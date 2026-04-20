@@ -3,3 +3,10 @@ maxUploadSize = 5
 
 [deploy]
 pythonVersion = "3.12"
+
+[browser]
+gatherUsageStats = false
+
+[client]
+showSidebarNavigation = false
+toolbarMode = "viewer"

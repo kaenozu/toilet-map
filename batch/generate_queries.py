@@ -1,13 +1,14 @@
 """
 generate_queries.py
 日本全国のスクレイプ用クエリファイルを自動生成する
+
+使い方: python generate_queries.py
 """
-import json
 import os
-import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 QUERIES_DIR = os.path.join(SCRIPT_DIR, "queries.d")
+BATCH_SIZE = 12  # 1ファイルあたりのクエリ数
 
 # ジャンルごとのクエリテンプレート
 QUERY_TEMPLATES = [
@@ -23,8 +24,9 @@ QUERY_TEMPLATES = [
     "ホテル in {city}",
 ]
 
-# 都道府県別の市区町村（主要のみ。カフェなどは市区町村単位が適切）
-# 人口少ない町村は郡単位で検索
+# ============================================================
+# 都道府県別市区町村データ
+# ============================================================
 PREFECTURES = {
     "北海道": ["札幌市", "函館市", "小樽市", "旭川市", "室蘭市", "釧路市", "帯広市",
         "北見市", "夕張市", "岩見沢市", "網走市", "留萌市", "苫小牧市", "稚内市",
@@ -115,7 +117,7 @@ PREFECTURES = {
         "羽咋市", "かほく市", "白山市", "能美市", "野々市市", "能登町",
         "中能登町", "穴水町", "川北町", "津幡町", "内灘町"],
     "福井県": ["福井市", "敦賀市", "小浜市", "大野市", "勝山市", "鯖江市",
-        "あわら市", "越前市", "坂井市", "越前町", "南越前町", "敦賀市",
+        "あわら市", "越前市", "坂井市", "越前町", "南越前町",
         "美浜町", "高浜町", "おおい町", "若狭町", "永平寺町"],
     "山梨県": ["甲府市", "富士吉田市", "都留市", "山梨市", "大月市", "韮崎市",
         "南アルプス市", "北杜市", "甲斐市", "笛吹市", "上野原市", "甲州市",
@@ -213,7 +215,7 @@ PREFECTURES = {
         "新庄村", "鏡野町", "勝央町", "奈義町", "西粟倉村", "久米南町",
         "美咲町", "吉備中央町"],
     "広島県": ["広島市", "呉市", "竹原市", "三原市", "尾道市", "福山市",
-        "府中市", "三次市", "庄原市", "大竹市", "東広島市", "廿日市市",
+        "府中市", "三次市", "庄原市", "大竹市", "東広島市", "廿日町市",
         "安芸高田市", "江田島市", "府中町", "海田町", "熊野町",
         "坂町", "安芸太田町", "北広島町", "大崎上島町", "世羅町",
         "神石高原町"],
@@ -249,16 +251,15 @@ PREFECTURES = {
     "佐賀県": ["佐賀市", "唐津市", "鳥栖市", "多久市", "伊万里市", "武雄市",
         "鹿島市", "小城市", "嬉野市", "神埼市", "吉野ヶ里町",
         "基山町", "上峰町", "みやき町", "川副町", "東与賀町",
-        "久保田町", "大町町", "江北町", "白石町", "太良町",
-        "有田町", "嬉野市"],
+        "久保田町", "大町町", "江北町", "白石町", "太良町", "有田町"],
     "長崎県": ["長崎市", "佐世保市", "島原市", "諫早市", "大村市", "平戸市",
         "松浦市", "対馬市", "壱岐市", "五島市", "西海市", "雲仙市",
         "南島原市", "波佐見町", "川棚町", "東彼杵町", "佐々町",
         "小値賀町", "新上五島町"],
     "熊本県": ["熊本市", "八代市", "人吉市", "荒尾市", "水俣市", "玉名市",
-        "山鹿市", "菊池市", "宇土市", "上天草市", "宇城市", "阿苏市",
+        "山鹿市", "菊池市", "宇土市", "上天草市", "宇城市",
         "天草市", "合志市", "大津町", "菊陽町", "南小国町", "小国町",
-        "産山村", "高森町", "西原村", "南阿苏村", "御船町", "嘉島町",
+        "産山村", "高森町", "西原村", "南阿蘇村", "御船町", "嘉島町",
         "益城町", "甲佐町", "山都町", "氷川町", "芦北町", "津奈木町",
         "錦町", "多良木町", "水上村", "相良村", "五木村", "山江村",
         "球磨村", "あさぎり町", "苓北町"],
@@ -274,7 +275,7 @@ PREFECTURES = {
     "鹿児島県": ["鹿児島市", "鹿屋市", "枕崎市", "阿久根市", "出水市", "指宿市",
         "西之表市", "垂水市", "薩摩川内市", "日置市", "霧島市",
         "いちき串木野市", "南九州市", "姶良市", "奄美市", "南さつま市",
-        "伊佐市", "志布志市", "萨摩町", "さつま町", "長島町",
+        "伊佐市", "志布志市", "さつま町", "長島町",
         "湧水町", "大崎町", "東串良町", "錦江町", "南大隅町",
         "肝付町", "中種子町", "南種子町", "屋久島町", "大和村",
         "宇検村", "瀬戸内町", "龍郷町", "喜界町", "徳之島町",
@@ -290,56 +291,69 @@ PREFECTURES = {
 }
 
 
-def generate_prefecture(pref_name, cities):
-    """都道府県単位でクエリファイルを生成"""
-    pref_dir = os.path.join(QUERIES_DIR, pref_name)
-    os.makedirs(pref_dir, exist_ok=True)
+# ============================================================
+# クエリ生成
+# ============================================================
+def build_queries(cities: list[str]) -> list[str]:
+    """都市リストとテンプレートからクエリ一覧を生成"""
+    return [tmpl.format(city=city) for city in cities for tmpl in QUERY_TEMPLATES]
 
-    BATCH_SIZE = 12  # 1ファイルあたり12クエリ
 
-    queries = []
-    for city in cities:
-        for tmpl in QUERY_TEMPLATES:
-            queries.append(tmpl.format(city=city))
-
-    # バッチに分割
+def write_batches(queries: list[str], output_dir: str,
+                  city: str = "", prefecture: str = "") -> int:
+    """クエリをバッチファイルに分割して書き出す。ファイル数を返す
+    ヘッダーに都市名・都道府県名を含め、scrape_runnerの--city自動検出に対応
+    """
+    os.makedirs(output_dir, exist_ok=True)
     file_count = 0
     for i in range(0, len(queries), BATCH_SIZE):
-        batch = queries[i:i+BATCH_SIZE]
         file_count += 1
-        filename = f"batch_{file_count:03d}.txt"
-        filepath = os.path.join(pref_dir, filename)
+        batch = queries[i : i + BATCH_SIZE]
+        filepath = os.path.join(output_dir, f"batch_{file_count:03d}.txt")
         with open(filepath, "w", encoding="utf-8") as f:
+            if city:
+                f.write(f"# city: {city}\n")
+            if prefecture:
+                f.write(f"# prefecture: {prefecture}\n")
             f.write("\n".join(batch) + "\n")
+    return file_count
 
-    return len(queries), file_count
 
-
+# ============================================================
+# メイン
+# ============================================================
 def main():
     os.makedirs(QUERIES_DIR, exist_ok=True)
 
     total_queries = 0
     total_files = 0
 
-    print(f"Generating queries for {len(PREFECTURES)} prefectures...")
-    print()
+    print(f"Generating queries for {len(PREFECTURES)} prefectures...\n")
 
     for pref, cities in sorted(PREFECTURES.items()):
-        q_count, f_count = generate_prefecture(pref, cities)
-        total_queries += q_count
-        total_files += f_count
-        est_min = q_count * 5 / 60  # 5min/query
-        print(f"  {pref:6s}: {len(cities):3d} cities, {q_count:5d} queries, {f_count:3d} files, ~{est_min:.0f}h")
+        pref_dir = os.path.join(QUERIES_DIR, pref)
 
-    print()
-    print(f"Total: {total_queries} queries in {total_files} files")
-    print(f"Est. time: {total_queries * 5 / 60 / 24:.0f} days (continuous)")
-    print()
-    print(f"Output: {QUERIES_DIR}/")
-    print()
-    print("Usage:")
+        file_count = 0
+        for city in cities:
+            city_queries = build_queries([city])
+            n_files = write_batches(city_queries, pref_dir, city=city, prefecture=pref)
+            file_count += n_files
+
+        total_queries += len(build_queries(cities))
+        total_files += file_count
+        est_hours = len(build_queries(cities)) * 5 / 3600
+        print(f"  {pref:6s}: {len(cities):3d} cities, "
+              f"{len(build_queries(cities)):5d} queries, "
+              f"{file_count:3d} files, ~{est_hours:.0f}h")
+
+    print(f"\nTotal: {total_queries} queries in {total_files} files")
+    print(f"Est. time: {total_queries * 5 / 3600 / 24:.0f} days (continuous)")
+    print(f"\nOutput: {QUERIES_DIR}/")
+    print("\nUsage:")
     print("  set QUERIES=queries.d/埼玉県/batch_001.txt")
     print("  scrape.bat")
+    print("  # or with city filter:")
+    print("  python scrape_runner.py --city 羽生市 --prefecture 埼玉県")
 
 
 if __name__ == "__main__":
