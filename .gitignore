@@ -4,6 +4,7 @@ batch/raw_parts/
 batch/.progress
 batch/.qcache
 batch/.tmp_query.txt
+batch/queries.d/
 
 # Legacy UI (not deployed)
 ui/
