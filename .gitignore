@@ -1,0 +1,17 @@
+# Batch / scraping temp files
+batch/raw_data.json
+batch/raw_parts/
+batch/.progress
+batch/.qcache
+batch/.tmp_query.txt
+
+# Legacy UI (not deployed)
+ui/
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
