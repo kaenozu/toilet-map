@@ -3,7 +3,6 @@ toilet-map/app.py
 Streamlit版トイレきれい度マップ
 toilets.jsonを読み込んでインタラクティブに表示する
 """
-import html
 import json
 import streamlit as st
 import pandas as pd
@@ -13,16 +12,20 @@ from streamlit_folium import st_folium
 import app_config
 
 from ui.styles import MOBILE_CSS
-from ui.components import render_score_legend, render_filter_buttons, render_detail_card
+from ui.components import (
+    render_score_legend,
+    render_filter_buttons,
+    render_detail_card,
+    render_toilet_card,
+)
+from ui.popups import build_popup_html
 from app_config import (
     DATA_PATH,
-    SCORE_RANGES,
     FILTER_CONFIG,
     PUBLIC_MARKER_RADIUS,
     NORMAL_MARKER_RADIUS,
-    MAX_SAMPLE_REVIEWS,
-    esc,
     get_score_style,
+    esc,
 )
 
 
@@ -61,131 +64,6 @@ def search_toilets(df: pd.DataFrame, query: str) -> pd.DataFrame:
         | df["address"].str.contains(query, case=False, na=False)
     )
     return df[mask]
-
-
-# ============================================================
-# ポップアップHTML生成（レスポンシブ対応）
-# ============================================================
-def _build_public_badge(is_public: bool) -> str:
-    if not is_public:
-        return ""
-    return (
-        '<span style="font-size:10px;padding:2px 6px;border-radius:3px;'
-        'background:#e3f2fd;color:#1565c0;font-weight:600;">公共トイレ</span> '
-    )
-
-
-def _build_keyword_tags(keywords: list) -> str:
-    if not keywords:
-        return ""
-    tags = []
-    for kw, cnt in keywords[:5]:
-        safe_kw = esc(kw[1:]) if kw.startswith(("+", "-")) else esc(kw)
-        prefix = "👍" if kw.startswith("+") else "👎" if kw.startswith("-") else ""
-        bg = "#e8f5e9" if kw.startswith("+") else "#ffebee" if kw.startswith("-") else "#f5f5f5"
-        color = "#2e7d32" if kw.startswith("+") else "#c62828" if kw.startswith("-") else "#555"
-        border = "#a5d6a7" if kw.startswith("+") else "#ef9a9a" if kw.startswith("-") else "#e0e0e0"
-        tags.append(
-            f'<span style="display:inline-block;font-size:11px;padding:2px 6px;'
-            f'border-radius:4px;background:{bg};color:{color};'
-            f'border:1px solid {border};margin:1px;word-break:break-all;">'
-            f'{prefix}{safe_kw} ×{cnt}</span>'
-        )
-    return '<div style="margin-top:4px;line-height:2;">' + " ".join(tags) + "</div>"
-
-
-def _build_review_html(reviews: list) -> str:
-    if not reviews:
-        return ""
-    seen = set()
-    parts = []
-    for r in reviews[:2]:
-        txt = r.get("text", "")
-        key = txt[:80]
-        if key in seen:
-            continue
-        seen.add(key)
-        score_val = r.get("score", 0)
-        icon = "👍" if score_val > 0 else "👎" if score_val < 0 else "📝"
-        border_color = "#2e7d32" if score_val > 0 else "#c62828" if score_val < 0 else "#bbb"
-        name = esc(r.get("name", ""))
-        rating = r.get("rating", "")
-        meta = f'<span style="color:#999;">{name}</span>'
-        if rating:
-            meta += f' <span style="color:#f9a825;">★{rating}</span>'
-        txt_safe = esc(txt).replace("\n", "<br>")
-        # モバイルではテキストを短縮
-        parts.append(
-            f'<div style="font-size:11px;color:#444;padding:4px 6px;background:#fafafa;'
-            f'border-radius:4px;margin-top:3px;border-left:3px solid {border_color};">'
-            f"{icon} {meta}<br>"
-            f'<span style="line-height:1.5;">{txt_safe[:120]}{"..." if len(txt_safe) > 120 else ""}</span></div>'
-        )
-    return "".join(parts)
-
-
-def _build_link_html(link: str) -> str:
-    if not link:
-        return ""
-    return (
-        '<div style="margin-top:6px;">'
-        f'<a href="{link}" target="_blank" rel="noopener noreferrer" '
-        'style="font-size:13px;color:#1a73e8;text-decoration:none;font-weight:600;'
-        'display:inline-block;padding:4px 0;">'
-        "🗺️ Google Mapsで開く →</a></div>"
-    )
-
-
-def build_popup_html(t: dict) -> str:
-    """1トイレ地点のポップアップHTMLを構築（コンパクト・スクロール対応）"""
-    color, emoji, label = get_score_style(t["toilet_score"])
-    badge = _build_public_badge(t["is_public_toilet"])
-    confidence_pct = int(t["confidence"] * 100)
-    phone_html = f'<span style="margin-right:6px;">📞{esc(t["phone"])}</span>' if t.get("phone") else ""
-    kw_html = _build_keyword_tags(t.get("top_keywords"))
-    rev_html = _build_review_html(t.get("sample_reviews", []))
-    link_html = _build_link_html(t.get("link", ""))
-
-    review_section = ""
-    if rev_html:
-        review_section = (
-            '<hr style="margin:4px 0;border:none;border-top:1px dashed #ccc;">'
-            '<div style="font-size:10px;font-weight:600;margin-bottom:2px;">🚽 口コミ:</div>'
-            + rev_html
-        )
-
-    # 住所を短縮（郵便番号削除）
-    addr = t.get("address", "")
-    addr = esc(addr)
-
-    return f"""
-    <div style="font-family:'Segoe UI','Hiragino Sans','Noto Sans JP',sans-serif;padding:4px;
-        max-width:100%;overflow-wrap:break-word;word-break:break-word;
-        max-height:45vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
-      <div style="font-size:14px;font-weight:700;margin-bottom:2px;line-height:1.3;">
-        {badge}{esc(t['title'])}
-      </div>
-      <div style="font-size:10px;color:#888;margin-bottom:4px;">{esc(t['category'])}</div>
-
-      <div style="text-align:center;margin:4px 0;">
-        <span style="font-size:24px;font-weight:800;color:{color};">{emoji} {t['toilet_score']:.0f}点</span>
-        <span style="font-size:11px;color:#888;">（{label}）</span>
-      </div>
-
-      <div style="text-align:center;font-size:10px;color:#888;margin-bottom:2px;">
-        信頼度 {confidence_pct}% | {t['toilet_review_count']}件
-      </div>
-      <div style="height:3px;border-radius:2px;background:#e0e0e0;margin-bottom:4px;overflow:hidden;">
-        <div style="height:100%;width:{confidence_pct}%;background:{color};border-radius:2px;"></div>
-      </div>
-
-      <div style="font-size:10px;color:#555;margin-bottom:1px;">📍 {addr}</div>
-      <div style="font-size:10px;color:#555;">⭐{t.get('rating', '-')} ({t.get('review_count', 0)}件) {phone_html}</div>
-      {kw_html}
-      {review_section}
-      {link_html}
-    </div>
-    """
 
 
 # ============================================================
@@ -277,85 +155,6 @@ def build_map(toilets: list, center_lat: float, center_lng: float, zoom: int) ->
 
 
 # ============================================================
-# UI描画
-# ============================================================
-def render_score_legend():
-    """スコア凡例を表示（レスポンシブ）"""
-    st.markdown(
-        """
-    <div class="score-legend-mobile" style="display:flex;align-items:center;gap:4px;font-size:12px;margin-bottom:4px;">
-        <span>💩</span>
-        <div class="bar" style="width:200px;height:14px;border-radius:7px;
-            background:linear-gradient(to right,#e74c3c,#f39c12,#f1c40f,#2ecc71,#27ae60);"></div>
-        <span>✨</span>
-    </div>
-    """,
-        unsafe_allow_html=True,
-    )
-
-
-def render_filter_buttons(selected: str) -> str:
-    """フィルタボタンをHTMLで描画（タップしやすい）し、選択中のキーを返す"""
-    buttons = []
-    for key in FILTER_CONFIG:
-        active = ' active' if key == selected else ''
-        buttons.append(
-            f'<span class="filter-btn{active}" '
-            f'data-key="{key}" '
-            f'onclick="document.querySelectorAll(\'.filter-btn\').forEach(b=>b.classList.remove(\'active\'));'
-            f'this.classList.add(\'active\');'
-            f'window.parent.postMessage({{type:\'streamlit:setComponentValue\',value:\'{key}\'}},\'*\')">'
-            f'{key}</span>'
-        )
-    st.markdown(
-        '<div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0;">'
-        + "".join(buttons) + "</div>",
-        unsafe_allow_html=True,
-    )
-    return selected
-
-
-def render_detail_card(toilet: dict):
-    """モバイル用 詳細カード（expander）"""
-    color, emoji, label = get_score_style(toilet["toilet_score"])
-    confidence_pct = int(toilet["confidence"] * 100)
-
-    with st.expander(
-        f"{emoji} {toilet['title']} — {toilet['toilet_score']:.0f}点（{label}）"
-    ):
-        c1, c2 = st.columns([1, 1])
-        with c1:
-            st.write(f"📍 {toilet.get('address', '')}")
-            st.write(f"⭐ {toilet.get('rating', '-')} (口コミ {toilet.get('review_count', 0)}件)")
-        with c2:
-            st.write(f"🏷️ {toilet.get('category', '')}")
-            if toilet.get("phone"):
-                st.write(f"📞 {toilet['phone']}")
-            st.write(f"信頼度 {confidence_pct}% | トイレ言及 {toilet['toilet_review_count']}件")
-
-        # キーワード
-        if toilet.get("top_keywords"):
-            tags = []
-            for kw, cnt in toilet["top_keywords"][:5]:
-                prefix = "👍" if kw.startswith("+") else "👎" if kw.startswith("-") else ""
-                tags.append(f"`{prefix}{kw[1:] if kw.startswith(('+','-')) else kw} ×{cnt}`")
-            st.markdown(" ".join(tags))
-
-        # レビュー
-        if toilet.get("sample_reviews"):
-            for r in toilet["sample_reviews"][:3]:
-                score_val = r.get("score", 0)
-                icon = "👍" if score_val > 0 else "👎" if score_val < 0 else "📝"
-                st.markdown(
-                    f"**{icon}** {esc(r.get('text', ''))[:200]}"
-                )
-
-        # リンク
-        if toilet.get("link"):
-            st.markdown(f"[🗺️ Google Mapsで開く]({toilet['link']})")
-
-
-# ============================================================
 # メイン
 # ============================================================
 def main():
@@ -412,51 +211,12 @@ def main():
     )
     st_folium(m, height=map_height, returned_objects=[], use_container_width=True)
 
-    # モバイル用：ランキングリスト
+    # ランキングリスト
     st.divider()
     st.subheader("📍 トイレランキング")
 
-    # 上位10件をカード表示
     for i, (_, row) in enumerate(filtered.head(20).iterrows()):
-        t = row.to_dict()
-        color, emoji, label = get_score_style(t["toilet_score"])
-        confidence_pct = int(t["confidence"] * 100)
-
-        # タップしやすい大きなカード
-        score_bg = color
-        public_tag = ' <span style="background:#e3f2fd;color:#1565c0;padding:1px 6px;border-radius:3px;font-size:10px;">公共</span>' if t.get("is_public_toilet") else ""
-
-        link_start = f'<a href="{t["link"]}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit;">' if t.get("link") else ""
-        link_end = "</a>" if t.get("link") else ""
-
-        st.markdown(
-            f"""
-            {link_start}
-            <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;
-                background:#ffffff;color:#222222;border-radius:8px;margin-bottom:4px;
-                border:1px solid #e0e0e0;min-height:60px;
-                -webkit-tap-highlight-color:transparent;">
-                <div style="min-width:50px;text-align:center;">
-                    <div style="font-size:24px;font-weight:800;color:{color};line-height:1;">{emoji}</div>
-                    <div style="font-size:14px;font-weight:700;color:{color};">{t['toilet_score']:.0f}</div>
-                </div>
-                <div style="flex:1;min-width:0;color:#222222;">
-                    <div style="font-size:14px;font-weight:600;color:#222222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                        {public_tag} {esc(t['title'])}
-                    </div>
-                    <div style="font-size:11px;color:#666666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                        📍 {esc(t.get('address', ''))}
-                    </div>
-                    <div style="font-size:11px;color:#666666;">
-                        ⭐ {t.get('rating', '-')} · 口コミ {t.get('review_count', 0)}件 · 信頼度 {confidence_pct}%
-                    </div>
-                </div>
-                <div style="font-size:18px;color:#aaaaaa;">›</div>
-            </div>
-            {link_end}
-            """,
-            unsafe_allow_html=True,
-        )
+        render_toilet_card(row.to_dict(), rank=i + 1)
 
 
 if __name__ == "__main__":

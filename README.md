@@ -7,15 +7,23 @@ Google Maps のレビューからトイレのきれい度を自動判定して�
 ```
 toilet-map/
 ├── app.py                  # Streamlit メインアプリ
+├── app_config.py           # 共有設定定数
 ├── data/
-│   └── toilets.json        # 処理済みデータ
+│   └── toilets.json      # 処理済みデータ
+├── ui/
+│   ├── styles.py        # Mobile CSS
+│   ├── components.py  # Streamlit UIコンポーネント
+│   └── popups.py      # ポップアップHTML生成
 ├── batch/
-│   ├── scrape.bat          # Windows用スクレイプ（Python呼び出し）
+│   ├── scrape.bat          # Windows用スクレイプ
 │   ├── scrape_runner.py    # スクレイプ実行エンジン
-│   ├── process_data.py     # データ処理・スコアリング
-│   ├── queries.txt         # デフォルト（熊谷市）
-│   ├── queries_saitama_city.txt  # さいたま市
-│   └── queries_kawagoe_kawaguchi.txt  # 川越・川口
+│   ├── process_data.py   # データ処理・スコアリング
+│   ├── generate_queries.py  # 全国クエリ生成
+│   └── city_bounds.py   # 地理バウンディング取得
+├── tests/
+│   ├── test_app.py       # app.pyテスト
+│   ├── test_batch.py    # batchモジュールテスト
+│   └── test_process_data.py  # スコアリングテスト
 ├── requirements.txt
 ├── .streamlit/config.toml
 ├── .gitignore

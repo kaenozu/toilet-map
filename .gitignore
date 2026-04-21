@@ -7,7 +7,10 @@ batch/.tmp_query.txt
 batch/queries.d/
 
 # Legacy UI (not deployed)
-ui/
+# Note: ui/*.py modules are exception and tracked in git
+ui/index.html
+ui/data/
+ui/start.bat
 
 # Python
 __pycache__/
