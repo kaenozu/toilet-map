@@ -45,8 +45,11 @@ def _load_data_cached():
 # ============================================================
 # フィルタリング
 # ============================================================
-def filter_toilets(df: pd.DataFrame, filter_type: str) -> pd.DataFrame:
+def filter_toilets(df: pd.DataFrame, filter_type: str, prefecture: str = None) -> pd.DataFrame:
     """フィルタタイプに従ってDataFrameを絞り込む"""
+    if prefecture and prefecture != "全て":
+        df = df[df["prefecture"] == prefecture]
+
     pattern = FILTER_CONFIG.get(filter_type)
     if pattern is None:
         return df
@@ -181,25 +184,36 @@ def main():
     df = pd.DataFrame(toilets)
     df = df[df["toilet_review_count"] > 0].reset_index(drop=True)
 
+    # 都道府県リスト（ソート）
+    prefectures = ["全て"] + sorted(df["prefecture"].dropna().unique().tolist())
+
     st.caption(
         f"{meta['area_name']} - Googleレビューからトイレのきれい度を可視化 | "
         f"トイレ口コミあり{len(df)}件"
     )
 
     # フィルタ＆検索（モバイルでは縦並び）
-    col_filter, col_search = st.columns([1, 2])
+    col_pref, col_filter, col_search = st.columns([1, 1, 2])
+    with col_pref:
+        selected_pref = st.selectbox("都道府県", prefectures, label_visibility="collapsed")
     with col_filter:
         filter_type = st.selectbox("フィルタ", list(FILTER_CONFIG.keys()), label_visibility="collapsed")
     with col_search:
-        search_query = st.text_input("検索（名前・住所）", "", placeholder="🔍 名前・住所で検索…")
+        search_query = st.text_input("検索（名前・住所）", "", placeholder="🔍 名前・住所で検索…", label_visibility="collapsed")
 
     # フィルタ→検索→ソート
-    filtered = filter_toilets(df, filter_type)
+    filtered = filter_toilets(df, filter_type, selected_pref)
     filtered = search_toilets(filtered, search_query)
     filtered = filtered.sort_values("toilet_score", ascending=False)
 
     st.markdown(f"**{len(filtered)}件** 表示中　（きれい度順）")
     render_score_legend()
+
+    # 戻るボタン（モバイル用）
+    st.markdown(
+        '<div class="back-to-top"><button class="back-btn" onclick="window.scrollTo({top:0,behavior:\'smooth\'})">⬆️</button></div>',
+        unsafe_allow_html=True
+    )
 
     # 地図表示（高さを画面サイズに応じて調整）
     map_height = 500  # モバイル想定

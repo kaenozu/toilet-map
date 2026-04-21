@@ -76,35 +76,58 @@ MOBILE_CSS = """
 }
 .locate-btn:active { transform: scale(0.9); }
 
-/* トイレ詳細カード（モバイル用オーバーレイ） */
-.detail-overlay {
-    display: none;
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    z-index: 10001;
-    background: white;
-    border-top-left-radius: 16px;
-    border-top-right-radius: 16px;
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
-    max-height: 60vh;
-    overflow-y: auto;
-    padding: 16px;
-    animation: slideUp 0.25s ease-out;
-}
-.detail-overlay.show { display: block; }
-@keyframes slideUp {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
-}
-.detail-overlay .close-btn {
-    position: absolute;
-    top: 8px; right: 12px;
-    font-size: 24px;
-    cursor: pointer;
-    color: #999;
-    border: none;
-    background: none;
-}
+ /* トイレ詳細カード（モバイル用オーバーレイ） */
+ .detail-overlay {
+     display: none;
+     position: fixed;
+     bottom: 0; left: 0; right: 0;
+     z-index: 10001;
+     background: white;
+     border-top-left-radius: 16px;
+     border-top-right-radius: 16px;
+     box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+     max-height: 60vh;
+     overflow-y: auto;
+     padding: 16px;
+     animation: slideUp 0.25s ease-out;
+ }
+ .detail-overlay.show { display: block; }
+ @keyframes slideUp {
+     from { transform: translateY(100%); }
+     to { transform: translateY(0); }
+ }
+ .detail-overlay .close-btn {
+     position: absolute;
+     top: 8px; right: 12px;
+     font-size: 24px;
+     cursor: pointer;
+     color: #999;
+     border: none;
+     background: none;
+ }
+
+ /* 戻るボタン（モバイル用） */
+ .back-to-top {
+     position: fixed;
+     bottom: 20px;
+     left: 20px;
+     z-index: 10000;
+ }
+ .back-btn {
+     width: 48px;
+     height: 48px;
+     border-radius: 50%;
+     background: white;
+     border: 2px solid #666;
+     font-size: 20px;
+     display: flex;
+     align-items: center;
+     justify-content: center;
+     box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+     cursor: pointer;
+     -webkit-tap-highlight-color: transparent;
+ }
+ .back-btn:active { transform: scale(0.9); }
 
 /* スマホではポップアップ幅を画面幅に合わせる */
 @media (max-width: 768px) {
