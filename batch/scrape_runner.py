@@ -112,20 +112,21 @@ def scrape_query(query: str, output_path: str) -> bool:
 
     try:
         query_docker = to_docker_path(tmp_query)
-        output_docker = to_docker_path(output_path)
 
-        # 結果ファイル初期化
-        with open(output_path, "w") as f:
-            pass
+        # Dockerボリュームマウント: ディレクトリ単位でマウント（rename対応）
+        output_dir = os.path.dirname(output_path)
+        output_name = os.path.basename(output_path)
+        output_dir_docker = to_docker_path(output_dir)
 
+        # 結果ファイルはコンテナ内で作成されるので、事前作成は不要
         cmd = [
             "docker", "run", "--rm",
             "-v", f"{query_docker}:/query.txt",
-            "-v", f"{output_docker}:/results.json",
+            "-v", f"{output_dir_docker}:/output",
             DOCKER_IMAGE,
             "-depth", SCRAPER_DEPTH,
             "-input", "/query.txt",
-            "-results", "/results.json",
+            "-results", f"/output/{output_name}",
             "-json", "--extra-reviews",
             "-lang", SCRAPER_LANG,
             "-exit-on-inactivity", EXIT_ON_INACTIVITY,
@@ -393,11 +394,7 @@ def run_batch():
     proc = subprocess.run(
         [sys.executable, os.path.join(SCRIPT_DIR, "process_data.py"),
          data_for_processing, PROCESSED, "--incremental"],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
-    print(proc.stdout)
-    if proc.stderr:
-        print(proc.stderr)
     if proc.returncode != 0:
         print("[ERROR] Data processing failed")
         sys.exit(1)
