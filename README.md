@@ -83,6 +83,44 @@ git push -u origin main
 - レビュー★5のネガティブは軽減、★1のポジティブは軽減
 - 否定文脈検知（「清潔さが残念」等の誤検出防止）
 
+## データ拡充（関東広域）
+
+県庁所在地7市（さいたま・新宿・千葉・横浜・水戸・宇都宮・前橋）を順次スクレイピング。
+
+### 実行
+
+```bash
+cd batch
+
+REM Phase 1 のみ実行（約7時間、84クエリ）
+kanto_phase1.bat
+```
+
+### 中断・再開
+
+各都市ごとに独立した進捗ファイル（`.progress_<都道府県>_phase1`）を使用しているため、途中で中断しても再実行で続きから自動再開されます。
+
+```bash
+REM 途中で止まった場合、同じコマンドで再開可能
+kanto_phase1.bat
+```
+
+### 進捗確認
+
+```bash
+REM 完了済みの都市を確認
+type .kanto_phase1_progress
+```
+
+### 個別実行（任意）
+
+任意の都市だけ実行したい場合：
+
+```bash
+set QUERIES=queries.d\埼玉県\batch_001.txt
+python scrape_runner.py --city さいたま市 --prefecture 埼玉県 --progress-file .progress_saitama_phase1
+```
+
 ## ライセンス
 
 MIT

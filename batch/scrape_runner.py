@@ -26,7 +26,7 @@ QUERIES_FILE = os.path.join(SCRIPT_DIR, os.environ.get("QUERIES", "queries.txt")
 RAW_DIR = os.path.join(SCRIPT_DIR, "raw_parts")
 RAW_OUTPUT = os.path.join(SCRIPT_DIR, "raw_data.json")
 PROCESSED = os.path.join(SCRIPT_DIR, "..", "data", "toilets.json")
-PROGRESS_FILE = os.path.join(SCRIPT_DIR, ".progress")
+PROGRESS_FILE = os.path.join(SCRIPT_DIR, os.environ.get("PROGRESS_FILE", ".progress"))
 
 SLEEP_BETWEEN = int(os.environ.get("SLEEP_BETWEEN", "120"))
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "2"))
@@ -162,7 +162,11 @@ def scrape_query(query: str, output_path: str) -> bool:
 
 def parse_args() -> dict:
     """CLI引数をパース"""
-    args = {"city": FILTER_CITY, "prefecture": FILTER_PREF}
+    args = {
+        "city": FILTER_CITY,
+        "prefecture": FILTER_PREF,
+        "progress_file": None,
+    }
     i = 1
     while i < len(sys.argv):
         if sys.argv[i] == "--city" and i + 1 < len(sys.argv):
@@ -170,6 +174,9 @@ def parse_args() -> dict:
             i += 2
         elif sys.argv[i] == "--prefecture" and i + 1 < len(sys.argv):
             args["prefecture"] = sys.argv[i + 1]
+            i += 2
+        elif sys.argv[i] == "--progress-file" and i + 1 < len(sys.argv):
+            args["progress_file"] = sys.argv[i + 1]
             i += 2
         else:
             i += 1
@@ -222,6 +229,9 @@ def run_batch():
     queries = load_queries()
     total = len(queries)
 
+    # 進捗ファイルの決定
+    progress_file = args.get("progress_file") or PROGRESS_FILE
+
     # 都市名決定: CLI > 環境変数 > クエリから自動検出
     city = args["city"]
     pref = args["prefecture"]
@@ -241,7 +251,7 @@ def run_batch():
     os.makedirs(RAW_DIR, exist_ok=True)
 
     # 進捗読み込み
-    done = load_progress()
+    done = load_progress(progress_file)
     if done:
         print(f"Resuming: {len(done)}/{total} already done.")
         # 欠落partファイル確認
@@ -285,7 +295,7 @@ def run_batch():
         if ok:
             success += 1
             done.add(i)
-            save_progress(done)
+            save_progress(done, progress_file)
         else:
             failed += 1
             print(f"  !! FAILED: {query}")
@@ -347,7 +357,7 @@ def run_batch():
 
     # 成功時クリーンアップ
     if failed == 0:
-        for path in [PROGRESS_FILE, RAW_DIR]:
+        for path in [progress_file, RAW_DIR]:
             if os.path.exists(path):
                 if os.path.isdir(path):
                     shutil.rmtree(path)
