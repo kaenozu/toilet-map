@@ -23,6 +23,7 @@ TARGETS = [
 
 # 設定
 SLEEP_BETWEEN = int(os.environ.get("SLEEP_BETWEEN", "120"))
+DRY_RUN = '--dry-run' in sys.argv
 
 # 進捗トラッキングファイル
 PHASE_PROGRESS = os.path.join(SCRIPT_DIR, ".kanto_phase1_progress")
@@ -47,7 +48,7 @@ def save_phase_progress(done: set[str]):
             f.write(f"{pref}\n")
 
 
-def run_scrape(pref: str, city: str, queries_rel: str):
+def run_scrape(pref: str, city: str, queries_rel: str, dry_run: bool = False) -> bool:
     """1都市をスクレイプ"""
     queries_abs = os.path.join(SCRIPT_DIR, queries_rel)
     progress_file = os.path.join(SCRIPT_DIR, f".progress_{pref}_phase1")
@@ -58,7 +59,6 @@ def run_scrape(pref: str, city: str, queries_rel: str):
             lines = f.readlines()
         if lines:
             last = int(lines[-1].strip())
-            # クエリ数は queries_abs からカウント
             with open(queries_abs, "r", encoding="utf-8") as qf:
                 total_queries = sum(1 for l in qf if l.strip() and not l.startswith("#"))
             if last >= total_queries:
@@ -80,15 +80,27 @@ def run_scrape(pref: str, city: str, queries_rel: str):
         "--city", city,
         "--prefecture", pref,
     ]
+    if dry_run:
+        cmd.append("--dry-run")
 
     print(f"  [{pref}] Running: {' '.join(cmd)}")
-    result = subprocess.run(cmd, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
-
-    # 出力を表示
-    if result.stdout:
-        print(f"  [{pref}] STDOUT:\n" + "\n".join(f"    {l}" for l in result.stdout.strip().split("\n")))
-    if result.stderr:
-        print(f"  [{pref}] STDERR:\n" + "\n".join(f"    {l}" for l in result.stderr.strip().split("\n")))
+    try:
+        # 出力はコンソールに直接流す（キャプチャしない）
+        result = subprocess.run(
+            cmd,
+            env=env,
+            cwd=SCRIPT_DIR,
+            timeout=3600,  # 1 hour max per prefecture
+        )
+    except subprocess.TimeoutExpired:
+        print(f"  [{pref}] [TIMEOUT] Exceeded 1 hour")
+        return False
+    except FileNotFoundError:
+        print(f"  [{pref}] [ERROR] Docker executable not found. Is Docker Desktop running?")
+        return False
+    except Exception as e:
+        print(f"  [{pref}] [ERROR] {type(e).__name__}: {e}")
+        return False
 
     if result.returncode != 0:
         print(f"  [{pref}] FAILED with exit code {result.returncode}")
@@ -115,7 +127,6 @@ def main():
         print()
 
     # 実行
-    total_queries = 0
     for pref, city, queries_rel in TARGETS:
         if pref in done_prefs:
             print(f"[{pref}/{city}] Already done, skipping.")
@@ -125,24 +136,27 @@ def main():
         print(f"  Processing: {pref} {city}")
         print(f"{'=' * 60}")
 
-        success = run_scrape(pref, city, queries_rel)
+        success = run_scrape(pref, city, queries_rel, dry_run=DRY_RUN)
         if success:
             done_prefs.add(pref)
             save_phase_progress(done_prefs)
-            print(f"  ✓ Phase progress saved ({len(done_prefs)}/7 completed)")
+            print(f"  [OK] Phase progress saved ({len(done_prefs)}/7 completed)")
         else:
-            print(f"\n  ✗ Failed on {pref} {city}")
+            print(f"\n  [FAIL] Failed on {pref} {city}")
             print(f"  Re-run this script to resume from the failed prefecture.")
             print(f"  Current phase progress: {sorted(done_prefs)}")
             sys.exit(1)
 
-        # 最終都市でなければスリープ
+        # 最終都市でなければスリープ（dry-run時はスキップ）
         if pref != TARGETS[-1][0]:
-            print(f"\n  Sleeping {SLEEP_BETWEEN}s before next prefecture...")
-            time.sleep(SLEEP_BETWEEN)
+            if DRY_RUN:
+                print("  [DRY-RUN] Skipping sleep between prefectures")
+            else:
+                print(f"\n  Sleeping {SLEEP_BETWEEN}s before next prefecture...")
+                time.sleep(SLEEP_BETWEEN)
 
     print("\n" + "=" * 60)
-    print("  ✓ All Phase 1 prefectures completed!")
+    print("  [DONE] All Phase 1 prefectures completed!")
     print(f"  Total: {len(done_prefs)}/7")
     print("=" * 60)
 

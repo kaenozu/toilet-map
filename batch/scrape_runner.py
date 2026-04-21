@@ -132,7 +132,26 @@ def scrape_query(query: str, output_path: str) -> bool:
         ]
 
         print(f"  Running: {query}")
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        try:
+            # Dockerプロセスを実行（出力はコンソールに直接流す）
+            result = subprocess.run(
+                cmd,
+                cwd=SCRIPT_DIR,
+                timeout=600,  # 10 minutes max per query
+            )
+        except subprocess.TimeoutExpired:
+            print(f"  [TIMEOUT] Query exceeded 10 minutes")
+            return False
+        except FileNotFoundError:
+            print(f"  [ERROR] Docker executable not found. Is Docker Desktop running?")
+            return False
+        except Exception as e:
+            print(f"  [ERROR] {type(e).__name__}: {e}")
+            return False
+
+        if result.returncode != 0:
+            print(f"  !! FAILED (exit code {result.returncode})")
+            return False
     finally:
         if os.path.exists(tmp_query):
             try:
@@ -140,14 +159,9 @@ def scrape_query(query: str, output_path: str) -> bool:
             except PermissionError:
                 pass
 
-    if result is None or result.returncode != 0:
-        print(f"  Docker exit code: {result.returncode if result else 'N/A'}")
-        for label, data in [("stdout", result.stdout), ("stderr", result.stderr)]:
-            if data:
-                print(f"  {label}: {data[:500]}")
-        return False
-
+    # 出力ファイル確認
     if not os.path.exists(output_path):
+        print(f"  [ERROR] Output file not created")
         return False
 
     with open(output_path, "r", encoding="utf-8") as f:
@@ -166,6 +180,8 @@ def parse_args() -> dict:
         "city": FILTER_CITY,
         "prefecture": FILTER_PREF,
         "progress_file": None,
+        "dry_run": False,
+        "max_queries": None,
     }
     i = 1
     while i < len(sys.argv):
@@ -177,6 +193,15 @@ def parse_args() -> dict:
             i += 2
         elif sys.argv[i] == "--progress-file" and i + 1 < len(sys.argv):
             args["progress_file"] = sys.argv[i + 1]
+            i += 2
+        elif sys.argv[i] == "--dry-run":
+            args["dry_run"] = True
+            i += 1
+        elif sys.argv[i] == "--max-queries" and i + 1 < len(sys.argv):
+            try:
+                args["max_queries"] = int(sys.argv[i + 1])
+            except ValueError:
+                print(f"[WARN] Invalid --max-queries value: {sys.argv[i+1]}")
             i += 2
         else:
             i += 1
@@ -271,6 +296,28 @@ def run_batch():
         print()
 
     success = skipped = failed = 0
+
+    #  --max-queries で処理件数を制限
+    max_q = args.get("max_queries")
+    if max_q is not None:
+        queries = queries[:max_q]
+        total = len(queries)
+        print(f"[MAX-QUERIES] Limited to first {total} queries")
+
+    # 既存の進捗で範囲外のものを除外
+    if done:
+        done = {idx for idx in done if 1 <= idx <= total}
+        print(f"Resuming: {len(done)}/{total} already done (after filter).")
+
+    #  --dry-run モード: 実際にはスクレイプせずに進捗だけシミュレート
+    if args.get("dry_run"):
+        print("[DRY-RUN] Dockerスクレイプをスキップします。全てのクエリを成功扱いとします。")
+        for i in range(1, total + 1):
+            if i not in done:
+                done.add(i)
+        save_progress(done, progress_file)
+        print(f"[DRY-RUN] 進捗ファイルに {len(done)}/{total} 件を記録しました。")
+        return 0
 
     for i, query in enumerate(queries, 1):
         part_file = os.path.join(RAW_DIR, f"part_{i:03d}.json")
