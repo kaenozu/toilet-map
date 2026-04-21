@@ -136,16 +136,17 @@ def main():
         print(f"  Processing: {pref} {city}")
         print(f"{'=' * 60}")
 
-        success = run_scrape(pref, city, queries_rel, dry_run=DRY_RUN)
-        if success:
-            done_prefs.add(pref)
-            save_phase_progress(done_prefs)
-            print(f"  [OK] Phase progress saved ({len(done_prefs)}/7 completed)")
-        else:
-            print(f"\n  [FAIL] Failed on {pref} {city}")
-            print(f"  Re-run this script to resume from the failed prefecture.")
-            print(f"  Current phase progress: {sorted(done_prefs)}")
-            sys.exit(1)
+         success = run_scrape(pref, city, queries_rel, dry_run=DRY_RUN)
+         if success:
+             done_prefs.add(pref)
+             save_phase_progress(done_prefs)
+             print(f"  [OK] Phase progress saved ({len(done_prefs)}/7 completed)")
+         else:
+             print(f"\n  [SKIP] Failed on {pref} {city} — moving to next prefecture")
+             print(f"  Re-run this script later to retry failed prefectures.")
+             print(f"  Current phase progress: {sorted(done_prefs)}")
+             # 失敗しても進捗ファイルは保存済み（完了分のみ）
+             # スキップして次へ
 
         # 最終都市でなければスリープ（dry-run時はスキップ）
         if pref != TARGETS[-1][0]:
