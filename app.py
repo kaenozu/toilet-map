@@ -10,174 +10,20 @@ import pandas as pd
 import folium
 from folium.plugins import MarkerCluster
 from streamlit_folium import st_folium
+import app_config
 
-# ============================================================
-# 定数
-# ============================================================
-DATA_PATH = "data/toilets.json"
-
-# スコア表示設定（閾値, 色, 絵文字, ラベル）
-SCORE_RANGES = [
-    (80, "#27ae60", "✨", "とてもきれい"),
-    (65, "#2ecc71", "😊", "きれい"),
-    (50, "#f1c40f", "😐", "普通"),
-    (35, "#f39c12", "😨", "少し気になる"),
-    (0, "#e74c3c", "💩", "要注意"),
-]
-
-# フィルタ定義
-FILTER_CONFIG = {
-    "すべて": None,
-    "公共トイレ": "__public__",
-    "カフェ・飲食": "カフェ|喫茶|レストラン|食堂|ダイニング|コーヒー|パン|ケーキ",
-    "コンビニ・店舗": "コンビニ|スーパー|ドラッグ|ストア|マート|商店",
-}
-
-# マーカー設定
-PUBLIC_MARKER_RADIUS = 14
-NORMAL_MARKER_RADIUS = 10
-
-# レビュー保存上限
-MAX_SAMPLE_REVIEWS = 5
-
-# モバイル判定閾値
-MOBILE_BREAKPOINT = 768
-
-# モバイル用CSS
-MOBILE_CSS = """
-<style>
-/* ===== モバイル最適化 ===== */
-
-/* Streamlitの余分な余白を削減 */
-@media (max-width: 768px) {
-    .block-container {
-        padding-top: 1rem !important;
-        padding-bottom: 0 !important;
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
-        max-width: 100% !important;
-    }
-
-    /* タイトル縮小 */
-    h1 { font-size: 1.3rem !important; margin-bottom: 0.3rem !important; }
-
-    /* キャプション縮小 */
-    .stCaption { font-size: 0.75rem !important; }
-
-    /* 地図コンテナの上下マージン削減 */
-    .st Folium_folium { margin-top: 0 !important; }
-
-    /* selectboxとtext_inputのフォントサイズ調整（iOSズーム防止） */
-    .stSelectbox label, .stTextInput label {
-        font-size: 16px !important;  /* 16px以上でiOSはズームしない */
-    }
-
-    /* 凡例を小さく */
-    .score-legend-mobile { font-size: 0.7rem !important; }
-    .score-legend-mobile .bar { width: 120px !important; height: 10px !important; }
-}
-
-/* タップしやすいフィルタボタン */
-.filter-btn {
-    display: inline-block;
-    padding: 6px 14px;
-    border-radius: 20px;
-    border: 1px solid #ddd;
-    font-size: 13px;
-    cursor: pointer;
-    margin: 2px;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-    transition: all 0.15s;
-}
-.filter-btn:hover { background: #f0f0f0; }
-.filter-btn.active {
-    background: #1a73e8;
-    color: white;
-    border-color: #1a73e8;
-}
-
-/* 現在地ボタン */
-.locate-btn {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    z-index: 10000;
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: white;
-    border: 2px solid #1a73e8;
-    font-size: 22px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-    -webkit-tap-highlight-color: transparent;
-}
-.locate-btn:active { transform: scale(0.9); }
-
-/* トイレ詳細カード（モバイル用オーバーレイ） */
-.detail-overlay {
-    display: none;
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    z-index: 10001;
-    background: white;
-    border-top-left-radius: 16px;
-    border-top-right-radius: 16px;
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
-    max-height: 60vh;
-    overflow-y: auto;
-    padding: 16px;
-    animation: slideUp 0.25s ease-out;
-}
-.detail-overlay.show { display: block; }
-@keyframes slideUp {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
-}
-.detail-overlay .close-btn {
-    position: absolute;
-    top: 8px; right: 12px;
-    font-size: 24px;
-    cursor: pointer;
-    color: #999;
-    border: none;
-    background: none;
-}
-
-/* スマホではポップアップ幅を画面幅に合わせる */
-@media (max-width: 768px) {
-    .leaflet-popup-content-wrapper {
-        max-width: calc(100vw - 40px) !important;
-        min-width: 0 !important;
-    }
-    .leaflet-popup-content {
-        min-width: 0 !important;
-        max-width: calc(100vw - 60px) !important;
-        font-size: 13px !important;
-    }
-}
-</style>
-"""
-
-
-# ============================================================
-# ユーティリティ
-# ============================================================
-def esc(text):
-    """HTMLエスケープ"""
-    return html.escape(str(text or ""), quote=True) if text else ""
-
-
-def get_score_style(score: float) -> tuple[str, str, str]:
-    """スコアに基づいて (色, 絵文字, ラベル) を返す"""
-    for threshold, color, emoji, label in SCORE_RANGES:
-        if score >= threshold:
-            return color, emoji, label
-    return SCORE_RANGES[-1][1:]
+from ui.styles import MOBILE_CSS
+from ui.components import render_score_legend, render_filter_buttons, render_detail_card
+from app_config import (
+    DATA_PATH,
+    SCORE_RANGES,
+    FILTER_CONFIG,
+    PUBLIC_MARKER_RADIUS,
+    NORMAL_MARKER_RADIUS,
+    MAX_SAMPLE_REVIEWS,
+    esc,
+    get_score_style,
+)
 
 
 # ============================================================
