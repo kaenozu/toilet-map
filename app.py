@@ -509,18 +509,11 @@ def render_detail_card(toilet: dict):
             st.markdown(f"[🗺️ Google Mapsで開く]({toilet['link']})")
 
 
-def esc(text):
-    """HTMLエスケープ（Streamlit markdown内用）"""
-    return html.escape(str(text or ""), quote=True) if text else ""
-
-
 # ============================================================
 # メイン
 # ============================================================
 def main():
-    # モバイルCSS注入
-    st.markdown(MOBILE_CSS, unsafe_allow_html=True)
-
+    # set_page_configは他のStreamlitコマンドより先に呼ぶ必要がある
     st.set_page_config(
         page_title="🚽 トイレきれい度マップ",
         page_icon="🚽",
@@ -530,6 +523,8 @@ def main():
             "About": "トイレきれい度マップ - Googleレビューからトイレのきれい度を可視化",
         },
     )
+
+    st.markdown(MOBILE_CSS, unsafe_allow_html=True)
 
     data = _load_data_cached()
     meta = data["metadata"]
