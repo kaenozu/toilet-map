@@ -179,6 +179,31 @@ def score_toilet_from_review(text: str) -> tuple[float, list[str]]:
 
 
 # ============================================================
+# 住所から都道府県を抽出
+# ============================================================
+# 日本の都道府県リスト（便宜上用いる順序）
+PREFECTURES = [
+    "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
+    "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
+    "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県",
+    "静岡県", "愛知県", "三重県", "滋賀県", "京都府", "大阪府", "兵庫県",
+    "奈良県", "和歌山県", "鳥取県", "島根県", "岡山県", "広島県", "山口県",
+    "徳島県", "香川県", "愛媛県", "高知県", "福岡県", "佐賀県", "長崎県",
+    "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県",
+]
+
+
+def extract_prefecture(address: str) -> str:
+    """住所から都道府県名を抽出（部分一致）"""
+    if not address:
+        return ""
+    for pref in PREFECTURES:
+        if pref in address:
+            return pref
+    return ""
+
+
+# ============================================================
 # レビュー評価による補正
 # ============================================================
 def _adjust_by_rating(score: float, matched: list[str], rating: float) -> tuple[float, list[str]]:
@@ -311,6 +336,7 @@ def process_place(place: dict) -> dict | None:
         "toilet_review_count": info["toilet_review_count"],
         "top_keywords": info["top_keywords"],
         "sample_reviews": info["toilet_reviews"][:5],
+        "prefecture": extract_prefecture(place.get("address", "")),
     }
 
 
