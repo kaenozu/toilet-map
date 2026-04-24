@@ -1,0 +1,16 @@
+{
+  "name": "厕所干净度地图",
+  "short_name": "厕所地图",
+  "description": "Google Mapsレビューから厕所の干净度を自动判定して地图上に表示するアプ师",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a73e8",
+  "icons": [
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

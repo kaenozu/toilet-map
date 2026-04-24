@@ -148,5 +148,20 @@ class TestTileOptions:
             assert isinstance(tile, str)
 
 
+class TestFilterConfig:
+    def test_has_all_keys(self):
+        assert "すべて" in FILTER_CONFIG
+        assert "公共トイレ" in FILTER_CONFIG
+        assert "カフェ・飲食" in FILTER_CONFIG
+
+    def test_new_filters(self):
+        assert "ホテル・旅館" in FILTER_CONFIG
+        assert "道の駅" in FILTER_CONFIG
+        assert "SA・PA" in FILTER_CONFIG
+
+    def test_public_filter(self):
+        assert FILTER_CONFIG["公共トイレ"] == "__public__"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

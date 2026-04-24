@@ -30,6 +30,9 @@ ui/start.bat
 # Scraper data
 batch/data/
 
+# IDE
+.idea/
+
 # Python
 __pycache__/
 *.pyc

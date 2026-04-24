@@ -178,8 +178,32 @@ def main():
 
     st.caption(
         f"{meta['area_name']} - Googleレビューからトイレのきれい度を可視化 | "
-        f"トイレ口コミあり{len(df)}件"
+        f"トイレ口コミあり{len(df)}件 | データ更新日: {meta.get('last_updated', '-')}"
     )
+
+    # 統計ダッシュボード
+    with st.expander("📊 統計"):
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("総数", meta.get("total", 0))
+        with col2:
+            st.metric("スコア算出", meta.get("scored", 0))
+        with col3:
+            st.metric("公共トイレ", meta.get("public_toilets", 0))
+        with col4:
+            avg_score = sum(t["toilet_score"] for t in toilets if t.get("toilet_score", 0) > 0) / max(1, sum(1 for t in toilets if t.get("toilet_score", 0) > 0))
+            st.metric("平均スコア", f"{avg_score:.0f}")
+
+    # CSVエクスポート
+    if total_items > 0:
+        csv = filtered.to_csv(index=False, encoding="utf-8-sig")
+        st.download_button(
+            label="📥 CSVダウンロード",
+            data=csv,
+            file_name=f"toilet_map_{selected_pref}_{filter_type}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
 
     # フィルタ＆検索（モバイルでは縦並び）
     col_pref, col_filter, col_search = st.columns([1, 1, 2])

@@ -423,8 +423,10 @@ def calc_dynamic_zoom(results: list[dict]) -> int:
         return 15
 
 
-def build_metadata(results: list[dict]) -> dict:
+def build_metadata(results: list[dict], input_path: str = None) -> dict:
     """結果リストからメタデータを自動生成"""
+    from datetime import datetime
+
     if results:
         center_lat = sum(r["lat"] for r in results) / len(results)
         center_lng = sum(r["lng"] for r in results) / len(results)
@@ -441,6 +443,8 @@ def build_metadata(results: list[dict]) -> dict:
 
     zoom = calc_dynamic_zoom(results)
 
+    now = datetime.now().strftime("%Y-%m-%d")
+
     return {
         "total": len(results),
         "scored": sum(1 for r in results if r["confidence"] > 0),
@@ -449,6 +453,7 @@ def build_metadata(results: list[dict]) -> dict:
         "center_lng": round(center_lng, 4),
         "zoom": zoom,
         "area_name": area_name,
+        "last_updated": now,
     }
 
 
