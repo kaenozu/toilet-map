@@ -394,6 +394,35 @@ def deduplicate(places: list[dict]) -> list[dict]:
 # ============================================================
 # メタデータ生成
 # ============================================================
+def calc_dynamic_zoom(results: list[dict]) -> int:
+    """データ範囲に応じたzoom値を計算"""
+    if len(results) < 2:
+        return 13
+    lats = [r["lat"] for r in results]
+    lngs = [r["lng"] for r in results]
+    lat_range = max(lats) - min(lats)
+    lng_range = max(lngs) - min(lngs)
+    max_range = max(lat_range, lng_range)
+    if max_range > 10:
+        return 5
+    elif max_range > 5:
+        return 7
+    elif max_range > 2:
+        return 9
+    elif max_range > 1:
+        return 10
+    elif max_range > 0.5:
+        return 11
+    elif max_range > 0.2:
+        return 12
+    elif max_range > 0.1:
+        return 13
+    elif max_range > 0.05:
+        return 14
+    else:
+        return 15
+
+
 def build_metadata(results: list[dict]) -> dict:
     """結果リストからメタデータを自動生成"""
     if results:
@@ -410,13 +439,15 @@ def build_metadata(results: list[dict]) -> dict:
             if m:
                 area_name = m.group(1)
 
+    zoom = calc_dynamic_zoom(results)
+
     return {
         "total": len(results),
         "scored": sum(1 for r in results if r["confidence"] > 0),
         "public_toilets": sum(1 for r in results if r["is_public_toilet"]),
         "center_lat": round(center_lat, 4),
         "center_lng": round(center_lng, 4),
-        "zoom": 13,
+        "zoom": zoom,
         "area_name": area_name,
     }
 

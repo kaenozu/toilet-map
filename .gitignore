@@ -5,16 +5,35 @@ batch/.progress
 batch/.qcache
 batch/.tmp_query.txt
 batch/queries.d/
+batch/kanto_*.log
+batch/prefecture_distribution.txt
+batch/raw_data.json.bak*
+batch/raw_data_filtered.json
+batch/.progress_*_phase1
+kanto_*.log
+
+# Debug scripts
+batch/check_*.py
+batch/debug_*.py
+batch/analyze_*.py
+batch/fix_and_*.py
+batch/final_check.py
 
 # Legacy UI (not deployed)
-# Note: ui/*.py modules are exception and tracked in git
 ui/index.html
 ui/data/
 ui/start.bat
 
+# Screenshots
+*.png
+
 # Python
 __pycache__/
 *.pyc
+.pytest_cache/
+*.heapsnapshot
+*.network-request
+*.network-response
 
 # OS
 .DS_Store

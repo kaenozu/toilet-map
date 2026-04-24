@@ -24,7 +24,10 @@ from app_config import (
     NORMAL_MARKER_RADIUS,
     get_score_style,
     esc,
+    PREFECTURE_CENTERS,
 )
+
+PER_PAGE = 20
 
 
 # ============================================================
@@ -38,6 +41,26 @@ def load_data():
 @st.cache_data(ttl=3600)
 def _load_data_cached():
     return load_data()
+
+
+@st.cache_data(ttl=3600)
+def _compute_prefecture_stats(toilets_json: str) -> dict:
+    """全データから都道府県別統計をJSON文字列でキャッシュ（TTL 1時間）"""
+    import json
+    toilets = json.loads(toilets_json)
+    stats = {}
+    for t in toilets:
+        pref = t.get("prefecture", "")
+        if pref:
+            if pref not in stats:
+                stats[pref] = {"count": 0, "lats": [], "lngs": []}
+            stats[pref]["count"] += 1
+            stats[pref]["lats"].append(t["lat"])
+            stats[pref]["lngs"].append(t["lng"])
+    for pref, s in stats.items():
+        s["center_lat"] = sum(s["lats"]) / len(s["lats"])
+        s["center_lng"] = sum(s["lngs"]) / len(s["lngs"])
+    return stats
 
 
 # ============================================================
@@ -207,7 +230,37 @@ def main():
     filtered = search_toilets(filtered, search_query)
     filtered = filtered.sort_values("toilet_score", ascending=False)
 
-    st.markdown(f"**{len(filtered)}件** 表示中　（きれい度順）")
+    # マップ中心座標：都道府県選択時はその県の中間点へ、それ以外はデータ全体の中間点へ
+    # 動的計算（前処理をキャッシュ）
+    stats = _compute_prefecture_stats(json.dumps(toilets, ensure_ascii=False))
+    if selected_pref != "全て" and selected_pref in PREFECTURE_CENTERS:
+        if selected_pref in stats and stats[selected_pref]["count"] >= 5:
+            map_lat = stats[selected_pref]["center_lat"]
+            map_lng = stats[selected_pref]["center_lng"]
+            map_zoom = 11
+        else:
+            map_lat, map_lng = PREFECTURE_CENTERS[selected_pref]
+            map_zoom = 11
+    else:
+        map_lat = meta["center_lat"]
+        map_lng = meta["center_lng"]
+        map_zoom = meta["zoom"]
+
+    total_items = len(filtered)
+    total_pages = max(1, (total_items + PER_PAGE - 1) // PER_PAGE)
+    page = st.number_input(
+        f"ページ (1/{total_pages})",
+        min_value=1,
+        max_value=total_pages,
+        value=1,
+        step=1,
+        label_visibility="collapsed",
+    )
+    start_idx = (page - 1) * PER_PAGE
+    end_idx = start_idx + PER_PAGE
+    page_items = filtered.iloc[start_idx:end_idx]
+
+    st.markdown(f"**{total_items}件** 表示中　（きれい度順）")
     render_score_legend()
 
     # 戻るボタン（モバイル用）
@@ -216,22 +269,22 @@ def main():
         unsafe_allow_html=True
     )
 
-    # 地図表示（高さを画面サイズに応じて調整）
-    map_height = 500  # モバイル想定
+    # 地図表示
+    map_height = 500
     m = build_map(
-        filtered.to_dict("records"),
-        meta["center_lat"],
-        meta["center_lng"],
-        meta["zoom"],
+        page_items.to_dict("records"),
+        map_lat,
+        map_lng,
+        map_zoom,
     )
     st_folium(m, height=map_height, returned_objects=[], use_container_width=True)
 
-    # ランキングリスト
+    # ランキングリスト（ページネーション対応）
     st.divider()
-    st.subheader("📍 トイレランキング")
+    st.subheader(f"📍 トイレランキング ({total_items}件中 {(page-1)*PER_PAGE+1}-{(min(page*PER_PAGE,total_items))}件)")
 
-    for i, (_, row) in enumerate(filtered.head(20).iterrows()):
-        render_toilet_card(row.to_dict(), rank=i + 1)
+    for i, (_, row) in enumerate(page_items.iterrows()):
+        render_toilet_card(row.to_dict(), rank=start_idx + i + 1)
 
 
 if __name__ == "__main__":

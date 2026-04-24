@@ -39,3 +39,14 @@ def get_score_style(score: float) -> tuple[str, str, str]:
         if score >= threshold:
             return color, emoji, label
     return SCORE_RANGES[-1][1:]
+
+
+PREFECTURE_CENTERS = {
+    "東京都": (35.6762, 139.6503),
+    "神奈川県": (35.4475, 139.6423),
+    "埼玉県": (35.8574, 139.6489),
+    "千葉県": (35.6050, 140.1233),
+    "茨城県": (36.3414, 140.4468),
+    "栃木県": (36.5657, 139.8836),
+    "群馬県": (36.3907, 139.0604),
+}

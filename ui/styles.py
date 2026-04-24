@@ -151,5 +151,92 @@ MOBILE_CSS = """
         font-size: 13px !important;
     }
 }
+
+/* ===== ダークモード対応 ===== */
+@media (prefers-color-scheme: dark) {
+    .stApp {
+        background-color: #0e1117 !important;
+        color: #f0f0f0 !important;
+    }
+
+    [data-testid="stMainBlockContainer"] {
+        background-color: #0e1117 !important;
+    }
+
+    .stMarkdown, .stText, p, span, label {
+        color: #f0f0f0 !important;
+    }
+
+    [data-testid="stHorizontalBlock"] > div {
+        background-color: #1e2530 !important;
+        border-radius: 8px !important;
+    }
+
+    [data-testid="stVerticalBlock"] > div {
+        background-color: transparent !important;
+    }
+
+    .stSelectbox > div {
+        background-color: #262c37 !important;
+        color: #f0f0f0 !important;
+    }
+
+    .stTextInput > div > div > input {
+        background-color: #262c37 !important;
+        color: #f0f0f0 !important;
+        border-color: #444 !important;
+    }
+
+    .stNumberInput > div {
+        background-color: #1e2530 !important;
+        border-radius: 8px !important;
+        padding: 4px 8px !important;
+    }
+
+    .stNumberInput input {
+        background-color: #262c37 !important;
+        color: #f0f0f0 !important;
+    }
+
+    .st-cd, [data-testid="stCaption"],
+    .st-emotion-cache-1vada7s, .st-emotion-cache-1kyu6fa {
+        color: #aaa !important;
+    }
+
+    h1 { color: #f0f0f0 !important; }
+    h2 { color: #f0f0f0 !important; }
+    h3 { color: #f0f0f0 !important; }
+
+    .leaflet-container {
+        background: #1a1a2e !important;
+    }
+
+    .leaflet-popup-content-wrapper {
+        background: #1e2530 !important;
+        color: #f0f0f0 !important;
+    }
+    .leaflet-popup-tip {
+        background: #1e2530 !important;
+    }
+
+    .filter-btn {
+        border-color: #444 !important;
+        color: #f0f0f0 !important;
+    }
+    .filter-btn:hover { background: #2a3444 !important; }
+    .filter-btn.active {
+        background: #1a73e8 !important;
+        border-color: #1a73e8 !important;
+    }
+
+    .back-btn {
+        background: #1e2530 !important;
+        border-color: #555 !important;
+    }
+
+    .back-to-top .back-btn {
+        color: #f0f0f0 !important;
+    }
+}
 </style>
 """

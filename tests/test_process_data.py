@@ -117,10 +117,34 @@ class TestPlaceDetection:
     """トイレ設置場所判定テスト"""
 
     def test_is_toilet_place_basic(self):
-        # 公园にトイレはありません
         place = {"name": "store", "category": "公园"}
         result = pd_module.is_toilet_place(place)
         assert isinstance(result, bool)
+
+
+class TestDynamicZoom:
+    """動的ズーム計算テスト"""
+
+    def test_single_point(self):
+        results = [{"lat": 35.5, "lng": 139.5}]
+        assert pd_module.calc_dynamic_zoom(results) == 13
+
+    def test_local_area(self):
+        results = [
+            {"lat": 35.7, "lng": 139.7},
+            {"lat": 35.71, "lng": 139.71},
+        ]
+        z = pd_module.calc_dynamic_zoom(results)
+        assert isinstance(z, int)
+        assert 10 <= z <= 15
+
+    def test_wide_area(self):
+        results = [
+            {"lat": 35.0, "lng": 135.0},
+            {"lat": 43.0, "lng": 142.0},
+        ]
+        z = pd_module.calc_dynamic_zoom(results)
+        assert z <= 7
 
 
 if __name__ == "__main__":

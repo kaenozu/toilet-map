@@ -38,9 +38,15 @@ class TestFilterToilets:
             {"title": "厕所B", "category": "便利店", "is_public_toilet": False},
         ])
         result = app.filter_toilets(df, "カフェ・飲食")
-        # カテゴリに "咖啡店" (中国語) が含まれている場合はマッチしない→日本語でテスト
-        # "咖啡" だと "カフェ" にマッチする
-        assert len(result) >= 0  # スキップ: 日本語 regex なので中国語は不一致
+        assert len(result) >= 0
+
+    def test_filter_cafe_match(self):
+        df = pd.DataFrame([
+            {"title": "厕所A", "category": "カフェ", "is_public_toilet": False},
+            {"title": "厕所B", "category": "喫茶店", "is_public_toilet": False},
+        ])
+        result = app.filter_toilets(df, "カフェ・飲食")
+        assert len(result) == 2
 
 
 class TestSearchToilets:
@@ -81,27 +87,32 @@ class TestGetScoreStyle:
     """スコアスタイル取得テスト"""
 
     def test_score_very_clean(self):
-        color, emoji, label = app.get_score_style(90)
+        from app_config import get_score_style
+        color, emoji, label = get_score_style(90)
         assert emoji == "✨"
         assert label == "とてもきれい"
 
     def test_score_clean(self):
-        color, emoji, label = app.get_score_style(70)
+        from app_config import get_score_style
+        color, emoji, label = get_score_style(70)
         assert emoji == "😊"
         assert label == "きれい"
 
     def test_score_normal(self):
-        color, emoji, label = app.get_score_style(55)
+        from app_config import get_score_style
+        color, emoji, label = get_score_style(55)
         assert emoji == "😐"
         assert label == "普通"
 
     def test_score_slightly_dirty(self):
-        color, emoji, label = app.get_score_style(40)
+        from app_config import get_score_style
+        color, emoji, label = get_score_style(40)
         assert emoji == "😨"
         assert label == "少し気になる"
 
     def test_score_dirty(self):
-        color, emoji, label = app.get_score_style(20)
+        from app_config import get_score_style
+        color, emoji, label = get_score_style(20)
         assert emoji == "💩"
         assert label == "要注意"
 
@@ -110,22 +121,27 @@ class TestEscaping:
     """HTMLエスケープテスト"""
 
     def test_esc_basic(self):
-        assert app.esc("<test>") == "&lt;test&gt;"
+        from app_config import esc
+        assert esc("<test>") == "&lt;test&gt;"
 
     def test_esc_quote(self):
-        assert app.esc('he said "hi"') == "he said &quot;hi&quot;"
+        from app_config import esc
+        assert esc('he said "hi"') == "he said &quot;hi&quot;"
 
     def test_esc_none(self):
-        assert app.esc(None) == ""
+        from app_config import esc
+        assert esc(None) == ""
 
     def test_esc_empty(self):
-        assert app.esc("") == ""
+        from app_config import esc
+        assert esc("") == ""
 
 
 class TestBuildPopupHtml:
     """ポップアップHTML生成テスト"""
 
     def test_build_popup_basic(self):
+        from ui.popups import build_popup_html
         toilet = {
             "title": "测试厕所",
             "category": "公园",
@@ -137,11 +153,12 @@ class TestBuildPopupHtml:
             "rating": 4.5,
             "review_count": 100,
         }
-        html = app.build_popup_html(toilet)
+        html = build_popup_html(toilet)
         assert "测试厕所" in html
-        assert "85.0" in html or "85" in html
+        assert "85" in html
 
     def test_build_popup_private(self):
+        from ui.popups import build_popup_html
         toilet = {
             "title": "私营厕所",
             "category": "餐厅",
@@ -153,9 +170,9 @@ class TestBuildPopupHtml:
             "rating": 3.5,
             "review_count": 50,
         }
-        html = app.build_popup_html(toilet)
+        html = build_popup_html(toilet)
         assert "私营厕所" in html
-        assert "公共トイレ" not in html
+        assert "公共厕所" not in html
 
 
 if __name__ == "__main__":
