@@ -27,6 +27,9 @@ ui/start.bat
 # Screenshots
 *.png
 
+# Scraper data
+batch/data/
+
 # Python
 __pycache__/
 *.pyc
