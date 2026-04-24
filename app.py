@@ -24,6 +24,7 @@ from app_config import (
     esc,
     PREFECTURE_CENTERS,
     TILE_OPTIONS,
+    POPUP_FIX_JS,
 )
 
 PER_PAGE = 20
@@ -33,8 +34,21 @@ PER_PAGE = 20
 # データ読み込み
 # ============================================================
 def load_data():
-    with open(DATA_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(DATA_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if "toilets" not in data or "metadata" not in data:
+            raise ValueError("Invalid data structure")
+        return data
+    except FileNotFoundError:
+        st.error(f"データファイルが見つかりません: {DATA_PATH}")
+        return {"metadata": {"total": 0, "scored": 0, "public_toilets": 0, "center_lat": 36.2231, "center_lng": 139.3772, "zoom": 13, "area_name": "エラー"}, "toilets": []}
+    except json.JSONDecodeError:
+        st.error(f"データファイルの形式が不正です: {DATA_PATH}")
+        return {"metadata": {"total": 0, "scored": 0, "public_toilets": 0, "center_lat": 36.2231, "center_lng": 139.3772, "zoom": 13, "area_name": "エラー"}, "toilets": []}
+    except Exception as e:
+        st.error(f"データ読み込みエラー: {e}")
+        return {"metadata": {"total": 0, "scored": 0, "public_toilets": 0, "center_lat": 36.2231, "center_lng": 139.3772, "zoom": 13, "area_name": "エラー"}, "toilets": []}
 
 
 @st.cache_data(ttl=3600)
@@ -98,57 +112,10 @@ def build_map(toilets: list, center_lat: float, center_lng: float, zoom: int, ti
         control_scale=True,
     )
 
-    # ポップアップが地図枠内に収まるよう Leaflet イベントで自動パン
-    popup_fix_js = """
-    <script>
-    (function(){
-      function fixPopups(){
-        var mapEl = document.getElementById('map');
-        if(!mapEl) { setTimeout(fixPopups, 500); return; }
-        var lmap = null;
-        // foliumが生成したL.Mapを探す
-        for(var k in window){
-          try{ if(window[k] && window[k].getContainer && window[k].getContainer()===mapEl){ lmap=window[k]; break; } }catch(e){}
-        }
-        if(!lmap){ setTimeout(fixPopups, 500); return; }
+    m.get_root().html.add_child(folium.Element(POPUP_FIX_JS))
 
-        lmap.on('popupopen', function(e){
-          var px = lmap.latLngToContainerPoint(e.popup.getLatLng());
-          // ポップアップをマーカーより上ではなく下（手前）に表示
-          // 高さを取得して自動パン先を計算
-          setTimeout(function(){
-            var popup = e.popup._container;
-            if(!popup) return;
-            var mapRect = lmap.getContainer().getBoundingClientRect();
-            var popRect = popup.getBoundingClientRect();
-            // 左右はみ出し補正
-            if(popRect.left < mapRect.left + 8){
-              popup.style.left = (mapRect.left + 8 - popRect.left + parseFloat(popup.style.left||0)) + 'px';
-            }
-            if(popRect.right > mapRect.right - 8){
-              popup.style.left = (parseFloat(popup.style.left||0) - (popRect.right - mapRect.right + 8)) + 'px';
-            }
-            // 上はみ出し → マップを下にパン
-            if(popRect.top < mapRect.top + 8){
-              var dy = mapRect.top + 8 - popRect.top;
-              lmap.panBy([0, -dy], {animate: true, duration: 0.2});
-            }
-            // 下はみ出し → マップを上にパン
-            if(popRect.bottom > mapRect.bottom - 8){
-              var dy = popRect.bottom - mapRect.bottom + 8;
-              lmap.panBy([0, dy], {animate: true, duration: 0.2});
-            }
-          }, 50);
-        });
-      }
-      fixPopups();
-    })();
-    </script>
-    """
-    m.get_root().html.add_child(folium.Element(popup_fix_js))
-
-# クラスター閾値をデータ件数に応じて動的調整
-    cluster_radius = 50 if len(filtered) < 500 else 80 if len(filtered) < 1000 else 100
+    # クラスター閾値をデータ件数に応じて動的調整
+    cluster_radius = 50 if len(toilets) < 500 else 80 if len(toilets) < 1000 else 100
 
     cluster = MarkerCluster(
         options={"maxClusterRadius": cluster_radius, "spiderfyOnMaxZoom": True},
