@@ -237,6 +237,16 @@ MOBILE_CSS = """
     .back-to-top .back-btn {
         color: #f0f0f0 !important;
     }
+
+    /* トイレカード */
+    .toilet-card {
+        background: #ffffff !important;
+        color: #222222 !important;
+        border-color: #e0e0e0 !important;
+    }
+    .toilet-card span, .toilet-card div {
+        color: inherit !important;
+    }
 }
 </style>
 """

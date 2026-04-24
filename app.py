@@ -3,7 +3,6 @@ toilet-map/app.py
 Streamlit版トイレきれい度マップ
 toilets.jsonを読み込んでインタラクティブに表示する
 """
-import json
 import streamlit as st
 import pandas as pd
 import folium
@@ -12,8 +11,6 @@ from streamlit_folium import st_folium
 from ui.styles import MOBILE_CSS
 from ui.components import (
     render_score_legend,
-    render_filter_buttons,
-    render_detail_card,
     render_toilet_card,
 )
 from ui.popups import build_popup_html
@@ -25,6 +22,7 @@ from app_config import (
     get_score_style,
     esc,
     PREFECTURE_CENTERS,
+    TILE_OPTIONS,
 )
 
 PER_PAGE = 20
@@ -40,14 +38,8 @@ def load_data():
 
 @st.cache_data(ttl=3600)
 def _load_data_cached():
-    return load_data()
-
-
-@st.cache_data(ttl=3600)
-def _compute_prefecture_stats(toilets_json: str) -> dict:
-    """全データから都道府県別統計をJSON文字列でキャッシュ（TTL 1時間）"""
-    import json
-    toilets = json.loads(toilets_json)
+    data = load_data()
+    toilets = data["toilets"]
     stats = {}
     for t in toilets:
         pref = t.get("prefecture", "")
@@ -60,7 +52,10 @@ def _compute_prefecture_stats(toilets_json: str) -> dict:
     for pref, s in stats.items():
         s["center_lat"] = sum(s["lats"]) / len(s["lats"])
         s["center_lng"] = sum(s["lngs"]) / len(s["lngs"])
-    return stats
+        del s["lats"]
+        del s["lngs"]
+    data["pref_stats"] = stats
+    return data
 
 
 # ============================================================
@@ -93,13 +88,12 @@ def search_toilets(df: pd.DataFrame, query: str) -> pd.DataFrame:
 # ============================================================
 # マップ構築
 # ============================================================
-def build_map(toilets: list, center_lat: float, center_lng: float, zoom: int) -> folium.Map:
+def build_map(toilets: list, center_lat: float, center_lng: float, zoom: int, tile: str = "OpenStreetMap") -> folium.Map:
     """Folium地図を生成してマーカーを配置"""
     m = folium.Map(
         location=[center_lat, center_lng],
         zoom_start=zoom,
-        tiles="OpenStreetMap",
-        # モバイルでのスワイプ操作を改善
+        tiles=tile,
         control_scale=True,
     )
 
@@ -219,11 +213,15 @@ def main():
     # フィルタ＆検索（モバイルでは縦並び）
     col_pref, col_filter, col_search = st.columns([1, 1, 2])
     with col_pref:
-        selected_pref = st.selectbox("都道府県", prefectures, label_visibility="collapsed")
+        selected_pref = st.selectbox("都道府県", prefectures, label_visibility="collapsed", key="pref_select")
     with col_filter:
-        filter_type = st.selectbox("フィルタ", list(FILTER_CONFIG.keys()), label_visibility="collapsed")
+        filter_type = st.selectbox("フィルタ", list(FILTER_CONFIG.keys()), label_visibility="collapsed", key="filter_select")
     with col_search:
-        search_query = st.text_input("検索（名前・住所）", "", placeholder="🔍 名前・住所で検索…", label_visibility="collapsed")
+        search_query = st.text_input("検索（名前・住所）", "", placeholder="🔍 名前・住所で検索…", label_visibility="collapsed", key="search_input")
+
+    # タイルレイヤー選択
+    tile_name = st.selectbox("地図スタイル", list(TILE_OPTIONS.keys()), label_visibility="collapsed", key="tile_select")
+    tile = TILE_OPTIONS[tile_name]
 
     # フィルタ→検索→ソート
     filtered = filter_toilets(df, filter_type, selected_pref)
@@ -231,8 +229,7 @@ def main():
     filtered = filtered.sort_values("toilet_score", ascending=False)
 
     # マップ中心座標：都道府県選択時はその県の中間点へ、それ以外はデータ全体の中間点へ
-    # 動的計算（前処理をキャッシュ）
-    stats = _compute_prefecture_stats(json.dumps(toilets, ensure_ascii=False))
+    stats = data.get("pref_stats", {})
     if selected_pref != "全て" and selected_pref in PREFECTURE_CENTERS:
         if selected_pref in stats and stats[selected_pref]["count"] >= 5:
             map_lat = stats[selected_pref]["center_lat"]
@@ -246,16 +243,37 @@ def main():
         map_lng = meta["center_lng"]
         map_zoom = meta["zoom"]
 
+    # フィルタ変更時はページをリセット
+    filter_key = f"{selected_pref}|{filter_type}|{search_query}"
+    if st.session_state.get("last_filter_key", "") != filter_key:
+        st.session_state.page = 1
+        st.session_state.last_filter_key = filter_key
+
     total_items = len(filtered)
     total_pages = max(1, (total_items + PER_PAGE - 1) // PER_PAGE)
-    page = st.number_input(
-        f"ページ (1/{total_pages})",
-        min_value=1,
-        max_value=total_pages,
-        value=1,
-        step=1,
-        label_visibility="collapsed",
-    )
+
+    if "page" not in st.session_state:
+        st.session_state.page = 1
+    page = st.session_state.page
+
+    col_prev, col_page, col_next = st.columns([1, 2, 1])
+    with col_prev:
+        prev_disabled = page <= 1
+        if st.button("◀ 前へ", disabled=prev_disabled, use_container_width=True):
+            st.session_state.page = max(1, page - 1)
+            st.rerun()
+    with col_page:
+        st.markdown(
+            f"<div style='text-align:center;padding:4px;font-size:14px;font-weight:600;'>"
+            f"ページ {page}/{total_pages}</div>",
+            unsafe_allow_html=True,
+        )
+    with col_next:
+        next_disabled = page >= total_pages
+        if st.button("次へ ▶", disabled=next_disabled, use_container_width=True):
+            st.session_state.page = min(total_pages, page + 1)
+            st.rerun()
+
     start_idx = (page - 1) * PER_PAGE
     end_idx = start_idx + PER_PAGE
     page_items = filtered.iloc[start_idx:end_idx]
@@ -269,13 +287,14 @@ def main():
         unsafe_allow_html=True
     )
 
-    # 地図表示
+    # 地図表示（マップは常に全フィルタ結果を表示、ランキングのみページネーション）
     map_height = 500
     m = build_map(
-        page_items.to_dict("records"),
+        filtered.to_dict("records"),
         map_lat,
         map_lng,
         map_zoom,
+        tile=tile,
     )
     st_folium(m, height=map_height, returned_objects=[], use_container_width=True)
 

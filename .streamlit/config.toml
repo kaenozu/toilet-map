@@ -10,3 +10,10 @@ gatherUsageStats = false
 [client]
 showSidebarNavigation = false
 toolbarMode = "viewer"
+
+[theme]
+primaryColor = "#1a73e8"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f0f2f6"
+textColor = "#222222"
+font = "sans serif"
