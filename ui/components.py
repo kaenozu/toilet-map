@@ -4,10 +4,6 @@ Streamlit UI components for toilet map
 """
 import html
 import streamlit as st
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 import app_config
 from app_config import get_score_style, esc, FILTER_CONFIG, MAX_SAMPLE_REVIEWS
 

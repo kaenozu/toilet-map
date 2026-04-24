@@ -121,13 +121,13 @@ def scrape_query(query: str, output_path: str) -> bool:
         # 結果ファイルはコンテナ内で作成されるので、事前作成は不要
         cmd = [
             "docker", "run", "--rm",
-            "-v", f"{query_docker}:/query.txt",
+            "-v", f"{query_docker}:/query.txt:ro",
             "-v", f"{output_dir_docker}:/output",
             DOCKER_IMAGE,
             "-depth", SCRAPER_DEPTH,
             "-input", "/query.txt",
             "-results", f"/output/{output_name}",
-            "-json", "--extra-reviews",
+            "-json",
             "-lang", SCRAPER_LANG,
             "-exit-on-inactivity", EXIT_ON_INACTIVITY,
         ]

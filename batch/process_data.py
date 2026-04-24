@@ -309,7 +309,7 @@ def is_toilet_place(place: dict) -> bool:
 def process_place(place: dict) -> dict | None:
     """1地点を処理してUI用データに変換"""
     lat = place.get("latitude")
-    lon = place.get("longitude") or place.get("longtitude")
+    lon = place.get("longitude") or place.get("longtitude")  # 古いキー互換
     if not lat or not lon:
         return None
 

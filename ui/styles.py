@@ -129,6 +129,16 @@ MOBILE_CSS = """
  }
  .back-btn:active { transform: scale(0.9); }
 
+/* フィルター行の垂直方向アライメント修正 */
+[data-testid="stHorizontalBlock"] {
+    align-items: flex-start !important;
+}
+[data-testid="stHorizontalBlock"] [data-testid="stColumn"] {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+}
+
 /* スマホではポップアップ幅を画面幅に合わせる */
 @media (max-width: 768px) {
     .leaflet-popup-content-wrapper {

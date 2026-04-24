@@ -9,8 +9,6 @@ import pandas as pd
 import folium
 from folium.plugins import MarkerCluster
 from streamlit_folium import st_folium
-import app_config
-
 from ui.styles import MOBILE_CSS
 from ui.components import (
     render_score_legend,
@@ -184,8 +182,11 @@ def main():
     df = pd.DataFrame(toilets)
     df = df[df["toilet_review_count"] > 0].reset_index(drop=True)
 
-    # 都道府県リスト（ソート）
-    prefectures = ["全て"] + sorted(df["prefecture"].dropna().unique().tolist())
+    # 都道府県フィルター（prefecture 列が存在しない場合は「全て」のみ）
+    if "prefecture" in df.columns:
+        prefectures = ["全て"] + sorted(df["prefecture"].dropna().unique().tolist())
+    else:
+        prefectures = ["全て"]
 
     st.caption(
         f"{meta['area_name']} - Googleレビューからトイレのきれい度を可視化 | "
