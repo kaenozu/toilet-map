@@ -29,8 +29,7 @@ MAP_HEIGHT = 500
 
 TILE_OPTIONS = {
     "OpenStreetMap（標準）": "OpenStreetMap",
-    "航空写真（Stamen）": "Stamen Terrain",
-    "World Map（Cartodb）": "CartoDB positron",
+    "モノクロ（Cartodb）": "CartoDB positron",
 }
 
 

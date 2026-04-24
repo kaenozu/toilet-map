@@ -13,6 +13,7 @@ from app_config import (
     SCORE_RANGES,
     FILTER_CONFIG,
     PREFECTURE_CENTERS,
+    TILE_OPTIONS,
 )
 
 
@@ -133,6 +134,18 @@ class TestScoreRanges:
     def test_ranges_have_4_elements(self):
         for r in SCORE_RANGES:
             assert len(r) == 4
+
+
+class TestTileOptions:
+    def test_tile_options_defined(self):
+        assert len(TILE_OPTIONS) >= 2
+        assert "OpenStreetMap（標準）" in TILE_OPTIONS
+        assert TILE_OPTIONS["OpenStreetMap（標準）"] == "OpenStreetMap"
+
+    def test_tile_keys_are_strings(self):
+        for name, tile in TILE_OPTIONS.items():
+            assert isinstance(name, str)
+            assert isinstance(tile, str)
 
 
 if __name__ == "__main__":

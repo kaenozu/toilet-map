@@ -3,6 +3,7 @@ toilet-map/app.py
 Streamlit版トイレきれい度マップ
 toilets.jsonを読み込んでインタラクティブに表示する
 """
+import json
 import streamlit as st
 import pandas as pd
 import folium
@@ -146,8 +147,11 @@ def build_map(toilets: list, center_lat: float, center_lng: float, zoom: int, ti
     """
     m.get_root().html.add_child(folium.Element(popup_fix_js))
 
+# クラスター閾値をデータ件数に応じて動的調整
+    cluster_radius = 50 if len(filtered) < 500 else 80 if len(filtered) < 1000 else 100
+
     cluster = MarkerCluster(
-        options={"maxClusterRadius": 50, "spiderfyOnMaxZoom": True},
+        options={"maxClusterRadius": cluster_radius, "spiderfyOnMaxZoom": True},
         name="トイレ",
     ).add_to(m)
 
