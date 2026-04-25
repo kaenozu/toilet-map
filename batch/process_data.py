@@ -9,6 +9,7 @@ import re
 import sys
 from collections import Counter
 from datetime import datetime
+from typing import Optional, TypedDict
 from utils import load_jsonl, save_json, logger
 from scoring_config import (
     SCORE_CLAMP_MIN,
@@ -35,6 +36,62 @@ from scoring_config import (
 )
 
 
+class PlaceDict(TypedDict, total=False):
+    """スクレイプされた地点データの型"""
+    title: str
+    category: str
+    address: str
+    latitude: float
+    longitude: float
+    longtitude: float  # タイプミス: longitude の代わりに使われる場合
+    phone: str
+    review_rating: float
+    review_count: int
+    link: str
+    user_reviews: list[dict]
+    user_reviews_extended: list[dict]
+
+
+class ToiletReviewDict(TypedDict):
+    """トイレビューの情報"""
+    text: str
+    rating: float | str | None
+    when: str | None
+    name: str | None
+    score: float
+    matched_keywords: list[str]
+    toilet_context: str
+
+
+class ToiletScoreInfo(TypedDict):
+    """スコア計算結果"""
+    score: float
+    confidence: float
+    toilet_review_count: int
+    toilet_reviews: list[ToiletReviewDict]
+    top_keywords: list[tuple[str, int]]
+
+
+class ToiletResultDict(TypedDict):
+    """処理済みトイレデータ"""
+    title: str
+    category: str
+    address: str
+    lat: float
+    lng: float
+    phone: str
+    rating: float
+    review_count: int
+    link: str
+    is_public_toilet: bool
+    toilet_score: float
+    confidence: float
+    toilet_review_count: int
+    top_keywords: list[tuple[str, int]]
+    sample_reviews: list[ToiletReviewDict]
+    prefecture: str
+
+
 def mentions_toilet(text: str) -> bool:
     return bool(TOILET_MENTION_RE.search(text))
 
@@ -49,7 +106,7 @@ def extract_toilet_contexts(text: str) -> list[str]:
     return [sentences[i] for i in sorted(toilet_indices)] if toilet_indices else []
 
 
-def _apply_keyword_scoring(target_text: str):
+def _apply_keyword_scoring(target_text: str) -> tuple[float, list[str]]:
     score = 0.0
     matched = []
     for kw, val in POSITIVE_KEYWORDS.items():
@@ -65,7 +122,7 @@ def _apply_keyword_scoring(target_text: str):
     return score, matched
 
 
-def _apply_negation_correction(target_text: str, score: float, matched: list[str]):
+def _apply_negation_correction(target_text: str, score: float, matched: list[str]) -> tuple[float, list[str]]:
     for neg_word in NEGATION_WORDS:
         if neg_word not in target_text:
             continue
@@ -89,7 +146,7 @@ def _apply_negation_correction(target_text: str, score: float, matched: list[str
     return score, matched
 
 
-def score_toilet_from_review(text: str):
+def score_toilet_from_review(text: str) -> tuple[float, list[str]]:
     contexts = extract_toilet_contexts(text) or [text]
     target_text = "。".join(contexts)
     score, matched = _apply_keyword_scoring(target_text)
@@ -106,7 +163,7 @@ def extract_prefecture(address: str) -> str:
     return ""
 
 
-def _adjust_by_rating(score: float, matched: list[str], rating: float):
+def _adjust_by_rating(score: float, matched: list[str], rating: float) -> tuple[float, list[str]]:
     if rating >= RATING_THRESHOLD_HIGH:
         if score < 0:
             score *= NEGATIVE_DAMPEN_HIGH
@@ -124,7 +181,7 @@ def _adjust_by_rating(score: float, matched: list[str], rating: float):
     return score, matched
 
 
-def compute_toilet_score(place: dict) -> dict:
+def compute_toilet_score(place: PlaceDict) -> ToiletScoreInfo:
     reviews = (place.get("user_reviews") or []) + (place.get("user_reviews_extended") or [])
     toilet_reviews = []
     total_score = 0.0
@@ -183,13 +240,13 @@ def compute_toilet_score(place: dict) -> dict:
     }
 
 
-def is_toilet_place(place: dict) -> bool:
+def is_toilet_place(place: PlaceDict) -> bool:
     cat = (place.get("category") or "").lower()
     title = (place.get("title") or "").lower()
     return any(tc.lower() in cat or tc.lower() in title for tc in TOILET_CATEGORIES)
 
 
-def process_place(place: dict) -> dict | None:
+def process_place(place: PlaceDict) -> Optional[ToiletResultDict]:
     lat = place.get("latitude")
     lon = place.get("longitude") or place.get("longtitude")
     if not lat or not lon:
@@ -221,13 +278,13 @@ def process_place(place: dict) -> dict | None:
     }
 
 
-def make_place_key(place: dict) -> str:
+def make_place_key(place: PlaceDict) -> str:
     lat = float(place.get("latitude") or 0)
     lng = float(place.get("longitude") or place.get("longtitude") or 0)
     return f"{place.get('title', '')}@{lat:.4f},{lng:.4f}"
 
 
-def make_result_key(result: dict) -> str:
+def make_result_key(result: ToiletResultDict) -> str:
     return f"{result['title']}@{result['lat']:.4f},{result['lng']:.4f}"
 
 
@@ -239,7 +296,7 @@ def load_existing(path: str) -> dict:
         return {"metadata": None, "toilets": []}
 
 
-def deduplicate(places: list[dict]) -> list[dict]:
+def deduplicate(places: list[PlaceDict]) -> list[PlaceDict]:
     seen = set()
     unique = []
     for p in places:
@@ -250,7 +307,7 @@ def deduplicate(places: list[dict]) -> list[dict]:
     return unique
 
 
-def calc_dynamic_zoom(results: list[dict]) -> int:
+def calc_dynamic_zoom(results: list[ToiletResultDict]) -> int:
     if len(results) < 2:
         return 13
     lats = [r["lat"] for r in results]
@@ -263,7 +320,7 @@ def calc_dynamic_zoom(results: list[dict]) -> int:
     return 15
 
 
-def build_metadata(results: list[dict]) -> dict:
+def build_metadata(results: list[ToiletResultDict]) -> dict:
     if results:
         center_lat = sum(r["lat"] for r in results) / len(results)
         center_lng = sum(r["lng"] for r in results) / len(results)

@@ -5,7 +5,6 @@ batch/nationwide_runner.py
 import os
 import sys
 import subprocess
-from utils import logger
 
 PREFECTURES = [
     "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
@@ -18,14 +17,10 @@ PREFECTURES = [
 ]
 
 def run_prefecture(pref: str):
-    logger.info(f"=== Starting Prefecture: {pref} ===")
     query_file = os.path.join("queries.d", pref, "batch_001.txt")
     if not os.path.exists(query_file):
-        logger.warning(f"Query file not found: {query_file}")
         return
 
-    # scrape_runner を呼び出し
-    # 環境変数 QUERIES を設定して、その都道府県のクエリファイルを読み込ませる
     env = os.environ.copy()
     env["QUERIES"] = query_file
     env["PROGRESS_FILE"] = f".progress_{pref}"

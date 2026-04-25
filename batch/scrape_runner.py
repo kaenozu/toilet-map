@@ -17,6 +17,7 @@ import shutil
 import tempfile
 import re
 from pathlib import Path
+from typing import Optional
 from utils import logger, count_lines
 
 # ============================================================
@@ -30,17 +31,17 @@ PROCESSED = os.path.join(SCRIPT_DIR, "..", "data", "toilets.json")
 PROGRESS_FILE = os.path.join(SCRIPT_DIR, os.environ.get("PROGRESS_FILE", ".progress"))
 
 SLEEP_BETWEEN = int(os.environ.get("SLEEP_BETWEEN", "120"))
-MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "2"))
+MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "2"))  # 0-based: 実際は MAX_RETRIES+1 回実行
 RETRY_SLEEP = int(os.environ.get("RETRY_SLEEP", "300"))
 
 FILTER_CITY = os.environ.get("CITY", "")
 FILTER_PREF = os.environ.get("PREFECTURE", "")
 
-# Docker設定
-DOCKER_IMAGE = "gosom/google-maps-scraper"
-SCRAPER_DEPTH = "1"
-SCRAPER_LANG = "ja"
-EXIT_ON_INACTIVITY = "5m"
+# Docker設定 (環境変数で上書き可能)
+DOCKER_IMAGE = os.environ.get("SCRAPER_IMAGE", "gosom/google-maps-scraper")
+SCRAPER_DEPTH = os.environ.get("SCRAPER_DEPTH", "1")
+SCRAPER_LANG = os.environ.get("SCRAPER_LANG", "ja")
+EXIT_ON_INACTIVITY = os.environ.get("EXIT_ON_INACTIVITY", "5m")
 
 
 # ============================================================
@@ -67,14 +68,14 @@ def load_progress(path: str = PROGRESS_FILE) -> set[int]:
         return {int(line.strip()) for line in f if line.strip()}
 
 
-def save_progress(done: set[int], path: str = PROGRESS_FILE):
+def save_progress(done: set[int], path: str = PROGRESS_FILE) -> None:
     """進捗をファイルに書き出す"""
     with open(path, "w") as f:
         for idx in sorted(done):
             f.write(f"{idx}\n")
 
 
-def merge_part_files(raw_dir: str, output_path: str, total: int):
+def merge_part_files(raw_dir: str, output_path: str, total: int) -> None:
     """partファイルを1つの出力ファイルにマージ"""
     with open(output_path, "w", encoding="utf-8") as outf:
         for i in range(1, total + 1):
@@ -102,20 +103,16 @@ def to_docker_path(win_path: str) -> str:
 # ============================================================
 def scrape_query(query: str, output_path: str) -> bool:
     """1クエリをスクレイプ。成功ならTrue"""
-    # 一時クエリファイル（レースコンディション回避）
     with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False, suffix='.txt') as tmp:
         tmp_query = tmp.name
         tmp.write(query)
 
     try:
         query_docker = to_docker_path(tmp_query)
-
-        # Dockerボリュームマウント: ディレクトリ単位でマウント（rename対応）
         output_dir = os.path.dirname(output_path)
         output_name = os.path.basename(output_path)
         output_dir_docker = to_docker_path(output_dir)
 
-        # 結果ファイルはコンテナ内で作成されるので、事前作成は不要
         cmd = [
             "docker", "run", "--rm",
             "-v", f"{query_docker}:/query.txt:ro",
@@ -129,14 +126,9 @@ def scrape_query(query: str, output_path: str) -> bool:
             "-exit-on-inactivity", EXIT_ON_INACTIVITY,
         ]
 
-        print(f"  Running: {query}")
+        logger.info(f"Running: {query}")
         try:
-            # Dockerプロセスを実行（出力はコンソールに直接流す）
-            result = subprocess.run(
-                cmd,
-                cwd=SCRIPT_DIR,
-                timeout=600,  # 10 minutes max per query
-            )
+            result = subprocess.run(cmd, cwd=SCRIPT_DIR, timeout=600)
         except subprocess.TimeoutExpired:
             logger.error("Query exceeded 10 minutes")
             return False
@@ -157,7 +149,6 @@ def scrape_query(query: str, output_path: str) -> bool:
             except PermissionError:
                 pass
 
-    # 出力ファイル確認
     if not os.path.exists(output_path):
         logger.error("Output file not created")
         return False
@@ -199,7 +190,7 @@ def parse_args() -> dict:
             try:
                 args["max_queries"] = int(sys.argv[i + 1])
             except ValueError:
-                print(f"[WARN] Invalid --max-queries value: {sys.argv[i+1]}")
+                logger.warning(f"Invalid --max-queries value: {sys.argv[i+1]}")
             i += 2
         else:
             i += 1
@@ -207,12 +198,7 @@ def parse_args() -> dict:
 
 
 def detect_city_from_queries(queries_path: str) -> tuple[str, str]:
-    """クエリファイルから都市名と都道府県を自動検出
-    1) '# city: XXX' ヘッダーコメント
-    2) 'in XXX市' クエリパターン
-    3) クエリ内に頻出する市区町村名
-    Returns: (city, prefecture)
-    """
+    """クエリファイルから都市名と都道府県を自動検出"""
     city = ""
     pref = ""
     city_counts = {}
@@ -243,95 +229,106 @@ def detect_city_from_queries(queries_path: str) -> tuple[str, str]:
     return city, pref
 
 
-# ============================================================
-# メインループ
-# ============================================================
+def fetch_city_bounds(city: str, pref: str) -> Optional[dict]:
+    """市のバウンディングボックスを取得（キャッシュ利用）"""
+    from city_bounds import get_city_bounds
+    if pref:
+        logger.info(f"Fetching bounding box for {pref}{city}...")
+        bounds = get_city_bounds(city, pref)
+        if bounds:
+            return bounds
+    logger.info(f"Fetching bounding box for {city}...")
+    return get_city_bounds(city)
+
+
+def apply_city_filter(city: str, pref: str, raw_output: str) -> tuple[str, int, int]:
+    """市フィルタを適用。戻り値: (処理用ファイルパス, 総生データ数, フィルタ後数)"""
+    from city_bounds import filter_raw_data
+
+    bounds = fetch_city_bounds(city, pref)
+    filtered_path = str(Path(raw_output).with_suffix("_filtered.json"))
+    total_raw, kept = filter_raw_data(raw_output, filtered_path, city, bounds)
+    return filtered_path, total_raw, kept
+
+
 def run_batch():
     """バッチスクレイプ全体を実行"""
     args = parse_args()
     queries = load_queries()
     total = len(queries)
 
-    # 進捗ファイルの決定
     progress_file = args.get("progress_file") or PROGRESS_FILE
 
-    # 都市名決定: CLI > 環境変数 > クエリから自動検出
     city = args["city"]
     pref = args["prefecture"]
     if not city:
         city, pref = detect_city_from_queries(QUERIES_FILE)
 
     if city:
-        print(f"City filter: {pref}{city}")
+        logger.info(f"City filter: {pref}{city}")
     else:
-        print("City filter: OFF (no --city specified, could not auto-detect)")
+        logger.info("City filter: OFF (no --city specified, could not auto-detect)")
 
-    print(f"Queries: {total}")
-    print(f"Sleep between: {SLEEP_BETWEEN}s")
-    print(f"Est. time: ~{total * (180 + SLEEP_BETWEEN) // 60} min")
-    print()
+    logger.info(f"Queries: {total}")
+    logger.info(f"Sleep between: {SLEEP_BETWEEN}s")
+    logger.info(f"Est. time: ~{total * (180 + SLEEP_BETWEEN) // 60} min")
 
     os.makedirs(RAW_DIR, exist_ok=True)
 
     # 進捗読み込み
     done = load_progress(progress_file)
     if done:
-        print(f"Resuming: {len(done)}/{total} already done.")
-        # 欠落partファイル確認
+        logger.info(f"Resuming: {len(done)}/{total} already done.")
         for idx in list(done):
             if not os.path.exists(os.path.join(RAW_DIR, f"part_{idx:03d}.json")):
-                print(f"  Missing part file for query #{idx} - will re-run")
+                logger.warning(f"Missing part file for query #{idx} - will re-run")
                 done.discard(idx)
-        print()
+        logger.info("")
     else:
-        # 新規開始: バックアップ＆クリーン
         if os.path.exists(RAW_OUTPUT):
             shutil.copy2(RAW_OUTPUT, RAW_OUTPUT + ".bak")
-            print("Previous data backed up.")
+            logger.info("Previous data backed up.")
         if os.path.exists(RAW_DIR):
             shutil.rmtree(RAW_DIR)
         os.makedirs(RAW_DIR, exist_ok=True)
-        print()
+        logger.info("")
 
     success = skipped = failed = 0
 
-    #  --max-queries で処理件数を制限
     max_q = args.get("max_queries")
     if max_q is not None:
         queries = queries[:max_q]
         total = len(queries)
-        print(f"[MAX-QUERIES] Limited to first {total} queries")
+        logger.info(f"[MAX-QUERIES] Limited to first {total} queries")
 
-    # 既存の進捗で範囲外のものを除外
     if done:
         done = {idx for idx in done if 1 <= idx <= total}
-        print(f"Resuming: {len(done)}/{total} already done (after filter).")
+        logger.info(f"Resuming: {len(done)}/{total} already done (after filter).")
 
-    #  --dry-run モード: 実際にはスクレイプせずに進捗だけシミュレート
     if args.get("dry_run"):
-        print("[DRY-RUN] Dockerスクレイプをスキップします。全てのクエリを成功扱いとします。")
+        logger.info("[DRY-RUN] Dockerスクレイプをスキップします。")
         for i in range(1, total + 1):
             if i not in done:
                 done.add(i)
         save_progress(done, progress_file)
-        print(f"[DRY-RUN] 進捗ファイルに {len(done)}/{total} 件を記録しました。")
+        logger.info(f"[DRY-RUN] 進捗ファイルに {len(done)}/{total} 件を記録しました。")
         return 0
 
     for i, query in enumerate(queries, 1):
         part_file = os.path.join(RAW_DIR, f"part_{i:03d}.json")
         if i in done and os.path.exists(part_file):
-            print(f"[{i}/{total}] (done) {query}")
+            logger.info(f"[{i}/{total}] (done) {query}")
             skipped += 1
             continue
 
-        print(f"\n{'=' * 50}")
-        print(f"[{i}/{total}] {query}")
-        print(f"{'=' * 50}")
+        logger.info(f"\n{'=' * 50}")
+        logger.info(f"[{i}/{total}] {query}")
+        logger.info(f"{'=' * 50}")
 
         ok = False
         for retry in range(MAX_RETRIES + 1):
             if retry > 0:
-                print(f"  Retry #{retry} ... waiting {RETRY_SLEEP}s")
+                logger.info(f"  Retry #{retry} ... waiting {RETRY_SLEEP}s")
                 time.sleep(RETRY_SLEEP)
             if scrape_query(query, part_file):
                 ok = True
@@ -343,57 +340,44 @@ def run_batch():
             save_progress(done, progress_file)
         else:
             failed += 1
-            print(f"  !! FAILED: {query}")
-            print("  Rerun to resume from here.")
+            logger.error(f"  !! FAILED: {query}")
+            logger.info("  Rerun to resume from here.")
 
         if ok and i < total:
-            print(f"  Sleeping {SLEEP_BETWEEN}s ...")
+            logger.info(f"  Sleeping {SLEEP_BETWEEN}s ...")
             time.sleep(SLEEP_BETWEEN)
 
-    # ── マージ ──
-    print(f"\n{'=' * 50}")
-    print(f"  Scraping done  OK: {success} / Skip: {skipped} / Fail: {failed}")
-    print(f"{'=' * 50}\n")
+    logger.info(f"\n{'=' * 50}")
+    logger.info(f"  Scraping done  OK: {success} / Skip: {skipped} / Fail: {failed}")
+    logger.info(f"{'=' * 50}\n")
 
-    print("Merging results...")
+    logger.info("Merging results...")
     merge_part_files(RAW_DIR, RAW_OUTPUT, total)
     total_lines = count_lines(RAW_OUTPUT)
-    print(f"Total raw data: {total_lines} entries")
+    logger.info(f"Total raw data: {total_lines} entries")
 
-    # ── 市フィルタ ──
+    # 市フィルタ
     data_for_processing = RAW_OUTPUT
     if city:
-        from city_bounds import get_city_bounds, filter_raw_data
-
-        bounds = None
-        if pref:
-            print(f"Fetching bounding box for {pref}{city}...")
-            bounds = get_city_bounds(city, pref)
-        if not bounds:
-            print(f"Fetching bounding box for {city}...")
-            bounds = get_city_bounds(city)
-
-        filtered_path = str(Path(RAW_OUTPUT).with_suffix("_filtered.json"))
-        total_raw, kept = filter_raw_data(RAW_OUTPUT, filtered_path, city, bounds)
-
+        filtered_path, total_raw, kept = apply_city_filter(city, pref, RAW_OUTPUT)
         if kept == 0:
-            print(f"\n  WARNING: No entries matched city filter '{city}'")
-            print(f"  ({total_raw} raw entries were checked)")
-            print("  Falling back to unfiltered data\n")
+            logger.warning(f"\n  WARNING: No entries matched city filter '{city}'")
+            logger.info(f"  ({total_raw} raw entries were checked)")
+            logger.info("  Falling back to unfiltered data\n")
             data_for_processing = RAW_OUTPUT
         else:
             pct = kept / total_raw * 100 if total_raw > 0 else 0
-            print(f"  City filter: {kept}/{total_raw} entries kept ({pct:.1f}%)")
+            logger.info(f"  City filter: {kept}/{total_raw} entries kept ({pct:.1f}%)")
             data_for_processing = filtered_path
 
-    # ── データ処理 ──
-    print("Processing data (incremental merge)...")
+    # データ処理
+    logger.info("Processing data (incremental merge)...")
     proc = subprocess.run(
         [sys.executable, os.path.join(SCRIPT_DIR, "process_data.py"),
          data_for_processing, PROCESSED, "--incremental"],
     )
     if proc.returncode != 0:
-        print("[ERROR] Data processing failed")
+        logger.error("[ERROR] Data processing failed")
         sys.exit(1)
 
     # 成功時クリーンアップ
@@ -404,9 +388,9 @@ def run_batch():
                     shutil.rmtree(path)
                 else:
                     os.remove(path)
-                print(f"Cleaned up: {path}")
+                logger.info(f"Cleaned up: {path}")
 
-    print(f"\nOutput: {os.path.abspath(PROCESSED)}")
+    logger.info(f"\nOutput: {os.path.abspath(PROCESSED)}")
 
 
 if __name__ == "__main__":

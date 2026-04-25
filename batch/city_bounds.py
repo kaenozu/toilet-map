@@ -8,9 +8,20 @@ import os
 import time
 import urllib.request
 import urllib.parse
+from typing import Optional
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CACHE_FILE = os.path.join(SCRIPT_DIR, "city_bounds_cache.json")
+
+# 簡易ロガー
+import logging
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', '%Y-%m-%d %H:%M:%S')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
 
 
 def _load_cache() -> dict:
@@ -28,7 +39,7 @@ def _save_cache(cache: dict):
         json.dump(cache, f, ensure_ascii=False, indent=2)
 
 
-def get_city_bounds(city: str, prefecture: str = "") -> dict | None:
+def get_city_bounds(city: str, prefecture: str = "") -> Optional[dict]:
     cache = _load_cache()
     key = f"{prefecture}{city}"
     if key in cache:
@@ -47,12 +58,12 @@ def get_city_bounds(city: str, prefecture: str = "") -> dict | None:
         with urllib.request.urlopen(req, timeout=15) as resp:
             results = json.loads(resp.read().decode("utf-8"))
     except Exception as e:
-        print(f"  [city_bounds] Failed to fetch bounds for {key}: {e}")
+        logger.warning(f"Failed to fetch bounds for {key}: {e}")
     finally:
-        time.sleep(1.1)
+        time.sleep(1.1)  # Nominatim rate limit: 1 req/sec
 
     if not results:
-        print(f"  [city_bounds] No results for: {query}")
+        logger.warning(f"No results for: {query}")
         return None
 
     bb = results[0].get("boundingbox")
@@ -66,9 +77,7 @@ def get_city_bounds(city: str, prefecture: str = "") -> dict | None:
 
     cache[key] = bounds
     _save_cache(cache)
-    print(f"  [city_bounds] Fetched {key}: "
-          f"S={bounds['south']:.4f} N={bounds['north']:.4f} "
-          f"W={bounds['west']:.4f} E={bounds['east']:.4f}")
+    logger.info(f"Fetched {key}: S={bounds['south']:.4f} N={bounds['north']:.4f} W={bounds['west']:.4f} E={bounds['east']:.4f}")
     return bounds
 
 
@@ -76,7 +85,7 @@ def is_in_bounds(lat: float, lng: float, bounds: dict) -> bool:
     return bounds["south"] <= lat <= bounds["north"] and bounds["west"] <= lng <= bounds["east"]
 
 
-def filter_raw_data(input_path: str, output_path: str, city_name: str, bounds: dict | None = None) -> tuple[int, int]:
+def filter_raw_data(input_path: str, output_path: str, city_name: str, bounds: Optional[dict] = None) -> tuple[int, int]:
     kept = 0
     total = 0
     with open(input_path, "r", encoding="utf-8") as inf, open(output_path, "w", encoding="utf-8") as outf:

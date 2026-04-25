@@ -4,6 +4,7 @@ Streamlit UI components for toilet map
 """
 import streamlit as st
 from app_config import get_score_style, esc
+from .types import ToiletDict
 
 
 def render_score_legend():
@@ -21,7 +22,7 @@ def render_score_legend():
     )
 
 
-def render_toilet_card(toilet: dict, rank: int = None):
+def render_toilet_card(toilet: ToiletDict, rank: int = None):
     """ランキングリストのトイレカード（1行）"""
     t = toilet
     color, emoji, label = get_score_style(t["toilet_score"])

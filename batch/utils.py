@@ -6,6 +6,7 @@ import json
 import os
 import logging
 import gzip
+from typing import Any
 
 # Configure logging
 logging.basicConfig(
@@ -15,7 +16,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def load_jsonl(path: str) -> list[dict]:
+def load_jsonl(path: str) -> list[dict[str, Any]]:
     """Load JSONL file into a list of dictionaries."""
     if not os.path.exists(path):
         return []
@@ -30,7 +31,7 @@ def load_jsonl(path: str) -> list[dict]:
                     logger.warning(f"Failed to decode JSON line in {path}: {e}")
     return places
 
-def save_json(path: str, data: dict, indent: int = 2, compress: bool = False):
+def save_json(path: str, data: dict[str, Any], indent: int = 2, compress: bool = False) -> None:
     """Save dictionary to JSON file (optionally compressed with gzip)."""
     target_path = path
     if compress:
@@ -50,6 +51,6 @@ def count_lines(path: str) -> int:
     with open(path, "r", encoding="utf-8") as f:
         return sum(1 for line in f if line.strip() and not line.startswith("#"))
 
-def ensure_dir(path: str):
+def ensure_dir(path: str) -> None:
     """Ensure directory exists."""
     os.makedirs(path, exist_ok=True)

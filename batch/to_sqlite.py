@@ -6,11 +6,12 @@ import sqlite3
 import json
 import os
 import gzip
+from typing import Optional
 from utils import logger
 
 DB_PATH = "data/toilets.db"
 
-def json_to_sqlite(json_path: str):
+def json_to_sqlite(json_path: str) -> None:
     logger.info(f"Converting {json_path} to SQLite...")
     
     if json_path.endswith(".gz"):

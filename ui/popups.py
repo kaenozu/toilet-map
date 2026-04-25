@@ -2,7 +2,9 @@
 ui/popups.py
 Popup HTML builders for toilet map markers
 """
+from typing import Optional
 from app_config import esc, get_score_style
+from .types import ToiletDict
 
 
 def _build_public_badge(is_public: bool) -> str:
@@ -14,7 +16,7 @@ def _build_public_badge(is_public: bool) -> str:
     )
 
 
-def _build_keyword_tags(keywords: list) -> str:
+def _build_keyword_tags(keywords: list[tuple[str, int]]) -> str:
     if not keywords:
         return ""
     tags = []
@@ -33,7 +35,7 @@ def _build_keyword_tags(keywords: list) -> str:
     return '<div style="margin-top:4px;line-height:2;">' + " ".join(tags) + "</div>"
 
 
-def _build_review_html(reviews: list) -> str:
+def _build_review_html(reviews: list[dict]) -> str:
     if not reviews:
         return ""
     seen = set()
@@ -74,13 +76,13 @@ def _build_link_html(link: str) -> str:
     )
 
 
-def build_popup_html(t: dict) -> str:
+def build_popup_html(t: ToiletDict) -> str:
     """1トイレ地点のポップアップHTMLを構築（コンパクト・スクロール対応）"""
     color, emoji, label = get_score_style(t["toilet_score"])
     badge = _build_public_badge(t["is_public_toilet"])
     confidence_pct = int(t["confidence"] * 100)
     phone_html = f'<span style="margin-right:6px;">📞{esc(t["phone"])}</span>' if t.get("phone") else ""
-    kw_html = _build_keyword_tags(t.get("top_keywords"))
+    kw_html = _build_keyword_tags(t.get("top_keywords", []))
     rev_html = _build_review_html(t.get("sample_reviews", []))
     link_html = _build_link_html(t.get("link", ""))
 

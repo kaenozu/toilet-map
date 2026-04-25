@@ -12,7 +12,8 @@ from app_config import (
     PREFECTURE_CENTERS,
     get_score_style,
 )
-from ui.popups import build_popup_html
+from .popups import build_popup_html
+from .types import ToiletDict
 
 
 CLUSTER_THRESHOLDS = [(500, 50), (1000, 80), (float("inf"), 100)]
@@ -43,7 +44,7 @@ def calc_map_center(
 
 
 def build_map(
-    toilets: list,
+    toilets: list[ToiletDict],
     center_lat: float,
     center_lng: float,
     zoom: int,

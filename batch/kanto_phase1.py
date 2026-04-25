@@ -7,6 +7,7 @@ import subprocess
 import sys
 import os
 import time
+from utils import logger
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -62,14 +63,13 @@ def run_scrape(pref: str, city: str, queries_rel: str, dry_run: bool = False) ->
             with open(queries_abs, "r", encoding="utf-8") as qf:
                 total_queries = sum(1 for line in qf if line.strip() and not line.startswith("#"))
             if last >= total_queries:
-                print(f"  [SKIP] {pref} already completed (progress: {last}/{total_queries})")
+                logger.info(f"  [SKIP] {pref} already completed (progress: {last}/{total_queries})")
                 return True
 
-    print(f"  [{pref}] City: {city}")
-    print(f"  [{pref}] Queries: {queries_rel}")
-    print(f"  [{pref}] Progress file: {progress_file}")
+    logger.info(f"  [{pref}] City: {city}")
+    logger.info(f"  [{pref}] Queries: {queries_rel}")
+    logger.info(f"  [{pref}] Progress file: {progress_file}")
 
-    # scrape_runner.py を呼び出
     env = os.environ.copy()
     env["QUERIES"] = queries_abs
     env["PROGRESS_FILE"] = progress_file
@@ -83,9 +83,8 @@ def run_scrape(pref: str, city: str, queries_rel: str, dry_run: bool = False) ->
     if dry_run:
         cmd.append("--dry-run")
 
-    print(f"  [{pref}] Running: {' '.join(cmd)}")
+    logger.info(f"  [{pref}] Running: {' '.join(cmd)}")
     try:
-        # 出力はコンソールに直接流す（キャプチャしない）
         result = subprocess.run(
             cmd,
             env=env,
@@ -93,82 +92,82 @@ def run_scrape(pref: str, city: str, queries_rel: str, dry_run: bool = False) ->
             timeout=3600,  # 1 hour max per prefecture
         )
     except subprocess.TimeoutExpired:
-        print(f"  [{pref}] [TIMEOUT] Exceeded 1 hour")
+        logger.error(f"  [{pref}] [TIMEOUT] Exceeded 1 hour")
         return False
     except FileNotFoundError:
-        print(f"  [{pref}] [ERROR] Docker executable not found. Is Docker Desktop running?")
+        logger.error(f"  [{pref}] [ERROR] Docker executable not found. Is Docker Desktop running?")
         return False
     except Exception as e:
-        print(f"  [{pref}] [ERROR] {type(e).__name__}: {e}")
+        logger.error(f"  [{pref}] [ERROR] {type(e).__name__}: {e}")
         return False
 
     if result.returncode != 0:
-        print(f"  [{pref}] FAILED with exit code {result.returncode}")
-        print(f"  [{pref}] Resume with: python scrape_runner.py --city {city} --prefecture {pref} --progress-file {progress_file}")
+        logger.error(f"  [{pref}] FAILED with exit code {result.returncode}")
+        logger.info(f"  [{pref}] Resume with: python scrape_runner.py --city {city} --prefecture {pref} --progress-file {progress_file}")
         return False
 
-    print(f"  [{pref}] Completed successfully")
+    logger.info(f"  [{pref}] Completed successfully")
     return True
 
 
 def main():
-    print("=" * 60)
-    print("  Kanto Phase 1 Scraper")
-    print("  Target: 7 prefecture capitals")
-    print("=" * 60)
-    print()
+    logger.info("=" * 60)
+    logger.info("  Kanto Phase 1 Scraper")
+    logger.info("  Target: 7 prefecture capitals")
+    logger.info("=" * 60)
+    logger.info("")
 
     # 既存進捗読み込み
     done_prefs = load_phase_progress()
     if done_prefs:
-        print(f"Resuming: {len(done_prefs)}/7 prefectures already done.")
+        logger.info(f"Resuming: {len(done_prefs)}/7 prefectures already done.")
         for pref in sorted(done_prefs):
-            print(f"  - {pref}")
-        print()
+            logger.info(f"  - {pref}")
+        logger.info("")
 
     # 実行
     for pref, city, queries_rel in TARGETS:
         if pref in done_prefs:
-            print(f"[{pref}/{city}] Already done, skipping.")
+            logger.info(f"[{pref}/{city}] Already done, skipping.")
             continue
 
-        print(f"\n{'=' * 60}")
-        print(f"  Processing: {pref} {city}")
-        print(f"{'=' * 60}")
+        logger.info(f"\n{'=' * 60}")
+        logger.info(f"  Processing: {pref} {city}")
+        logger.info(f"{'=' * 60}")
 
         success = run_scrape(pref, city, queries_rel, dry_run=DRY_RUN)
         if success:
             done_prefs.add(pref)
             save_phase_progress(done_prefs)
-            print(f"  [OK] Phase progress saved ({len(done_prefs)}/7 completed)")
+            logger.info(f"  [OK] Phase progress saved ({len(done_prefs)}/7 completed)")
         else:
-            print(f"\n  [SKIP] Failed on {pref} {city} - moving to next prefecture")
-            print("  Re-run this script later to retry failed prefectures.")
-            print(f"  Current phase progress: {sorted(done_prefs)}")
+            logger.info(f"\n  [SKIP] Failed on {pref} {city} - moving to next prefecture")
+            logger.info("  Re-run this script later to retry failed prefectures.")
+            logger.info(f"  Current phase progress: {sorted(done_prefs)}")
             # 失敗しても進捗ファイルは保存済み（完了分のみ）
             # スキップして次へ（進捗ファイルはそのまま保持）
 
         # 最終都市でなければスリープ（dry-run時はスキップ）
         if pref != TARGETS[-1][0]:
             if DRY_RUN:
-                print("  [DRY-RUN] Skipping sleep between prefectures")
+                logger.info("  [DRY-RUN] Skipping sleep between prefectures")
             else:
-                print(f"\n  Sleeping {SLEEP_BETWEEN}s before next prefecture...")
+                logger.info(f"\n  Sleeping {SLEEP_BETWEEN}s before next prefecture...")
                 time.sleep(SLEEP_BETWEEN)
 
-    print("\n" + "=" * 60)
-    print("  [DONE] All Phase 1 prefectures completed!")
-    print(f"  Total: {len(done_prefs)}/7")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("  [DONE] All Phase 1 prefectures completed!")
+    logger.info(f"  Total: {len(done_prefs)}/7")
+    logger.info("=" * 60)
 
     # クリーンアップ
     if os.path.exists(PHASE_PROGRESS):
         os.remove(PHASE_PROGRESS)
-        print("Cleaned up phase progress file.")
+        logger.info("Cleaned up phase progress file.")
 
-    print("\nNext steps:")
-    print("  1. Verify data: python -c \"import json; d=json.load(open('data/toilets.json')); print('Total:', d['metadata']['total'])\"")
-    print("  2. Run app: streamlit run app.py")
+    logger.info("\nNext steps:")
+    logger.info("  1. Verify data: python -c \"import json; d=json.load(open('data/toilets.json')); print('Total:', d['metadata']['total'])\"")
+    logger.info("  2. Run app: streamlit run app.py")
 
 
 if __name__ == "__main__":
