@@ -31,7 +31,6 @@ from scoring_config import (
     AREA_NAME_RE,
     PREFECTURES,
     TOILET_CATEGORIES,
-    TOILET_MENTION_KEYWORDS,
 )
 
 

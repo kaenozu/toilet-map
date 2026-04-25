@@ -16,7 +16,7 @@ def filter_toilets(df: pd.DataFrame, filter_type: str, prefecture: str = None) -
     if pattern is None:
         return df
     if pattern == "__public__":
-        return df[df["is_public_toilet"] == True]
+        return df[df["is_public_toilet"]]
     return df[df["category"].str.contains(pattern, na=False)]
 
 

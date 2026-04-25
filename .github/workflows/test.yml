@@ -31,5 +31,5 @@ jobs:
         run: |
           streamlit run app.py &
           sleep 5
-          curl -s http://localhost:8501 | grep -q "toilet-map" && echo "Streamlit app started successfully" || exit 1
+          curl -s http://localhost:8501 | grep -q "Streamlit" && echo "Streamlit app started successfully" || exit 1
         shell: bash

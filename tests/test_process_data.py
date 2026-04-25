@@ -2,7 +2,8 @@
 tests/test_process_data.py
 process_data.py + scoring_config.py のユニットテスト
 """
-import sys, os
+import sys
+import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "batch"))
 
 import pytest
@@ -11,11 +12,11 @@ import process_data as pd_module
 
 class TestToiletDetection:
     def test_mentions_toilet_yes(self):
-        assert pd_module.mentions_toilet("トイレがきれいです") == True
+        assert pd_module.mentions_toilet("トイレがきれいです")
     def test_mentions_toilet_no(self):
-        assert pd_module.mentions_toilet("スタッフの対応が素晴らしい") == False
+        assert not pd_module.mentions_toilet("スタッフの対応が素晴らしい")
     def test_mentions_toilet_english(self):
-        assert pd_module.mentions_toilet("clean bathroom") == True
+        assert pd_module.mentions_toilet("clean bathroom")
 
 
 class TestContextExtraction:
@@ -105,7 +106,6 @@ class TestDynamicZoom:
 
 class TestExtractPrefecture:
     def test_basic(self):
-        from scoring_config import PREFECTURES
         result = pd_module.extract_prefecture("東京都渋谷区")
         assert result == "東京都"
     def test_empty(self):

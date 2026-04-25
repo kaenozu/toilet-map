@@ -60,7 +60,7 @@ def run_scrape(pref: str, city: str, queries_rel: str, dry_run: bool = False) ->
         if lines:
             last = int(lines[-1].strip())
             with open(queries_abs, "r", encoding="utf-8") as qf:
-                total_queries = sum(1 for l in qf if l.strip() and not l.startswith("#"))
+                total_queries = sum(1 for line in qf if line.strip() and not line.startswith("#"))
             if last >= total_queries:
                 print(f"  [SKIP] {pref} already completed (progress: {last}/{total_queries})")
                 return True
@@ -143,7 +143,7 @@ def main():
             print(f"  [OK] Phase progress saved ({len(done_prefs)}/7 completed)")
         else:
             print(f"\n  [SKIP] Failed on {pref} {city} - moving to next prefecture")
-            print(f"  Re-run this script later to retry failed prefectures.")
+            print("  Re-run this script later to retry failed prefectures.")
             print(f"  Current phase progress: {sorted(done_prefs)}")
             # 失敗しても進捗ファイルは保存済み（完了分のみ）
             # スキップして次へ（進捗ファイルはそのまま保持）

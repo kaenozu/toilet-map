@@ -4,7 +4,6 @@ Streamlit版トイレきれい度マップ
 ui/ モジュールのオーケストレーションのみ担当
 """
 import streamlit as st
-import pandas as pd
 from streamlit_folium import st_folium
 from app_config import FILTER_CONFIG, TILE_OPTIONS
 from ui.styles import MOBILE_CSS

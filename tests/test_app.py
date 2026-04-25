@@ -2,7 +2,8 @@
 tests/test_app.py
 app.py モジュールのユニットテスト
 """
-import sys, os
+import sys
+import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
@@ -27,7 +28,7 @@ class TestFilterToilets:
         ])
         result = filter_toilets(df, "公共トイレ")
         assert len(result) == 1
-        assert result.iloc[0]["is_public_toilet"] == True
+        assert result.iloc[0]["is_public_toilet"]
 
     def test_filter_cafe(self):
         df = pd.DataFrame([

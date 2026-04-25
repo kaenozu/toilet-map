@@ -25,7 +25,7 @@ def count_queries_for_pref(pref: str) -> int:
     if not os.path.exists(path):
         return 0
     with open(path, "r", encoding="utf-8") as f:
-        return sum(1 for l in f if l.strip() and not l.startswith("#"))
+        return sum(1 for line in f if line.strip() and not line.startswith("#"))
 
 
 def main():
@@ -39,7 +39,7 @@ def main():
     meta = data.get("metadata", {})
 
     # 基本統計
-    print(f"[SUMMARY]")
+    print("[SUMMARY]")
     print(f"  Total toilets    : {len(toilets)}")
     print(f"  With reviews     : {meta.get('scored', 'N/A')}")
     print(f"  Public toilets   : {meta.get('public_toilets', 'N/A')}")
@@ -48,7 +48,7 @@ def main():
 
     # 都道府県別
     pref_counts = Counter(t.get("prefecture", "不明") for t in toilets)
-    print(f"[PREFECTURE DISTRIBUTION]")
+    print("[PREFECTURE DISTRIBUTION]")
     for pref in KANTO_PREFECTURES:
         cnt = pref_counts.get(pref, 0)
         expected = count_queries_for_pref(pref)
@@ -63,7 +63,7 @@ def main():
     missing_score = sum(1 for t in toilets if t.get("toilet_score") is None)
     missing_city = sum(1 for t in toilets if not t.get("city"))
     missing_addr = sum(1 for t in toilets if not t.get("address"))
-    print(f"[COMPLETENESS]")
+    print("[COMPLETENESS]")
     print(f"  Missing score     : {missing_score}/{len(toilets)}")
     print(f"  Missing city      : {missing_city}/{len(toilets)}")
     print(f"  Missing address   : {missing_addr}/{len(toilets)}")
@@ -83,13 +83,13 @@ def main():
         for (title, addr), link in duplicates[:5]:
             print(f"  - {title} / {addr[:30]}...")
     else:
-        print(f"[DUPLICATES] None found")
+        print("[DUPLICATES] None found")
     print()
 
     # スコア分布
     scores = [t["toilet_score"] for t in toilets if t.get("toilet_score") is not None]
     if scores:
-        print(f"[SCORE DISTRIBUTION]")
+        print("[SCORE DISTRIBUTION]")
         for s in [5, 4, 3, 2, 1]:
             pct = sum(1 for x in scores if x >= s and x < s + 1) / len(scores) * 100
             print(f"  {s}.0 - {s+1:.1f}: {pct:.1f}%")

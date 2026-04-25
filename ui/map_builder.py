@@ -10,7 +10,6 @@ from app_config import (
     NORMAL_MARKER_RADIUS,
     POPUP_FIX_JS,
     PREFECTURE_CENTERS,
-    TILE_OPTIONS,
     get_score_style,
 )
 from ui.popups import build_popup_html

@@ -13,7 +13,6 @@ import subprocess
 import sys
 import os
 import time
-import json
 import shutil
 import tempfile
 import re
@@ -142,10 +141,10 @@ def scrape_query(query: str, output_path: str) -> bool:
                 timeout=600,  # 10 minutes max per query
             )
         except subprocess.TimeoutExpired:
-            print(f"  [TIMEOUT] Query exceeded 10 minutes")
+            print("  [TIMEOUT] Query exceeded 10 minutes")
             return False
         except FileNotFoundError:
-            print(f"  [ERROR] Docker executable not found. Is Docker Desktop running?")
+            print("  [ERROR] Docker executable not found. Is Docker Desktop running?")
             return False
         except Exception as e:
             print(f"  [ERROR] {type(e).__name__}: {e}")
@@ -163,7 +162,7 @@ def scrape_query(query: str, output_path: str) -> bool:
 
     # 出力ファイル確認
     if not os.path.exists(output_path):
-        print(f"  [ERROR] Output file not created")
+        print("  [ERROR] Output file not created")
         return False
 
     with open(output_path, "r", encoding="utf-8") as f:
@@ -348,7 +347,7 @@ def run_batch():
         else:
             failed += 1
             print(f"  !! FAILED: {query}")
-            print(f"  Rerun to resume from here.")
+            print("  Rerun to resume from here.")
 
         if ok and i < total:
             print(f"  Sleeping {SLEEP_BETWEEN}s ...")
@@ -383,7 +382,7 @@ def run_batch():
         if kept == 0:
             print(f"\n  WARNING: No entries matched city filter '{city}'")
             print(f"  ({total_raw} raw entries were checked)")
-            print(f"  Falling back to unfiltered data\n")
+            print("  Falling back to unfiltered data\n")
             data_for_processing = RAW_OUTPUT
         else:
             pct = kept / total_raw * 100 if total_raw > 0 else 0
