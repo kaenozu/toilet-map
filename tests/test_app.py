@@ -2,13 +2,9 @@
 tests/test_app.py
 app.py モジュールのユニットテスト
 """
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import pytest
 import pandas as pd
-from ui.filters import filter_toilets, search_toilets
+from app import filter_toilets, search_toilets
 
 
 class TestFilterToilets:

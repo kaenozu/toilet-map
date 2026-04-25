@@ -4,6 +4,8 @@ ui/data_loader.py
 app.py から分離
 """
 import json
+import gzip
+import os
 import streamlit as st
 import pandas as pd
 from app_config import DATA_PATH, ERROR_METADATA
@@ -12,19 +14,29 @@ from app_config import DATA_PATH, ERROR_METADATA
 @st.cache_data(ttl=3600)
 def load_toilet_data():
     """
-    toilets.json を読み込み、prefecture 別統計を付与して返す
+    toilets.json または toilets.json.gz を読み込み、prefecture 別統計を付与して返す
     Returns: {"metadata": dict, "toilets": list, "pref_stats": dict}
     """
+    data_path = DATA_PATH
+    # .gz が存在すれば優先、なければ .json
+    if not os.path.exists(data_path) and os.path.exists(data_path + ".gz"):
+        data_path += ".gz"
+
     try:
-        with open(DATA_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        if data_path.endswith(".gz"):
+            with gzip.open(data_path, "rt", encoding="utf-8") as f:
+                data = json.load(f)
+        else:
+            with open(data_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
         if "toilets" not in data or "metadata" not in data:
             raise ValueError("Invalid data structure")
     except FileNotFoundError:
-        st.error(f"データファイルが見つかりません: {DATA_PATH}")
+        st.error(f"データファイルが見つかりません: {data_path}")
         return {"metadata": ERROR_METADATA, "toilets": [], "pref_stats": {}}
-    except json.JSONDecodeError:
-        st.error(f"データファイルの形式が不正です: {DATA_PATH}")
+    except (json.JSONDecodeError, EOFError):
+        st.error(f"データファイルの形式が不正です: {data_path}")
         return {"metadata": ERROR_METADATA, "toilets": [], "pref_stats": {}}
     except Exception as e:
         st.error(f"データ読み込みエラー: {e}")

@@ -2,10 +2,6 @@
 tests/test_app_config.py
 app_config.py のユニットテスト
 """
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import pytest
 from app_config import (
     get_score_style, esc, SCORE_RANGES, FILTER_CONFIG,

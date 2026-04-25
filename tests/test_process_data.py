@@ -2,10 +2,6 @@
 tests/test_process_data.py
 process_data.py + scoring_config.py のユニットテスト
 """
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "batch"))
-
 import pytest
 import process_data as pd_module
 

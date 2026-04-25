@@ -2,10 +2,6 @@
 tests/test_popups.py
 ui/popups.py のユニットテスト
 """
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import pytest
 from ui.popups import (
     build_popup_html, _build_public_badge,
