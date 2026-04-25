@@ -2,8 +2,7 @@
 tests/test_ui_components.py
 ui/components.py のユニットテスト
 """
-import sys
-import os
+import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
@@ -11,8 +10,6 @@ from app_config import get_score_style, esc
 
 
 class TestGetScoreStyle:
-    """app_config.get_score_style のインポートテスト"""
-
     def test_high_score(self):
         color, emoji, label = get_score_style(90)
         assert emoji == "✨"
@@ -21,7 +18,6 @@ class TestGetScoreStyle:
     def test_low_score(self):
         color, emoji, label = get_score_style(10)
         assert emoji == "💩"
-        assert label == "要注意"
 
     def test_esc_none(self):
         assert esc(None) == ""

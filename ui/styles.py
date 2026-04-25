@@ -23,7 +23,7 @@ MOBILE_CSS = """
     .stCaption { font-size: 0.75rem !important; }
 
     /* 地図コンテナの上下マージン削減 */
-    .st Folium_folium { margin-top: 0 !important; }
+    .stFolium > div { margin-top: 0 !important; }
 
     /* selectboxとtext_inputのフォントサイズ調整（iOSズーム防止） */
     .stSelectbox label, .stTextInput label {

@@ -1,13 +1,7 @@
 """
-city_bounds.py
-日本の市区町村のバウンディングボックスを取得・キャッシュする
-Nominatim API (OSM) を使用し、結果をローカルJSONにキャッシュ
-
-使い方:
-    from city_bounds import get_city_bounds, filter_raw_data
-    bounds = get_city_bounds("羽生市", "埼玉県")
-
-関連: scrape_runner.py, process_data.py
+batch/city_bounds.py
+市区町村のバウンディングボックス取得・キャッシュ
+Nominatim API 使用
 """
 import json
 import os
@@ -35,9 +29,6 @@ def _save_cache(cache: dict):
 
 
 def get_city_bounds(city: str, prefecture: str = "") -> dict | None:
-    """市区町村のバウンディングボックスを返す
-    Returns: {"south": float, "north": float, "west": float, "east": float} or None
-    """
     cache = _load_cache()
     key = f"{prefecture}{city}"
     if key in cache:
@@ -45,23 +36,20 @@ def get_city_bounds(city: str, prefecture: str = "") -> dict | None:
 
     query = f"{city}, {prefecture}, Japan" if prefecture else f"{city}, Japan"
     params = urllib.parse.urlencode({
-        "q": query,
-        "format": "json",
-        "limit": 1,
-        "polygon_geojson": 0,
-        "accept-language": "ja",
+        "q": query, "format": "json", "limit": 1,
+        "polygon_geojson": 0, "accept-language": "ja",
     })
     url = f"https://nominatim.openstreetmap.org/search?{params}"
-
     req = urllib.request.Request(url, headers={"User-Agent": "toilet-map-bounds/1.0"})
+
+    results = None
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             results = json.loads(resp.read().decode("utf-8"))
     except Exception as e:
         print(f"  [city_bounds] Failed to fetch bounds for {key}: {e}")
-        return None
-
-    time.sleep(1.1)
+    finally:
+        time.sleep(1.1)
 
     if not results:
         print(f"  [city_bounds] No results for: {query}")
@@ -72,10 +60,8 @@ def get_city_bounds(city: str, prefecture: str = "") -> dict | None:
         return None
 
     bounds = {
-        "south": float(bb[0]),
-        "north": float(bb[1]),
-        "west": float(bb[2]),
-        "east": float(bb[3]),
+        "south": float(bb[0]), "north": float(bb[1]),
+        "west": float(bb[2]), "east": float(bb[3]),
     }
 
     cache[key] = bounds
@@ -87,34 +73,24 @@ def get_city_bounds(city: str, prefecture: str = "") -> dict | None:
 
 
 def is_in_bounds(lat: float, lng: float, bounds: dict) -> bool:
-    return (bounds["south"] <= lat <= bounds["north"] and
-            bounds["west"] <= lng <= bounds["east"])
+    return bounds["south"] <= lat <= bounds["north"] and bounds["west"] <= lng <= bounds["east"]
 
 
-def filter_raw_data(input_path: str, output_path: str,
-                    city_name: str, bounds: dict | None = None) -> tuple[int, int]:
-    """JSONLを都市名(住所)とバウンディングボックスでフィルタ
-    OR logic: 住所一致 OR 座標範囲内 → 保持
-    Returns: (total_count, kept_count)
-    """
+def filter_raw_data(input_path: str, output_path: str, city_name: str, bounds: dict | None = None) -> tuple[int, int]:
     kept = 0
     total = 0
-
-    with open(input_path, "r", encoding="utf-8") as inf, \
-         open(output_path, "w", encoding="utf-8") as outf:
+    with open(input_path, "r", encoding="utf-8") as inf, open(output_path, "w", encoding="utf-8") as outf:
         for line in inf:
             total += 1
             stripped = line.strip()
             if not stripped:
                 continue
-
             try:
                 entry = json.loads(stripped)
             except json.JSONDecodeError:
                 continue
 
             address_match = city_name in entry.get("address", "")
-
             coord_match = False
             if bounds:
                 lat = entry.get("latitude")
@@ -130,13 +106,11 @@ def filter_raw_data(input_path: str, output_path: str,
 
 
 def main():
-    """CLI: 指定都市のバウンディングボックスを表示"""
     import sys
     if len(sys.argv) < 2:
         print("Usage: python city_bounds.py <city> [prefecture]")
         print("  python city_bounds.py 羽生市 埼玉県")
         sys.exit(1)
-
     city = sys.argv[1]
     pref = sys.argv[2] if len(sys.argv) > 2 else ""
     bounds = get_city_bounds(city, pref)

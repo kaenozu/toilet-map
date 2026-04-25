@@ -6,6 +6,12 @@ import html
 
 DATA_PATH = "data/toilets.json"
 
+ERROR_METADATA = {
+    "total": 0, "scored": 0, "public_toilets": 0,
+    "center_lat": 36.2231, "center_lng": 139.3772,
+    "zoom": 13, "area_name": "エラー",
+}
+
 SCORE_RANGES = [
     (80, "#27ae60", "✨", "とてもきれい"),
     (65, "#2ecc71", "😊", "きれい"),
@@ -26,9 +32,6 @@ FILTER_CONFIG = {
 
 PUBLIC_MARKER_RADIUS = 14
 NORMAL_MARKER_RADIUS = 10
-MAX_SAMPLE_REVIEWS = 5
-MOBILE_BREAKPOINT = 768
-MAP_HEIGHT = 500
 
 TILE_OPTIONS = {
     "OpenStreetMap（標準）": "OpenStreetMap",

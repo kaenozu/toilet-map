@@ -1,156 +1,79 @@
 """
-トイレきれい度マップ - データ処理スクリプト
-Google Maps Scraperの出力(JSONL)からトイレ情報を抽出・スコアリング
+batch/process_data.py
+Google Maps Scraper出力(JSONL)のデータ処理スクリプト
 
 使い方: python process_data.py <input.json> <output.json>
 """
 import json
-import sys
 import re
+import sys
 from collections import Counter
-
-# ============================================================
-# 定数
-# ============================================================
-
-# スコアリング範囲
-SCORE_CLAMP_MIN = -5.0
-SCORE_CLAMP_MAX = 5.0
-DISPLAY_SCORE_OFFSET = 5       # -5..5 → 0..100 変換用
-DISPLAY_SCORE_MULTIPLIER = 10
-
-# 信頼度
-CONFIDENCE_MAX_REVIEWS = 5.0   # 5件で信頼度MAX
-CONFIDENCE_LOW = 0.1           # 店舗評価のみの場合
-
-# レビュー評価によるスコア補正
-RATING_THRESHOLD_HIGH = 4
-RATING_THRESHOLD_LOW = 2
-POSITIVE_BOOST_HIGH = 1.2
-NEGATIVE_DAMPEN_HIGH = 0.4
-POSITIVE_DAMPEN_LOW = 0.4
-NEGATIVE_BOOST_LOW = 1.2
-
-# 否定文脈検知
-NEGATION_WINDOW = 30  # キーワードと否定語の近傍文字数
-
-# 否定語リスト
-NEGATION_WORDS = [
-    "ない", "なし", "なく", "ません", "無い",
-    "残念", "ひどい", "酷い", "最悪", "問題", "不満",
-    "がっかり", "だらけ", "されてない", "されていない",
-]
-
-# キーワード辞書
-POSITIVE_KEYWORDS = {
-    "きれい": 3, "綺麗": 3, "キレイ": 3, "清潔": 4, "クリーン": 3,
-    "ピカピカ": 4, "新品": 3, "清潔感": 3,
-    "バリアフリー": 2, "多目的トイレ": 2, "オストメ": 1,
-    "ウォシュレット付き": 2, "温水洗浄": 2, "暖房便座": 1,
-    "ベビー": 2, "オムツ": 2, "車椅子": 2,
-    "完備": 2, "充実": 1,
-    "使いやすい": 2, "広い": 2, "ゆったり": 2,
-    "いい匂い": 2, "良い匂い": 2, "よい匂い": 2, "匂いがしない": 2,
-    "明るい": 1, "嬉しい": 1, "気兼ねなく": 1,
-}
-
-NEGATIVE_KEYWORDS = {
-    "汚い": -4, "汚れてる": -3, "汚れていた": -3, "汚れています": -3,
-    "こびりつき": -4, "こびり付い": -4, "カビ": -3, "汚物": -4,
-    "臭い": -3, "悪臭": -4, "異臭": -4,
-    "臭い匂い": -3, "変な匂い": -3, "匂いがきつい": -3,
-    "びしょびしょ": -3, "詰まって": -3, "詰まり": -3,
-    "狭い": -2, "暗い": -2,
-    "故障": -3, "壊れて": -3, "壊れ": -2,
-    "使えない": -4, "使用不可": -4,
-    "紙がない": -3, "ペーパーがな": -3,
-    "ウォシュレット無": -2, "ウォシュレットなく": -2, "ウォシュレットない": -2,
-    "ウォシュレットではない": -2, "和式": -1,
-    "ホコリ": -3, "埃": -3, "だらけ": -3,
-    "掃除されてない": -4, "掃除されていない": -4,
-    "掃除してない": -4, "掃除が行き届いてない": -4, "掃除ができてない": -4,
-    "溜まって": -2, "溜まっていた": -3,
-    "残念": -2, "ひどい": -4, "酷い": -4, "最悪": -4,
-    "がっかり": -3, "ガッカリ": -3, "不潔": -4,
-}
-
-# トイレ言及検出キーワード
-TOILET_MENTION_KEYWORDS = [
-    "トイレ", "お手洗い", "おてあらい", "化粧室", "洗面所",
-    " restroom", " washroom", " bathroom",
-    "ウォシュレット", "シャワートイレ",
-]
-
-# カテゴリ判定
-TOILET_CATEGORIES = ["公共トイレ", "トイレ", "restroom"]
-
-# プリコンパイル正規表現
-SENTENCE_SPLIT_RE = re.compile(r'[。\n]')
-TOILET_MENTION_RE = re.compile(
-    '|'.join(re.escape(k) for k in TOILET_MENTION_KEYWORDS),
-    re.IGNORECASE,
+from datetime import datetime
+from scoring_config import (
+    SCORE_CLAMP_MIN,
+    SCORE_CLAMP_MAX,
+    DISPLAY_SCORE_OFFSET,
+    DISPLAY_SCORE_MULTIPLIER,
+    CONFIDENCE_MAX_REVIEWS,
+    CONFIDENCE_LOW,
+    RATING_THRESHOLD_HIGH,
+    RATING_THRESHOLD_LOW,
+    POSITIVE_BOOST_HIGH,
+    NEGATIVE_DAMPEN_HIGH,
+    POSITIVE_DAMPEN_LOW,
+    NEGATIVE_BOOST_LOW,
+    NEGATION_WINDOW,
+    NEGATION_WORDS,
+    POSITIVE_KEYWORDS,
+    NEGATIVE_KEYWORDS,
+    SENTENCE_SPLIT_RE,
+    TOILET_MENTION_RE,
+    AREA_NAME_RE,
+    PREFECTURES,
+    TOILET_CATEGORIES,
+    TOILET_MENTION_KEYWORDS,
 )
-AREA_NAME_RE = re.compile(r"(\S+県\S+[市区町村])")
 
 
-# ============================================================
-# トイレ言及検出
-# ============================================================
 def mentions_toilet(text: str) -> bool:
-    """テキストがトイレに言及しているか（大文字小文字無視）"""
     return bool(TOILET_MENTION_RE.search(text))
 
 
 def extract_toilet_contexts(text: str) -> list[str]:
-    """トイレ言及箇所の前後文を抽出。
-    句点・改行で文分割し、トイレ言及を含む文＋前後1文を返す。
-    """
     sentences = [s.strip() for s in SENTENCE_SPLIT_RE.split(text) if s.strip()]
-
     toilet_indices = set()
     for i, sent in enumerate(sentences):
         if mentions_toilet(sent):
             for j in range(max(0, i - 1), min(len(sentences), i + 2)):
                 toilet_indices.add(j)
-
     return [sentences[i] for i in sorted(toilet_indices)] if toilet_indices else []
 
 
-# ============================================================
-# スコアリング
-# ============================================================
-def _apply_keyword_scoring(target_text: str) -> tuple[float, list[str]]:
-    """キーワードマッチングでスコアとマッチリストを返す"""
+def _apply_keyword_scoring(target_text: str):
     score = 0.0
     matched = []
-
     for kw, val in POSITIVE_KEYWORDS.items():
         cnt = target_text.count(kw)
         if cnt > 0:
             score += val * cnt
             matched.append(f"+{kw}")
-
     for kw, val in NEGATIVE_KEYWORDS.items():
         cnt = target_text.count(kw)
         if cnt > 0:
             score += val * cnt
             matched.append(f"-{kw}")
-
     return score, matched
 
 
-def _apply_negation_correction(target_text: str, score: float, matched: list[str]) -> tuple[float, list[str]]:
-    """否定語が近傍にあるポジティブキーワードのスコアを打ち消す"""
+def _apply_negation_correction(target_text: str, score: float, matched: list[str]):
     for neg_word in NEGATION_WORDS:
         if neg_word not in target_text:
             continue
         neg_positions = [m.start() for m in re.finditer(re.escape(neg_word), target_text)]
-
         for kw, val in POSITIVE_KEYWORDS.items():
             if kw not in target_text:
                 continue
             kw_positions = [m.start() for m in re.finditer(re.escape(kw), target_text)]
-
             cancelled = False
             for kp in kw_positions:
                 for np in neg_positions:
@@ -163,38 +86,18 @@ def _apply_negation_correction(target_text: str, score: float, matched: list[str
                         break
                 if cancelled:
                     break
-
     return score, matched
 
 
-def score_toilet_from_review(text: str) -> tuple[float, list[str]]:
-    """レビューテキストからトイレきれい度スコアを算出 (-5〜+5)"""
+def score_toilet_from_review(text: str):
     contexts = extract_toilet_contexts(text) or [text]
     target_text = "。".join(contexts)
-
     score, matched = _apply_keyword_scoring(target_text)
     score, matched = _apply_negation_correction(target_text, score, matched)
-
     return max(SCORE_CLAMP_MIN, min(SCORE_CLAMP_MAX, score)), matched
 
 
-# ============================================================
-# 住所から都道府県を抽出
-# ============================================================
-# 日本の都道府県リスト（便宜上用いる順序）
-PREFECTURES = [
-    "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
-    "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
-    "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県",
-    "静岡県", "愛知県", "三重県", "滋賀県", "京都府", "大阪府", "兵庫県",
-    "奈良県", "和歌山県", "鳥取県", "島根県", "岡山県", "広島県", "山口県",
-    "徳島県", "香川県", "愛媛県", "高知県", "福岡県", "佐賀県", "長崎県",
-    "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県",
-]
-
-
 def extract_prefecture(address: str) -> str:
-    """住所から都道府県名を抽出（部分一致）"""
     if not address:
         return ""
     for pref in PREFECTURES:
@@ -203,11 +106,7 @@ def extract_prefecture(address: str) -> str:
     return ""
 
 
-# ============================================================
-# レビュー評価による補正
-# ============================================================
-def _adjust_by_rating(score: float, matched: list[str], rating: float) -> tuple[float, list[str]]:
-    """レビュー星数に基づいてスコアを補正"""
+def _adjust_by_rating(score: float, matched: list[str], rating: float):
     if rating >= RATING_THRESHOLD_HIGH:
         if score < 0:
             score *= NEGATIVE_DAMPEN_HIGH
@@ -225,13 +124,8 @@ def _adjust_by_rating(score: float, matched: list[str], rating: float) -> tuple[
     return score, matched
 
 
-# ============================================================
-# 地点スコア計算
-# ============================================================
 def compute_toilet_score(place: dict) -> dict:
-    """1地点のトイレスコアを計算"""
     reviews = (place.get("user_reviews") or []) + (place.get("user_reviews_extended") or [])
-
     toilet_reviews = []
     total_score = 0.0
     all_highlights = []
@@ -241,15 +135,12 @@ def compute_toilet_score(place: dict) -> dict:
         desc = r.get("Description", "")
         if not desc or not desc.strip() or not mentions_toilet(desc):
             continue
-
         desc_key = desc.strip()[:100]
         if desc_key in seen_descs:
             continue
         seen_descs.add(desc_key)
 
         s, matched = score_toilet_from_review(desc)
-
-        # レビュー星数補正
         rating = float(r.get("Rating") or 0)
         s, matched = _adjust_by_rating(s, matched, rating)
         s = max(SCORE_CLAMP_MIN, min(SCORE_CLAMP_MAX, s))
@@ -266,7 +157,6 @@ def compute_toilet_score(place: dict) -> dict:
         total_score += s
         all_highlights.extend(matched)
 
-    # 総合スコア算出
     if toilet_reviews:
         avg_score = total_score / len(toilet_reviews)
         place_rating = float(place.get("review_rating") or 0)
@@ -293,26 +183,17 @@ def compute_toilet_score(place: dict) -> dict:
     }
 
 
-# ============================================================
-# 施設判定
-# ============================================================
 def is_toilet_place(place: dict) -> bool:
-    """施設自体がトイレ（公共トイレ等）かどうか"""
     cat = (place.get("category") or "").lower()
     title = (place.get("title") or "").lower()
     return any(tc.lower() in cat or tc.lower() in title for tc in TOILET_CATEGORIES)
 
 
-# ============================================================
-# データ変換
-# ============================================================
 def process_place(place: dict) -> dict | None:
-    """1地点を処理してUI用データに変換"""
     lat = place.get("latitude")
-    lon = place.get("longitude") or place.get("longtitude")  # 古いキー互換
+    lon = place.get("longitude") or place.get("longtitude")
     if not lat or not lon:
         return None
-
     title = place.get("title", "")
     if not title:
         return None
@@ -340,27 +221,17 @@ def process_place(place: dict) -> dict | None:
     }
 
 
-# ============================================================
-# 重複除去キー
-# ============================================================
 def make_place_key(place: dict) -> str:
-    """未処理データの一意キー（title + 座標丸め）"""
-    title = place.get("title", "")
     lat = float(place.get("latitude") or 0)
     lng = float(place.get("longitude") or place.get("longtitude") or 0)
-    return f"{title}@{lat:.4f},{lng:.4f}"
+    return f"{place.get('title', '')}@{lat:.4f},{lng:.4f}"
 
 
 def make_result_key(result: dict) -> str:
-    """処理済みデータの一意キー"""
     return f"{result['title']}@{result['lat']:.4f},{result['lng']:.4f}"
 
 
-# ============================================================
-# ファイルI/O
-# ============================================================
 def load_jsonl(path: str) -> list[dict]:
-    """JSONLファイルを読み込む"""
     places = []
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
@@ -371,7 +242,6 @@ def load_jsonl(path: str) -> list[dict]:
 
 
 def load_existing(path: str) -> dict:
-    """既存のtoilets.jsonを読み込む"""
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -380,7 +250,6 @@ def load_existing(path: str) -> dict:
 
 
 def deduplicate(places: list[dict]) -> list[dict]:
-    """title+座標ベースで重複除去"""
     seen = set()
     unique = []
     for p in places:
@@ -391,42 +260,20 @@ def deduplicate(places: list[dict]) -> list[dict]:
     return unique
 
 
-# ============================================================
-# メタデータ生成
-# ============================================================
 def calc_dynamic_zoom(results: list[dict]) -> int:
-    """データ範囲に応じたzoom値を計算"""
     if len(results) < 2:
         return 13
     lats = [r["lat"] for r in results]
     lngs = [r["lng"] for r in results]
-    lat_range = max(lats) - min(lats)
-    lng_range = max(lngs) - min(lngs)
-    max_range = max(lat_range, lng_range)
-    if max_range > 10:
-        return 5
-    elif max_range > 5:
-        return 7
-    elif max_range > 2:
-        return 9
-    elif max_range > 1:
-        return 10
-    elif max_range > 0.5:
-        return 11
-    elif max_range > 0.2:
-        return 12
-    elif max_range > 0.1:
-        return 13
-    elif max_range > 0.05:
-        return 14
-    else:
-        return 15
+    max_range = max(max(lats) - min(lats), max(lngs) - min(lngs))
+    thresholds = [(10, 5), (5, 7), (2, 9), (1, 10), (0.5, 11), (0.2, 12), (0.1, 13), (0.05, 14)]
+    for threshold, zoom in thresholds:
+        if max_range > threshold:
+            return zoom
+    return 15
 
 
-def build_metadata(results: list[dict], input_path: str = None) -> dict:
-    """結果リストからメタデータを自動生成"""
-    from datetime import datetime
-
+def build_metadata(results: list[dict]) -> dict:
     if results:
         center_lat = sum(r["lat"] for r in results) / len(results)
         center_lng = sum(r["lng"] for r in results) / len(results)
@@ -442,7 +289,6 @@ def build_metadata(results: list[dict], input_path: str = None) -> dict:
                 area_name = m.group(1)
 
     zoom = calc_dynamic_zoom(results)
-
     now = datetime.now().strftime("%Y-%m-%d")
 
     return {
@@ -457,19 +303,13 @@ def build_metadata(results: list[dict], input_path: str = None) -> dict:
     }
 
 
-# ============================================================
-# メイン処理
-# ============================================================
 def process_file(input_path: str, output_path: str, mode: str = "--full"):
-    """スクレイプデータを処理して出力"""
-    # 読み込み・重複除去
     places = load_jsonl(input_path)
     print(f"スクレイプデータ: {len(places)}件")
 
     unique_places = deduplicate(places)
     print(f"重複除去後: {len(unique_places)}件")
 
-    # 処理
     new_results = {}
     for place in unique_places:
         processed = process_place(place)
@@ -477,25 +317,20 @@ def process_file(input_path: str, output_path: str, mode: str = "--full"):
             new_results[make_result_key(processed)] = processed
     print(f"新規処理済み: {len(new_results)}件")
 
-    # マージ or フル再生成
     if mode == "--incremental":
         existing = load_existing(output_path)
         merged = {make_result_key(t): t for t in existing.get("toilets", [])}
-
         new_count = sum(1 for k in new_results if k not in merged)
         updated_count = sum(1 for k in new_results if k in merged)
         merged.update(new_results)
-
         results = list(merged.values())
         print(f"差分マージ: 新規追加 {new_count}件 / 更新 {updated_count}件 / 既存維持 {len(merged) - new_count - updated_count}件")
-
         metadata = existing.get("metadata") or build_metadata(results)
     else:
         results = list(new_results.values())
         metadata = build_metadata(results)
         print(f"フル再生成: {len(results)}件")
 
-    # ソート・統計
     results.sort(key=lambda x: x["toilet_score"], reverse=True)
     metadata["total"] = len(results)
     metadata["scored"] = sum(1 for r in results if r["confidence"] > 0)
@@ -503,7 +338,6 @@ def process_file(input_path: str, output_path: str, mode: str = "--full"):
 
     print(f"出力: {len(results)}件 (スコアあり {metadata['scored']}件 / 公共トイレ {metadata['public_toilets']}件)")
 
-    # 書き出し
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump({"metadata": metadata, "toilets": results}, f, ensure_ascii=False, indent=2)
     print(f"出力完了: {output_path}")
@@ -515,7 +349,6 @@ def main():
         print("  --full        既存データを無視して全件再生成（デフォルト）")
         print("  --incremental 既存データに差分マージ")
         sys.exit(1)
-
     input_path = sys.argv[1]
     output_path = sys.argv[2]
     mode = sys.argv[3] if len(sys.argv) > 3 else "--full"

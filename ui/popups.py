@@ -2,7 +2,6 @@
 ui/popups.py
 Popup HTML builders for toilet map markers
 """
-import app_config
 from app_config import esc, get_score_style
 
 

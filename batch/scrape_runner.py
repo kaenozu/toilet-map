@@ -17,6 +17,7 @@ import json
 import shutil
 import tempfile
 import re
+from pathlib import Path
 
 # ============================================================
 # 設定
@@ -376,7 +377,7 @@ def run_batch():
             print(f"Fetching bounding box for {city}...")
             bounds = get_city_bounds(city)
 
-        filtered_path = RAW_OUTPUT.replace(".json", "_filtered.json")
+        filtered_path = str(Path(RAW_OUTPUT).with_suffix("_filtered.json"))
         total_raw, kept = filter_raw_data(RAW_OUTPUT, filtered_path, city, bounds)
 
         if kept == 0:

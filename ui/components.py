@@ -3,7 +3,7 @@ ui/components.py
 Streamlit UI components for toilet map
 """
 import streamlit as st
-from app_config import get_score_style, esc, FILTER_CONFIG, MAX_SAMPLE_REVIEWS
+from app_config import get_score_style, esc
 
 
 def render_score_legend():

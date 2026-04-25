@@ -2,18 +2,13 @@
 tests/test_app_config.py
 app_config.py のユニットテスト
 """
-import sys
-import os
+import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 from app_config import (
-    get_score_style,
-    esc,
-    SCORE_RANGES,
-    FILTER_CONFIG,
-    PREFECTURE_CENTERS,
-    TILE_OPTIONS,
+    get_score_style, esc, SCORE_RANGES, FILTER_CONFIG,
+    PREFECTURE_CENTERS, TILE_OPTIONS, ERROR_METADATA,
 )
 
 
@@ -45,64 +40,54 @@ class TestGetScoreStyle:
         assert label == "要注意"
 
     def test_boundary_80(self):
-        color, emoji, label = get_score_style(80)
-        assert emoji == "✨"
+        assert get_score_style(80)[1] == "✨"
 
     def test_boundary_65(self):
-        color, emoji, label = get_score_style(65)
-        assert emoji == "😊"
+        assert get_score_style(65)[1] == "😊"
 
     def test_boundary_50(self):
-        color, emoji, label = get_score_style(50)
-        assert emoji == "😐"
+        assert get_score_style(50)[1] == "😐"
 
     def test_boundary_35(self):
-        color, emoji, label = get_score_style(35)
-        assert emoji == "😨"
+        assert get_score_style(35)[1] == "😨"
 
     def test_boundary_0(self):
-        color, emoji, label = get_score_style(0)
-        assert emoji == "💩"
+        assert get_score_style(0)[1] == "💩"
 
 
 class TestEsc:
-    def test_esc_html_chars(self):
+    def test_html(self):
         assert esc("<script>") == "&lt;script&gt;"
-
-    def test_esc_quote(self):
+    def test_quote(self):
         assert esc('say "hi"') == "say &quot;hi&quot;"
-
-    def test_esc_amp(self):
+    def test_amp(self):
         assert esc("A & B") == "A &amp; B"
-
-    def test_esc_none(self):
+    def test_none(self):
         assert esc(None) == ""
-
-    def test_esc_empty(self):
+    def test_empty(self):
         assert esc("") == ""
-
-    def test_esc_number(self):
+    def test_number(self):
         assert esc(123) == "123"
 
 
 class TestFilterConfig:
-    def test_has_all_key(self):
+    def test_all_key(self):
         assert "すべて" in FILTER_CONFIG
         assert FILTER_CONFIG["すべて"] is None
-
-    def test_has_public_key(self):
-        assert "公共トイレ" in FILTER_CONFIG
+    def test_public_key(self):
         assert FILTER_CONFIG["公共トイレ"] == "__public__"
-
     def test_cafe_pattern(self):
-        assert "カフェ・飲食" in FILTER_CONFIG
         pat = FILTER_CONFIG["カフェ・飲食"]
         assert "カフェ" in pat and "レストラン" in pat
-
     def test_store_pattern(self):
-        assert "コンビニ・店舗" in FILTER_CONFIG
         pat = FILTER_CONFIG["コンビニ・店舗"]
         assert "コンビニ" in pat and "スーパー" in pat
+    def test_hotel(self):
+        assert "ホテル・旅館" in FILTER_CONFIG
+    def test_michi(self):
+        assert "道の駅" in FILTER_CONFIG
+    def test_sapa(self):
+        assert "SA・PA" in FILTER_CONFIG
 
 
 class TestPrefectureCenters:
@@ -119,48 +104,35 @@ class TestPrefectureCenters:
         for pref, coords in expected.items():
             assert pref in PREFECTURE_CENTERS
             lat, lng = PREFECTURE_CENTERS[pref]
-            assert isinstance(lat, float)
-            assert isinstance(lng, float)
-            assert 30 < lat < 44
-            assert 127 < lng < 146
+            assert isinstance(lat, float) and isinstance(lng, float)
+            assert 30 < lat < 44 and 127 < lng < 146
 
 
 class TestScoreRanges:
-    def test_all_ranges_defined(self):
+    def test_all_ranges(self):
         assert len(SCORE_RANGES) == 5
         thresholds = [r[0] for r in SCORE_RANGES]
         assert thresholds == [80, 65, 50, 35, 0]
-
-    def test_ranges_have_4_elements(self):
+    def test_ranges_elements(self):
         for r in SCORE_RANGES:
             assert len(r) == 4
 
 
 class TestTileOptions:
-    def test_tile_options_defined(self):
+    def test_defined(self):
         assert len(TILE_OPTIONS) >= 2
         assert "OpenStreetMap（標準）" in TILE_OPTIONS
         assert TILE_OPTIONS["OpenStreetMap（標準）"] == "OpenStreetMap"
-
-    def test_tile_keys_are_strings(self):
+    def test_keys_strings(self):
         for name, tile in TILE_OPTIONS.items():
-            assert isinstance(name, str)
-            assert isinstance(tile, str)
+            assert isinstance(name, str) and isinstance(tile, str)
 
 
-class TestFilterConfig:
-    def test_has_all_keys(self):
-        assert "すべて" in FILTER_CONFIG
-        assert "公共トイレ" in FILTER_CONFIG
-        assert "カフェ・飲食" in FILTER_CONFIG
-
-    def test_new_filters(self):
-        assert "ホテル・旅館" in FILTER_CONFIG
-        assert "道の駅" in FILTER_CONFIG
-        assert "SA・PA" in FILTER_CONFIG
-
-    def test_public_filter(self):
-        assert FILTER_CONFIG["公共トイレ"] == "__public__"
+class TestErrorMetadata:
+    def test_keys(self):
+        assert ERROR_METADATA["area_name"] == "エラー"
+        assert ERROR_METADATA["total"] == 0
+        assert ERROR_METADATA["center_lat"] == 36.2231
 
 
 if __name__ == "__main__":
