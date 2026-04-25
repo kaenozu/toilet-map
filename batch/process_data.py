@@ -328,7 +328,7 @@ def process_file(input_path: str, output_path: str, mode: str = "--full"):
 
     logger.info(f"出力: {len(results)}件 (スコアあり {metadata['scored']}件 / 公共トイレ {metadata['public_toilets']}件)")
 
-    save_json(output_path, {"metadata": metadata, "toilets": results})
+    save_json(output_path, {"metadata": metadata, "toilets": results}, compress=True)
 
 
 def main():

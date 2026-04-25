@@ -5,6 +5,7 @@ Common utility functions for batch processing.
 import json
 import os
 import logging
+import gzip
 
 # Configure logging
 logging.basicConfig(
@@ -29,11 +30,18 @@ def load_jsonl(path: str) -> list[dict]:
                     logger.warning(f"Failed to decode JSON line in {path}: {e}")
     return places
 
-def save_json(path: str, data: dict, indent: int = 2):
-    """Save dictionary to JSON file with UTF-8 encoding."""
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=indent)
-    logger.info(f"Saved: {path}")
+def save_json(path: str, data: dict, indent: int = 2, compress: bool = False):
+    """Save dictionary to JSON file (optionally compressed with gzip)."""
+    target_path = path
+    if compress:
+        if not target_path.endswith(".gz"):
+            target_path += ".gz"
+        with gzip.open(target_path, "wt", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=indent)
+    else:
+        with open(target_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=indent)
+    logger.info(f"Saved: {target_path}")
 
 def count_lines(path: str) -> int:
     """Count non-empty lines in a file (excluding comments)."""

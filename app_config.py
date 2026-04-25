@@ -4,7 +4,8 @@ Shared configuration constants for toilet map app
 """
 import html
 
-DATA_PATH = "data/toilets.json"
+DATA_PATH = "data/toilets.json.gz"
+DB_PATH = "data/toilets.db"
 
 ERROR_METADATA = {
     "total": 0, "scored": 0, "public_toilets": 0,
