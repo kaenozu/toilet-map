@@ -17,6 +17,7 @@ import shutil
 import tempfile
 import re
 from pathlib import Path
+from utils import logger, count_lines
 
 # ============================================================
 # 設定
@@ -47,6 +48,8 @@ EXIT_ON_INACTIVITY = "5m"
 # ============================================================
 def load_queries(path: str = QUERIES_FILE) -> list[str]:
     """クエリファイルを読み込む（空行・コメント行を除外）"""
+    if not os.path.exists(path):
+        return []
     queries = []
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
@@ -79,12 +82,6 @@ def merge_part_files(raw_dir: str, output_path: str, total: int):
             if os.path.exists(part):
                 with open(part, "r", encoding="utf-8") as pf:
                     outf.write(pf.read())
-
-
-def count_lines(path: str) -> int:
-    """ファイルの行数をカウント"""
-    with open(path, "r", encoding="utf-8") as f:
-        return sum(1 for _ in f)
 
 
 # ============================================================
@@ -141,17 +138,17 @@ def scrape_query(query: str, output_path: str) -> bool:
                 timeout=600,  # 10 minutes max per query
             )
         except subprocess.TimeoutExpired:
-            print("  [TIMEOUT] Query exceeded 10 minutes")
+            logger.error("Query exceeded 10 minutes")
             return False
         except FileNotFoundError:
-            print("  [ERROR] Docker executable not found. Is Docker Desktop running?")
+            logger.error("Docker executable not found. Is Docker Desktop running?")
             return False
         except Exception as e:
-            print(f"  [ERROR] {type(e).__name__}: {e}")
+            logger.error(f"{type(e).__name__}: {e}")
             return False
 
         if result.returncode != 0:
-            print(f"  !! FAILED (exit code {result.returncode})")
+            logger.error(f"FAILED (exit code {result.returncode})")
             return False
     finally:
         if os.path.exists(tmp_query):
@@ -162,16 +159,16 @@ def scrape_query(query: str, output_path: str) -> bool:
 
     # 出力ファイル確認
     if not os.path.exists(output_path):
-        print("  [ERROR] Output file not created")
+        logger.error("Output file not created")
         return False
 
     with open(output_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
     if not lines:
-        print("  No results")
+        logger.warning("No results found for this query")
         return False
 
-    print(f"  OK ({len(lines)} results)")
+    logger.info(f"OK ({len(lines)} results)")
     return True
 
 

@@ -9,6 +9,7 @@ import re
 import sys
 from collections import Counter
 from datetime import datetime
+from utils import load_jsonl, save_json, logger
 from scoring_config import (
     SCORE_CLAMP_MIN,
     SCORE_CLAMP_MAX,
@@ -230,16 +231,6 @@ def make_result_key(result: dict) -> str:
     return f"{result['title']}@{result['lat']:.4f},{result['lng']:.4f}"
 
 
-def load_jsonl(path: str) -> list[dict]:
-    places = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                places.append(json.loads(line))
-    return places
-
-
 def load_existing(path: str) -> dict:
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -304,17 +295,17 @@ def build_metadata(results: list[dict]) -> dict:
 
 def process_file(input_path: str, output_path: str, mode: str = "--full"):
     places = load_jsonl(input_path)
-    print(f"スクレイプデータ: {len(places)}件")
+    logger.info(f"スクレイプデータ: {len(places)}件")
 
     unique_places = deduplicate(places)
-    print(f"重複除去後: {len(unique_places)}件")
+    logger.info(f"重複除去後: {len(unique_places)}件")
 
     new_results = {}
     for place in unique_places:
         processed = process_place(place)
         if processed:
             new_results[make_result_key(processed)] = processed
-    print(f"新規処理済み: {len(new_results)}件")
+    logger.info(f"新規処理済み: {len(new_results)}件")
 
     if mode == "--incremental":
         existing = load_existing(output_path)
@@ -323,28 +314,26 @@ def process_file(input_path: str, output_path: str, mode: str = "--full"):
         updated_count = sum(1 for k in new_results if k in merged)
         merged.update(new_results)
         results = list(merged.values())
-        print(f"差分マージ: 新規追加 {new_count}件 / 更新 {updated_count}件 / 既存維持 {len(merged) - new_count - updated_count}件")
+        logger.info(f"差分マージ: 新規追加 {new_count}件 / 更新 {updated_count}件 / 既存維持 {len(merged) - new_count - updated_count}件")
         metadata = existing.get("metadata") or build_metadata(results)
     else:
         results = list(new_results.values())
         metadata = build_metadata(results)
-        print(f"フル再生成: {len(results)}件")
+        logger.info(f"フル再生成: {len(results)}件")
 
     results.sort(key=lambda x: x["toilet_score"], reverse=True)
     metadata["total"] = len(results)
     metadata["scored"] = sum(1 for r in results if r["confidence"] > 0)
     metadata["public_toilets"] = sum(1 for r in results if r["is_public_toilet"])
 
-    print(f"出力: {len(results)}件 (スコアあり {metadata['scored']}件 / 公共トイレ {metadata['public_toilets']}件)")
+    logger.info(f"出力: {len(results)}件 (スコアあり {metadata['scored']}件 / 公共トイレ {metadata['public_toilets']}件)")
 
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump({"metadata": metadata, "toilets": results}, f, ensure_ascii=False, indent=2)
-    print(f"出力完了: {output_path}")
+    save_json(output_path, {"metadata": metadata, "toilets": results})
 
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: python process_data.py <input.json> <output.json>")
+        logger.error("Usage: python process_data.py <input.json> <output.json>")
         print("  --full        既存データを無視して全件再生成（デフォルト）")
         print("  --incremental 既存データに差分マージ")
         sys.exit(1)
