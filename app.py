@@ -19,6 +19,27 @@ from ui.pagination import (
     render_pagination,
     render_csv_export,
 )
+from ui.i18n import LANGUAGES
+
+FILTER_LABEL_MAP = {
+    "すべて": "filter_all",
+    "公共トイレ": "filter_public",
+    "カフェ・飲食": "filter_cafe",
+    "コンビニ・店舗": "filter_convenience",
+    "ホテル・旅館": "filter_hotel",
+    "道の駅": "filter_roadstation",
+    "SA・PA": "filter_sapa",
+}
+
+
+def get_translated_filters(lang: str) -> tuple[dict, dict]:
+    t = LANGUAGES[lang]
+    display_to_value = {}
+    display_to_internal = {}
+    for ja_key, i18n_key in FILTER_LABEL_MAP.items():
+        display_to_value[t[i18n_key]] = FILTER_CONFIG[ja_key]
+        display_to_internal[t[i18n_key]] = ja_key
+    return display_to_value, display_to_internal
 
 
 def main():
@@ -29,43 +50,48 @@ def main():
         initial_sidebar_state="collapsed",
     )
     st.markdown(MOBILE_CSS, unsafe_allow_html=True)
+    st.markdown('<link rel="manifest" href="/static/manifest.json">', unsafe_allow_html=True)
 
-    # 現在地取得 (GPS)
+    lang = st.selectbox("🌐 Language", list(LANGUAGES.keys()), key="lang_select")
+    t = LANGUAGES[lang]
+    translated_filters, translated_to_internal = get_translated_filters(lang)
+
     user_location = None
-    if st.checkbox("📍 現在地を使用する (GPS)"):
-        # js_expressions の結果が直接 coords オブジェクトになるよう調整
+    if st.checkbox(t["gps"]):
         loc = streamlit_js_eval(js_expressions="new Promise(resolve => navigator.geolocation.getCurrentPosition(pos => resolve(pos.coords)))", key="location")
         if loc:
             user_location = (loc["latitude"], loc["longitude"])
-            st.info(f"現在地を取得しました: {user_location[0]:.4f}, {user_location[1]:.4f}")
+            st.info(f"{t['location_acquired']}: {user_location[0]:.4f}, {user_location[1]:.4f}")
 
     data = load_toilet_data()
     meta = data["metadata"]
     toilets = data["toilets"]
     prefecture_stats = data.get("pref_stats", {})
 
-    st.title("🚽 トイレきれい度マップ")
+    st.title(t["title"])
 
     df = toilets_to_dataframe(toilets)
     prefectures = get_prefectures(df)
 
-    render_stats(meta, toilets)
+    render_stats(meta, toilets, t)
 
     col_pref, col_filter, col_search = st.columns([1, 1, 2])
     with col_pref:
-        selected_pref = st.selectbox("都道府県", prefectures, key="pref_select")
+        selected_pref = st.selectbox(t["prefecture"], prefectures, key="pref_select")
     with col_filter:
-        filter_type = st.selectbox("フィルタ", list(FILTER_CONFIG.keys()), key="filter_select")
+        filter_type = st.selectbox(t["filter"], list(translated_filters.keys()), key="filter_select")
     with col_search:
-        search_query = st.text_input("検索", "", placeholder="🔍 名前・住所・カテゴリで検索…", key="search_input")
+        search_query = st.text_input(t["search_label"], "", placeholder=t["search_placeholder"], key="search_input")
 
-    sort_order = st.radio("並び替え", ["きれい度順", "現在地から近い順"], horizontal=True)
+    filter_value = translated_filters[filter_type]
+    internal_filter = translated_to_internal[filter_type]
+    sort_order = st.radio(t["sort_label"], [t["sort_clean"], t["sort_near"]], horizontal=True)
 
     user_lat, user_lng = user_location if user_location else (None, None)
-    filtered = filter_toilets(df, filter_type, selected_pref, user_lat, user_lng)
+    filtered = filter_toilets(df, internal_filter, selected_pref, user_lat, user_lng)
     filtered = search_toilets(filtered, search_query)
 
-    if sort_order == "現在地から近い順" and user_location:
+    if sort_order == t["sort_near"] and user_location:
         filtered = filtered.sort_values("distance", ascending=True)
     else:
         filtered = filtered.sort_values("toilet_score", ascending=False)
@@ -79,13 +105,13 @@ def main():
     total_pages = max(1, (total_items + PER_PAGE - 1) // PER_PAGE)
     page = st.session_state.page
 
-    render_csv_export(filtered, selected_pref, filter_type)
-    render_pagination(total_items, page, total_pages)
+    render_csv_export(filtered, selected_pref, filter_type, t)
+    render_pagination(total_items, page, total_pages, t)
 
     start_idx = (page - 1) * PER_PAGE
     page_items = filtered.iloc[start_idx : start_idx + PER_PAGE]
 
-    st.markdown(f"**{total_items}件** 表示中")
+    st.markdown(f"**{total_items}{t['showing']}**")
     render_score_legend()
 
     m = build_map(page_items.to_dict("records"), map_lat, map_lng, map_zoom)

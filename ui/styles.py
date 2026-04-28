@@ -283,12 +283,18 @@ MOBILE_CSS = """
 
     /* トイレカード */
     .toilet-card {
-        background: #ffffff !important;
-        color: #222222 !important;
-        border-color: #e0e0e0 !important;
+        background: #1e2530 !important;
+        color: #f0f0f0 !important;
+        border-color: #333 !important;
     }
     .toilet-card span, .toilet-card div {
         color: inherit !important;
+    }
+
+    .stDownloadButton button {
+        background-color: #262c37 !important;
+        color: #f0f0f0 !important;
+        border-color: #444 !important;
     }
 }
 </style>

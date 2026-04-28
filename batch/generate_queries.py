@@ -22,6 +22,18 @@ QUERY_TEMPLATES = [
     "駅 トイレ in {city}",
     "公園 トイレ in {city}",
     "ホテル in {city}",
+    "ショッピングモール in {city}",
+    "ドラッグストア in {city}",
+    "病院 in {city}",
+    "図書館 in {city}",
+    "温泉 in {city}",
+    "レストラン トイレ in {city}",
+    "デパート in {city}",
+    "百円ショップ in {city}",
+    "ファミレス in {city}",
+    "書店 in {city}",
+    "公共施設 トイレ in {city}",
+    "学校 トイレ in {city}",
 ]
 
 

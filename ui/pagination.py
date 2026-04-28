@@ -30,31 +30,31 @@ def reset_page(filter_key: str):
         st.session_state.last_filter_key = filter_key
 
 
-def render_pagination(total: int, page: int, total_pages: int):
+def render_pagination(total: int, page: int, total_pages: int, t: dict):
     col_prev, col_page, col_next = st.columns([1, 2, 1])
     with col_prev:
         prev_disabled = page <= 1
-        if st.button("◀ 前へ", disabled=prev_disabled, use_container_width=True):
+        if st.button(t["prev"], disabled=prev_disabled, use_container_width=True):
             st.session_state.page = max(1, page - 1)
             st.rerun()
     with col_page:
         st.markdown(
             f"<div style='text-align:center;padding:4px;font-size:14px;font-weight:600;'>"
-            f"ページ {page}/{total_pages}</div>",
+            f"{t['page']} {page}/{total_pages}</div>",
             unsafe_allow_html=True,
         )
     with col_next:
         next_disabled = page >= total_pages
-        if st.button("次へ ▶", disabled=next_disabled, use_container_width=True):
+        if st.button(t["next"], disabled=next_disabled, use_container_width=True):
             st.session_state.page = min(total_pages, page + 1)
             st.rerun()
 
 
-def render_csv_export(filtered: pd.DataFrame, selected_pref: str, filter_type: str):
+def render_csv_export(filtered: pd.DataFrame, selected_pref: str, filter_type: str, t: dict):
     if len(filtered) > 0:
         csv = filtered.to_csv(index=False, encoding="utf-8-sig")
         st.download_button(
-            label="📥 CSVダウンロード",
+            label=t["download"],
             data=csv,
             file_name=f"toilet_map_{selected_pref}_{filter_type}.csv",
             mime="text/csv",
