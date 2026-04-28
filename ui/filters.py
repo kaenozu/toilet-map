@@ -66,11 +66,12 @@ def filter_toilets(
 
 
 def search_toilets(df: pd.DataFrame, query: Optional[str]) -> pd.DataFrame:
-    """名前・住所で部分一致検索"""
+    """名前・住所・カテゴリで部分一致検索"""
     if not query:
         return df
     mask = (
         df["title"].str.contains(query, case=False, na=False)
         | df["address"].str.contains(query, case=False, na=False)
+        | df["category"].str.contains(query, case=False, na=False)
     )
     return df[mask]

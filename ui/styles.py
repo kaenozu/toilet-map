@@ -33,6 +33,49 @@ MOBILE_CSS = """
     /* 凡例を小さく */
     .score-legend-mobile { font-size: 0.7rem !important; }
     .score-legend-mobile .bar { width: 120px !important; height: 10px !important; }
+
+    /* フィルタ行を折り返し表示 */
+    .stHorizontalBlock {
+        flex-wrap: wrap !important;
+    }
+    .stHorizontalBlock > div {
+        min-width: 140px !important;
+        flex: 1 1 45% !important;
+    }
+
+    /* 統計expander コンパクト化 */
+    .streamlit-expanderHeader {
+        font-size: 14px !important;
+        padding: 4px 8px !important;
+    }
+
+    /* ページネーションボタン タップ領域拡大 */
+    .stButton > button {
+        min-height: 44px !important;
+        font-size: 14px !important;
+    }
+
+    /* トイレカードのタッチ操作改善 */
+    .toilet-card {
+        -webkit-tap-highlight-color: transparent !important;
+        transition: background 0.15s !important;
+    }
+    .toilet-card:active {
+        background: #f5f5f5 !important;
+    }
+
+    /* ラジオボタンをコンパクトに */
+    .stRadio > label {
+        font-size: 13px !important;
+    }
+    .stRadio > div {
+        gap: 4px !important;
+    }
+
+    /* ダウンロードボタン */
+    .stDownloadButton > button {
+        min-height: 44px !important;
+    }
 }
 
 /* タップしやすいフィルタボタン */

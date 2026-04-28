@@ -57,7 +57,7 @@ def main():
     with col_filter:
         filter_type = st.selectbox("フィルタ", list(FILTER_CONFIG.keys()), key="filter_select")
     with col_search:
-        search_query = st.text_input("検索", "", placeholder="🔍 名前・住所で検索…", key="search_input")
+        search_query = st.text_input("検索", "", placeholder="🔍 名前・住所・カテゴリで検索…", key="search_input")
 
     sort_order = st.radio("並び替え", ["きれい度順", "現在地から近い順"], horizontal=True)
 

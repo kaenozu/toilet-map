@@ -9,7 +9,7 @@ import pandas as pd
 from app_config import DB_PATH, ERROR_METADATA
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, max_entries=1, show_spinner="データを読み込み中...")
 def load_toilet_data():
     """
     SQLite から全データを読み込み、アプリ用の辞書形式で返す。
