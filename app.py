@@ -42,7 +42,7 @@ def main():
     data = load_toilet_data()
     meta = data["metadata"]
     toilets = data["toilets"]
-    pref_stats = data.get("pref_stats", {})
+    prefecture_stats = data.get("pref_stats", {})
 
     st.title("🚽 トイレきれい度マップ")
 
@@ -70,7 +70,7 @@ def main():
     else:
         filtered = filtered.sort_values("toilet_score", ascending=False)
 
-    map_lat, map_lng, map_zoom = calc_map_center(selected_pref, meta, pref_stats)
+    map_lat, map_lng, map_zoom = calc_map_center(selected_pref, meta, prefecture_stats)
 
     init_page_state()
     reset_page(f"{selected_pref}|{filter_type}|{search_query}")

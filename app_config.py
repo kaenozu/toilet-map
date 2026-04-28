@@ -23,13 +23,15 @@ SCORE_RANGES = [
 
 FILTER_CONFIG = {
     "すべて": None,
-    "公共トイレ": "__public__",
+    "公共トイレ": "__public__",  # 特殊値: is_public_toilet == True でフィルタ
     "カフェ・飲食": "カフェ|喫茶|レストラン|食堂|ダイニング|コーヒー|パン|ケーキ",
     "コンビニ・店舗": "コンビニ|スーパー|ドラッグ|ストア|マート|商店",
     "ホテル・旅館": "ホテル|旅馆|民宿|ビジネスホテル",
     "道の駅": "道の駅",
     "SA・PA": "サービスエリア|パーキングエリア",
 }
+
+PUBLIC_FILTER_VALUE = "__public__"
 
 PUBLIC_MARKER_RADIUS = 14
 NORMAL_MARKER_RADIUS = 10
@@ -38,6 +40,11 @@ TILE_OPTIONS = {
     "OpenStreetMap（標準）": "OpenStreetMap",
     "モノクロ（Cartodb）": "CartoDB positron",
 }
+
+# UI表示上限
+MAX_SAMPLE_REVIEWS = 2  # ポップアップ内の最大レビュー数
+REVIEW_TEXT_MAX_LENGTH = 120  # レビュー文の最大表示文字数
+MAX_KEYWORD_TAGS = 5  # ポップアップ内の最大キーワードタグ数
 
 
 def esc(text):
@@ -53,6 +60,7 @@ def get_score_style(score: float) -> tuple[str, str, str]:
     return SCORE_RANGES[-1][1:]
 
 
+# 各都道府県の代表座標（Google Maps に基づく簡易中心点）
 PREFECTURE_CENTERS = {
     "北海道": (43.0642, 141.3469),
     "青森県": (40.8226, 140.6379),

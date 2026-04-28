@@ -29,13 +29,13 @@ def calc_cluster_radius(count: int) -> int:
 def calc_map_center(
     selected_pref: str,
     meta: dict,
-    pref_stats: dict,
+    prefecture_stats: dict,
 ) -> tuple[float, float, int]:
     if selected_pref != "全て" and selected_pref in PREFECTURE_CENTERS:
-        if selected_pref in pref_stats and pref_stats[selected_pref]["count"] >= 5:
+        if selected_pref in prefecture_stats and prefecture_stats[selected_pref]["count"] >= 5:
             return (
-                pref_stats[selected_pref]["center_lat"],
-                pref_stats[selected_pref]["center_lng"],
+                prefecture_stats[selected_pref]["center_lat"],
+                prefecture_stats[selected_pref]["center_lng"],
                 11,
             )
         lat, lng = PREFECTURE_CENTERS[selected_pref]
@@ -55,6 +55,7 @@ def build_map(
         zoom_start=zoom,
         tiles=tile,
         control_scale=True,
+        prefer_canvas=True,  # large datasets: use Canvas renderer for performance
     )
     m.get_root().html.add_child(folium.Element(POPUP_FIX_JS))
 

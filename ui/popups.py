@@ -3,7 +3,7 @@ ui/popups.py
 Popup HTML builders for toilet map markers
 """
 from typing import Optional
-from app_config import esc, get_score_style
+from app_config import esc, get_score_style, MAX_SAMPLE_REVIEWS, REVIEW_TEXT_MAX_LENGTH
 from .types import ToiletDict
 
 
@@ -40,7 +40,7 @@ def _build_review_html(reviews: list[dict]) -> str:
         return ""
     seen = set()
     parts = []
-    for r in reviews[:2]:
+    for r in reviews[:MAX_SAMPLE_REVIEWS]:
         txt = r.get("text", "")
         key = txt[:80]
         if key in seen:
@@ -55,11 +55,13 @@ def _build_review_html(reviews: list[dict]) -> str:
         if rating:
             meta += f' <span style="color:#f9a825;">★{rating}</span>'
         txt_safe = esc(txt).replace("\n", "<br>")
+        display_text = txt_safe[:REVIEW_TEXT_MAX_LENGTH]
+        suffix = "..." if len(txt_safe) > REVIEW_TEXT_MAX_LENGTH else ""
         parts.append(
             f'<div style="font-size:11px;color:#444;padding:4px 6px;background:#fafafa;'
             f'border-radius:4px;margin-top:3px;border-left:3px solid {border_color};">'
             f"{icon} {meta}<br>"
-            f'<span style="line-height:1.5;">{txt_safe[:120]}{"..." if len(txt_safe) > 120 else ""}</span></div>'
+            f'<span style="line-height:1.5;">{display_text}{suffix}</span></div>'
         )
     return "".join(parts)
 
