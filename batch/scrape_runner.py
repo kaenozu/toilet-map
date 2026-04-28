@@ -246,7 +246,7 @@ def apply_city_filter(city: str, pref: str, raw_output: str) -> tuple[str, int, 
     from city_bounds import filter_raw_data
 
     bounds = fetch_city_bounds(city, pref)
-    filtered_path = str(Path(raw_output).with_suffix("_filtered.json"))
+    filtered_path = str(Path(raw_output).with_name(Path(raw_output).stem + "_filtered.json"))
     total_raw, kept = filter_raw_data(raw_output, filtered_path, city, bounds)
     return filtered_path, total_raw, kept
 
