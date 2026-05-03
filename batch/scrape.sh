@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 QUERIES_FILE="$SCRIPT_DIR/queries.txt"
 RAW_DIR="$SCRIPT_DIR/raw_parts"
 RAW_OUTPUT="$SCRIPT_DIR/raw_data.json"
-PROCESSED="$SCRIPT_DIR/../data/toilets.json"
+PROCESSED="$SCRIPT_DIR/../data/toilets.json.gz"
 PROGRESS_FILE="$SCRIPT_DIR/.progress"
 
 SLEEP_BETWEEN=120

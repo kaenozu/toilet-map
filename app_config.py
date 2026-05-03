@@ -3,6 +3,7 @@ app_config.py
 Shared configuration constants for toilet map app
 """
 import html
+from urllib.parse import urlparse
 
 DATA_PATH = "data/toilets.json.gz"
 DB_PATH = "data/toilets.db"
@@ -50,6 +51,18 @@ MAX_KEYWORD_TAGS = 5  # ポップアップ内の最大キーワードタグ数
 def esc(text):
     """HTMLエスケープ"""
     return html.escape(str(text or ""), quote=True) if text else ""
+
+
+def safe_href(url):
+    """安全な外部リンクだけを href に使える文字列に変換する"""
+    if not url:
+        return ""
+    parsed = urlparse(str(url).strip())
+    if parsed.scheme not in {"http", "https"}:
+        return ""
+    if not parsed.netloc:
+        return ""
+    return html.escape(parsed.geturl(), quote=True)
 
 
 def get_score_style(score: float) -> tuple[str, str, str]:

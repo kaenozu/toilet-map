@@ -103,7 +103,7 @@ def filter_raw_data(input_path: str, output_path: str, city_name: str, bounds: O
             coord_match = False
             if bounds:
                 lat = entry.get("latitude")
-                lng = entry.get("longtitude") or entry.get("longitude")
+                lng = entry.get("longitude")
                 if lat and lng:
                     coord_match = is_in_bounds(float(lat), float(lng), bounds)
 

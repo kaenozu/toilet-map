@@ -3,7 +3,7 @@ ui/components.py
 Streamlit UI components for toilet map
 """
 import streamlit as st
-from app_config import get_score_style, esc
+from app_config import get_score_style, esc, safe_href
 from .types import ToiletDict
 
 
@@ -30,8 +30,9 @@ def render_toilet_card(toilet: ToiletDict, rank: int = None):
 
     public_tag = ' <span style="background:#e3f2fd;color:#1565c0;padding:1px 6px;border-radius:3px;font-size:10px;">公共</span>' if t.get("is_public_toilet") else ""
 
-    link_start = f'<a href="{t["link"]}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit;">' if t.get("link") else ""
-    link_end = "</a>" if t.get("link") else ""
+    link_href = safe_href(t.get("link"))
+    link_start = f'<a href="{link_href}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit;">' if link_href else ""
+    link_end = "</a>" if link_href else ""
 
     rank_html = f'<span style="color:#999;font-weight:600;min-width:24px;">#{rank}</span>' if rank else ""
 

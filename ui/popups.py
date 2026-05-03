@@ -3,7 +3,7 @@ ui/popups.py
 Popup HTML builders for toilet map markers
 """
 from typing import Optional
-from app_config import esc, get_score_style, MAX_SAMPLE_REVIEWS, REVIEW_TEXT_MAX_LENGTH
+from app_config import esc, safe_href, get_score_style, MAX_SAMPLE_REVIEWS, REVIEW_TEXT_MAX_LENGTH
 from .types import ToiletDict
 
 
@@ -67,11 +67,12 @@ def _build_review_html(reviews: list[dict]) -> str:
 
 
 def _build_link_html(link: str) -> str:
-    if not link:
+    safe_link = safe_href(link)
+    if not safe_link:
         return ""
     return (
         '<div style="margin-top:6px;">'
-        f'<a href="{link}" target="_blank" rel="noopener noreferrer" '
+        f'<a href="{safe_link}" target="_blank" rel="noopener noreferrer" '
         'style="font-size:13px;color:#1a73e8;text-decoration:none;font-weight:600;'
         'display:inline-block;padding:4px 0;">'
         "🗺️ Google Mapsで開く →</a></div>"

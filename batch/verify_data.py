@@ -2,21 +2,33 @@
 verify_data.py
 Phase 1 スクレイピング後のデータ品質を検証
 実行: python verify_data.py
-関連: data/toilets.json, batch/queries.d/
+関連: data/toilets.json.gz, batch/queries.d/
 """
 import json
 import os
 from collections import Counter
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "toilets.json")
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(SCRIPT_DIR, "..", "data")
+DATA_PATHS = [
+    os.path.join(DATA_DIR, "toilets.json.gz"),
+    os.path.join(DATA_DIR, "toilets.json"),
+]
 QUERIES_D = os.path.join(os.path.dirname(__file__), "queries.d")
 
 KANTO_PREFECTURES = ["埼玉県", "東京都", "千葉県", "神奈川県", "茨城県", "栃木県", "群馬県"]
 
 
 def load_data():
-    with open(DATA_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+    for path in DATA_PATHS:
+        if os.path.exists(path):
+            if path.endswith(".gz"):
+                import gzip
+                with gzip.open(path, "rt", encoding="utf-8") as f:
+                    return json.load(f)
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    raise FileNotFoundError(DATA_PATHS[0])
 
 
 def count_queries_for_pref(pref: str) -> int:
@@ -25,7 +37,7 @@ def count_queries_for_pref(pref: str) -> int:
     if not os.path.exists(path):
         return 0
     with open(path, "r", encoding="utf-8") as f:
-        return sum(1 for line in f if line.strip() and not line.startswith("#"))
+        return sum(1 for line in f if (stripped := line.strip()) and not stripped.startswith("#"))
 
 
 def main():
@@ -61,11 +73,11 @@ def main():
 
     # データ completeness
     missing_score = sum(1 for t in toilets if t.get("toilet_score") is None)
-    missing_city = sum(1 for t in toilets if not t.get("city"))
+    missing_pref = sum(1 for t in toilets if not t.get("prefecture"))
     missing_addr = sum(1 for t in toilets if not t.get("address"))
     print("[COMPLETENESS]")
     print(f"  Missing score     : {missing_score}/{len(toilets)}")
-    print(f"  Missing city      : {missing_city}/{len(toilets)}")
+    print(f"  Missing prefecture: {missing_pref}/{len(toilets)}")
     print(f"  Missing address   : {missing_addr}/{len(toilets)}")
     print()
 

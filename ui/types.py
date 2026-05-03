@@ -24,14 +24,3 @@ class ToiletDict(TypedDict, total=False):
     prefecture: str
     distance: Optional[float]  # 現在地からの距離（km）
 
-
-class ToiletReviewDict(TypedDict):
-    """トイレビュー情報"""
-    text: str
-    rating: float | str | None
-    when: str | None
-    name: str | None
-    score: float
-    matched_keywords: list[str]
-    toilet_context: str
-

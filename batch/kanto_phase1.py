@@ -166,7 +166,7 @@ def main():
         logger.info("Cleaned up phase progress file.")
 
     logger.info("\nNext steps:")
-    logger.info("  1. Verify data: python -c \"import json; d=json.load(open('data/toilets.json')); print('Total:', d['metadata']['total'])\"")
+    logger.info("  1. Verify data: python -c \"import gzip, json; d=json.load(gzip.open('data/toilets.json.gz', 'rt', encoding='utf-8')); print('Total:', d['metadata']['total'])\"")
     logger.info("  2. Run app: streamlit run app.py")
 
 

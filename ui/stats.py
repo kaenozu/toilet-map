@@ -4,7 +4,6 @@ ui/stats.py
 app.py から分離
 """
 import streamlit as st
-from app_config import SCORE_RANGES
 
 
 def calc_avg_score(toilets: list) -> float:
@@ -20,14 +19,14 @@ def render_score_distribution(toilets: list):
         return
     total = len(scored)
     ranges = [
-        (80, 101, "✨ 80-100"),
-        (65, 80, "😊 65-79"),
-        (50, 65, "😐 50-64"),
-        (35, 50, "😨 35-49"),
-        (0, 35, "💩 0-34"),
+        (80, 101, "✨ 80-100", "#27ae60"),
+        (65, 80, "😊 65-79", "#2ecc71"),
+        (50, 65, "😐 50-64", "#f1c40f"),
+        (35, 50, "😨 35-49", "#f39c12"),
+        (0, 35, "💩 0-34", "#e74c3c"),
     ]
     bars_html = "<div style='margin-top:12px;'>"
-    for (lo, hi, label), (_, color, _, _) in zip(ranges, SCORE_RANGES):
+    for lo, hi, label, color in ranges:
         count = sum(1 for t in scored if lo <= t["toilet_score"] < hi)
         pct = count / total * 100 if total > 0 else 0
         bars_html += (

@@ -46,13 +46,19 @@ def build_queries(cities: list[str]) -> list[str]:
     return [tmpl.format(city=city) for city in cities for tmpl in QUERY_TEMPLATES]
 
 
-def write_batches(queries: list[str], output_dir: str, city: str = "", prefecture: str = "") -> int:
+def write_batches(
+    queries: list[str],
+    output_dir: str,
+    city: str = "",
+    prefecture: str = "",
+    start_index: int = 1,
+) -> int:
     os.makedirs(output_dir, exist_ok=True)
     file_count = 0
     for i in range(0, len(queries), BATCH_SIZE):
         file_count += 1
         batch = queries[i : i + BATCH_SIZE]
-        filepath = os.path.join(output_dir, f"batch_{file_count:03d}.txt")
+        filepath = os.path.join(output_dir, f"batch_{start_index + file_count - 1:03d}.txt")
         with open(filepath, "w", encoding="utf-8") as f:
             if city:
                 f.write(f"# city: {city}\n")
@@ -74,16 +80,26 @@ def main():
     for pref, cities in sorted(prefectures.items()):
         pref_dir = os.path.join(QUERIES_DIR, pref)
         file_count = 0
+        pref_query_count = 0
+        next_batch_index = 1
         for city in cities:
             city_queries = build_queries([city])
-            n_files = write_batches(city_queries, pref_dir, city=city, prefecture=pref)
+            n_files = write_batches(
+                city_queries,
+                pref_dir,
+                city=city,
+                prefecture=pref,
+                start_index=next_batch_index,
+            )
             file_count += n_files
+            next_batch_index += n_files
+            pref_query_count += len(city_queries)
 
-        total_queries += len(build_queries(cities))
+        total_queries += pref_query_count
         total_files += file_count
-        est_hours = len(build_queries(cities)) * 5 / 3600
+        est_hours = pref_query_count * 5 / 3600
         print(f"  {pref:6s}: {len(cities):3d} cities, "
-              f"{len(build_queries(cities)):5d} queries, "
+              f"{pref_query_count:5d} queries, "
               f"{file_count:3d} files, ~{est_hours:.0f}h")
 
     print(f"\nTotal: {total_queries} queries in {total_files} files")

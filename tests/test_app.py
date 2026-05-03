@@ -4,7 +4,7 @@ app.py モジュールのユニットテスト
 """
 import pytest
 import pandas as pd
-from app import filter_toilets, search_toilets
+from ui.filters import filter_toilets, search_toilets
 
 
 class TestFilterToilets:
@@ -91,6 +91,14 @@ class TestEscaping:
         from app_config import esc
         assert esc(None) == ""
 
+    def test_safe_href_blocks_javascript(self):
+        from app_config import safe_href
+        assert safe_href("javascript:alert(1)") == ""
+
+    def test_safe_href_allows_https(self):
+        from app_config import safe_href
+        assert safe_href("https://maps.google.com/?q=test") == "https://maps.google.com/?q=test"
+
 
 class TestBuildPopupHtml:
     def test_build_popup_basic(self):
@@ -109,6 +117,55 @@ class TestBuildPopupHtml:
         html = build_popup_html(toilet)
         assert "テストトイレ" in html
         assert "85" in html
+
+    def test_build_popup_blocks_dangerous_link(self):
+        from ui.popups import build_popup_html
+        toilet = {
+            "title": "テストトイレ",
+            "category": "公園",
+            "toilet_score": 85.0,
+            "toilet_review_count": 5,
+            "confidence": 0.8,
+            "is_public_toilet": True,
+            "address": "東京都渋谷区",
+            "rating": 4.5,
+            "review_count": 100,
+            "link": 'javascript:alert(1)" onclick="alert(2)',
+        }
+        html = build_popup_html(toilet)
+        assert "javascript:" not in html
+        assert "onclick=" not in html
+
+
+class TestCardRendering:
+    def test_render_toilet_card_blocks_dangerous_link(self, monkeypatch):
+        from ui import components
+
+        captured = {}
+
+        def fake_markdown(html, unsafe_allow_html=False):
+            captured["html"] = html
+            captured["unsafe"] = unsafe_allow_html
+
+        monkeypatch.setattr(components.st, "markdown", fake_markdown)
+
+        components.render_toilet_card(
+            {
+                "title": "テストトイレ",
+                "category": "公園",
+                "toilet_score": 85.0,
+                "confidence": 0.8,
+                "is_public_toilet": False,
+                "address": "東京都渋谷区",
+                "rating": 4.5,
+                "review_count": 100,
+                "link": 'javascript:alert(1)" onclick="alert(2)',
+            }
+        )
+
+        assert captured["unsafe"] is True
+        assert "javascript:" not in captured["html"]
+        assert "onclick=" not in captured["html"]
 
 
 if __name__ == "__main__":

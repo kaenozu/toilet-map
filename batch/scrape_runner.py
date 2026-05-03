@@ -27,7 +27,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 QUERIES_FILE = os.path.join(SCRIPT_DIR, os.environ.get("QUERIES", "queries.txt"))
 RAW_DIR = os.path.join(SCRIPT_DIR, "raw_parts")
 RAW_OUTPUT = os.path.join(SCRIPT_DIR, "raw_data.json")
-PROCESSED = os.path.join(SCRIPT_DIR, "..", "data", "toilets.json")
+PROCESSED = os.path.join(SCRIPT_DIR, "..", "data", "toilets.json.gz")
 PROGRESS_FILE = os.path.join(SCRIPT_DIR, os.environ.get("PROGRESS_FILE", ".progress"))
 
 SLEEP_BETWEEN = int(os.environ.get("SLEEP_BETWEEN", "120"))
@@ -51,13 +51,8 @@ def load_queries(path: str = QUERIES_FILE) -> list[str]:
     """クエリファイルを読み込む（空行・コメント行を除外）"""
     if not os.path.exists(path):
         return []
-    queries = []
     with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith("#"):
-                queries.append(line)
-    return queries
+        return [stripped for line in f if (stripped := line.strip()) and not stripped.startswith("#")]
 
 
 def load_progress(path: str = PROGRESS_FILE) -> set[int]:

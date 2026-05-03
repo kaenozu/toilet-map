@@ -5,6 +5,7 @@ Google Maps Scraper出力(JSONL)のデータ処理スクリプト
 使い方: python process_data.py <input.json> <output.json>
 """
 import json
+import gzip
 import re
 import sys
 from collections import Counter
@@ -43,7 +44,6 @@ class PlaceDict(TypedDict, total=False):
     address: str
     latitude: float
     longitude: float
-    longtitude: float  # タイプミス: longitude の代わりに使われる場合
     phone: str
     review_rating: float
     review_count: int
@@ -131,6 +131,7 @@ def _apply_keyword_scoring(target_text: str) -> tuple[float, list[str]]:
 
 def _apply_negation_correction(target_text: str, score: float, matched: list[str]) -> tuple[float, list[str]]:
     """否定語がキーワードの近く（NEGATION_WINDOW 文字以内）にあればスコアを打消し"""
+    matched = list(matched)
     for neg_word in NEGATION_WORDS:
         if neg_word not in target_text:
             continue
@@ -299,7 +300,7 @@ def process_place(place: PlaceDict) -> Optional[ToiletResultDict]:
       ToiletResultDict 形式の辞書、または None
     """
     lat = place.get("latitude")
-    lon = place.get("longitude") or place.get("longtitude")
+    lon = place.get("longitude")
     if not lat or not lon:
         return None
     title = place.get("title", "")
@@ -331,7 +332,7 @@ def process_place(place: PlaceDict) -> Optional[ToiletResultDict]:
 
 def make_place_key(place: PlaceDict) -> str:
     lat = float(place.get("latitude") or 0)
-    lng = float(place.get("longitude") or place.get("longtitude") or 0)
+    lng = float(place.get("longitude") or 0)
     return f"{place.get('title', '')}@{lat:.4f},{lng:.4f}"
 
 
@@ -340,11 +341,21 @@ def make_result_key(result: ToiletResultDict) -> str:
 
 
 def load_existing(path: str) -> dict:
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {"metadata": None, "toilets": []}
+    candidates = [path]
+    if not path.endswith(".gz"):
+        candidates.append(f"{path}.gz")
+    for candidate in candidates:
+        try:
+            if candidate.endswith(".gz"):
+                with gzip.open(candidate, "rt", encoding="utf-8") as f:
+                    return json.load(f)
+            with open(candidate, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            continue
+        except json.JSONDecodeError:
+            return {"metadata": None, "toilets": []}
+    return {"metadata": None, "toilets": []}
 
 
 def deduplicate(places: list[PlaceDict]) -> list[PlaceDict]:
@@ -423,7 +434,7 @@ def process_file(input_path: str, output_path: str, mode: str = "--full"):
         merged.update(new_results)
         results = list(merged.values())
         logger.info(f"差分マージ: 新規追加 {new_count}件 / 更新 {updated_count}件 / 既存維持 {len(merged) - new_count - updated_count}件")
-        metadata = existing.get("metadata") or build_metadata(results)
+        metadata = build_metadata(results)
     else:
         results = list(new_results.values())
         metadata = build_metadata(results)
