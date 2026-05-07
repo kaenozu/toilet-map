@@ -9,7 +9,7 @@ import pandas as pd
 from app_config import DB_PATH, ERROR_METADATA
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, max_entries=1, show_spinner="データを読み込み中...")
 def load_toilet_data():
     """
     SQLite から全データを読み込み、アプリ用の辞書形式で返す。
@@ -42,23 +42,25 @@ def load_toilet_data():
                 t["sample_reviews"] = []
 
         # 都道府県別の統計（中心座標など）を動的に計算
-        pref_stats = {}
+        # prefecture が空または無効なトイレは統計から除外
+        prefecture_stats = {}
         for t in toilets:
             pref = t.get("prefecture")
-            if not pref: continue
-            if pref not in pref_stats:
-                pref_stats[pref] = {"count": 0, "lats": [], "lngs": []}
-            pref_stats[pref]["count"] += 1
-            pref_stats[pref]["lats"].append(t["lat"])
-            pref_stats[pref]["lngs"].append(t["lng"])
+            if not pref:
+                continue  # prefecture 未設定のトイレは統計対象外
+            if pref not in prefecture_stats:
+                prefecture_stats[pref] = {"count": 0, "lats": [], "lngs": []}
+            prefecture_stats[pref]["count"] += 1
+            prefecture_stats[pref]["lats"].append(t["lat"])
+            prefecture_stats[pref]["lngs"].append(t["lng"])
 
-        for pref, s in pref_stats.items():
+        for pref, s in prefecture_stats.items():
             s["center_lat"] = sum(s["lats"]) / len(s["lats"])
             s["center_lng"] = sum(s["lngs"]) / len(s["lngs"])
             del s["lats"]
             del s["lngs"]
 
-        return {"metadata": metadata, "toilets": toilets, "pref_stats": pref_stats}
+        return {"metadata": metadata, "toilets": toilets, "pref_stats": prefecture_stats}
     except Exception as e:
         st.error(f"データベース読み込みエラー: {e}")
         return {"metadata": ERROR_METADATA, "toilets": [], "pref_stats": {}}

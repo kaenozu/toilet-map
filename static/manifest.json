@@ -1,9 +1,11 @@
 {
-  "name": "厕所干净度地图",
-  "short_name": "厕所地图",
-  "description": "Google Mapsレビューから厕所の干净度を自动判定して地图上に表示するアプ师",
+  "name": "トイレきれい度マップ",
+  "short_name": "トイレマップ",
+  "description": "Google Mapsレビューからトイレのきれい度を自動判定して地図上に表示",
+  "lang": "ja",
   "start_url": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#ffffff",
   "theme_color": "#1a73e8",
   "icons": [

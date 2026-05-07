@@ -5,7 +5,7 @@ ui/filters.py
 import math
 import pandas as pd
 from typing import Optional
-from app_config import FILTER_CONFIG
+from app_config import FILTER_CONFIG, PUBLIC_FILTER_VALUE
 
 
 def haversine_distance(lat1: float, lon1: float, lat2, lon2) -> float | pd.Series:
@@ -54,7 +54,7 @@ def filter_toilets(
         df = df[df["prefecture"] == prefecture]
 
     pattern = FILTER_CONFIG.get(filter_type)
-    if pattern == "__public__":
+    if pattern == PUBLIC_FILTER_VALUE:
         df = df[df["is_public_toilet"]]
     elif pattern:
         df = df[df["category"].str.contains(pattern, na=False)]
@@ -66,11 +66,12 @@ def filter_toilets(
 
 
 def search_toilets(df: pd.DataFrame, query: Optional[str]) -> pd.DataFrame:
-    """名前・住所で部分一致検索"""
+    """名前・住所・カテゴリで部分一致検索"""
     if not query:
         return df
     mask = (
         df["title"].str.contains(query, case=False, na=False)
         | df["address"].str.contains(query, case=False, na=False)
+        | df["category"].str.contains(query, case=False, na=False)
     )
     return df[mask]

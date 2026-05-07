@@ -11,7 +11,7 @@ QUERIES_DIR = os.path.join(SCRIPT_DIR, "queries.d")
 DATA_FILE = os.path.join(SCRIPT_DIR, "prefecture_cities.json")
 BATCH_SIZE = 12
 
-QUERY_TEMPLATES = [
+CITY_QUERY_TEMPLATES = [
     "公共トイレ in {city}",
     "トイレ in {city}",
     "道の駅 in {city}",
@@ -22,6 +22,32 @@ QUERY_TEMPLATES = [
     "駅 トイレ in {city}",
     "公園 トイレ in {city}",
     "ホテル in {city}",
+    "ショッピングモール in {city}",
+    "ドラッグストア in {city}",
+    "病院 in {city}",
+    "図書館 in {city}",
+    "温泉 in {city}",
+    "レストラン トイレ in {city}",
+    "デパート in {city}",
+    "百円ショップ in {city}",
+    "ファミレス in {city}",
+    "書店 in {city}",
+    "公共施設 トイレ in {city}",
+    "学校 トイレ in {city}",
+]
+
+# Backward-compatible alias for existing callers/tests
+QUERY_TEMPLATES = CITY_QUERY_TEMPLATES
+
+PREFECTURE_QUERY_TEMPLATES = [
+    "公共トイレ in {place}",
+    "公衆トイレ in {place}",
+    "トイレ in {place}",
+    "お手洗い in {place}",
+    "道の駅 トイレ in {place}",
+    "サービスエリア トイレ in {place}",
+    "パーキングエリア トイレ in {place}",
+    "観光案内所 トイレ in {place}",
 ]
 
 
@@ -30,17 +56,24 @@ def load_prefectures() -> dict:
         return json.load(f)
 
 
-def build_queries(cities: list[str]) -> list[str]:
-    return [tmpl.format(city=city) for city in cities for tmpl in QUERY_TEMPLATES]
+def build_queries(locations: list[str], templates: list[str] | None = None) -> list[str]:
+    templates = templates or CITY_QUERY_TEMPLATES
+    return [tmpl.format(city=location, place=location) for location in locations for tmpl in templates]
 
 
-def write_batches(queries: list[str], output_dir: str, city: str = "", prefecture: str = "") -> int:
+def write_batches(
+    queries: list[str],
+    output_dir: str,
+    city: str = "",
+    prefecture: str = "",
+    start_index: int = 1,
+) -> int:
     os.makedirs(output_dir, exist_ok=True)
     file_count = 0
     for i in range(0, len(queries), BATCH_SIZE):
         file_count += 1
         batch = queries[i : i + BATCH_SIZE]
-        filepath = os.path.join(output_dir, f"batch_{file_count:03d}.txt")
+        filepath = os.path.join(output_dir, f"batch_{start_index + file_count - 1:03d}.txt")
         with open(filepath, "w", encoding="utf-8") as f:
             if city:
                 f.write(f"# city: {city}\n")
@@ -62,16 +95,37 @@ def main():
     for pref, cities in sorted(prefectures.items()):
         pref_dir = os.path.join(QUERIES_DIR, pref)
         file_count = 0
+        pref_query_count = 0
+        next_batch_index = 1
         for city in cities:
-            city_queries = build_queries([city])
-            n_files = write_batches(city_queries, pref_dir, city=city, prefecture=pref)
+            city_queries = build_queries([city], CITY_QUERY_TEMPLATES)
+            n_files = write_batches(
+                city_queries,
+                pref_dir,
+                city=city,
+                prefecture=pref,
+                start_index=next_batch_index,
+            )
             file_count += n_files
+            next_batch_index += n_files
+            pref_query_count += len(city_queries)
 
-        total_queries += len(build_queries(cities))
+        prefecture_queries = build_queries([pref], PREFECTURE_QUERY_TEMPLATES)
+        n_files = write_batches(
+            prefecture_queries,
+            pref_dir,
+            city="",
+            prefecture=pref,
+            start_index=next_batch_index,
+        )
+        file_count += n_files
+        pref_query_count += len(prefecture_queries)
+
+        total_queries += pref_query_count
         total_files += file_count
-        est_hours = len(build_queries(cities)) * 5 / 3600
+        est_hours = pref_query_count * 5 / 3600
         print(f"  {pref:6s}: {len(cities):3d} cities, "
-              f"{len(build_queries(cities)):5d} queries, "
+              f"{pref_query_count:5d} queries, "
               f"{file_count:3d} files, ~{est_hours:.0f}h")
 
     print(f"\nTotal: {total_queries} queries in {total_files} files")

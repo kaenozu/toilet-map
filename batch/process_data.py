@@ -5,6 +5,7 @@ Google Maps Scraper出力(JSONL)のデータ処理スクリプト
 使い方: python process_data.py <input.json> <output.json>
 """
 import json
+import gzip
 import re
 import sys
 from collections import Counter
@@ -16,8 +17,8 @@ from scoring_config import (
     SCORE_CLAMP_MAX,
     DISPLAY_SCORE_OFFSET,
     DISPLAY_SCORE_MULTIPLIER,
-    CONFIDENCE_MAX_REVIEWS,
-    CONFIDENCE_LOW,
+    CONFIDENCE_REVIEW_FACTOR,
+    CONFIDENCE_MIN,
     RATING_THRESHOLD_HIGH,
     RATING_THRESHOLD_LOW,
     POSITIVE_BOOST_HIGH,
@@ -43,7 +44,6 @@ class PlaceDict(TypedDict, total=False):
     address: str
     latitude: float
     longitude: float
-    longtitude: float  # タイプミス: longitude の代わりに使われる場合
     phone: str
     review_rating: float
     review_count: int
@@ -93,10 +93,23 @@ class ToiletResultDict(TypedDict):
 
 
 def mentions_toilet(text: str) -> bool:
+    """テキストにトイレ固有の言及（トイレ、お手洗い、restroom等）が含まれるか判定。
+
+    本関数が False を返すレビューは、トイレとは無関係とみなし、
+    compute_toilet_score() でスコア計算対象から除外される。
+    """
     return bool(TOILET_MENTION_RE.search(text))
 
 
+def _get_longitude(place: PlaceDict) -> float:
+    lon = place.get("longitude")
+    if lon is None:
+        lon = place.get("longtitude")
+    return float(lon or 0)
+
+
 def extract_toilet_contexts(text: str) -> list[str]:
+    """トイレが言及された文とその前後の文を抽出（2文分散ウィンドウ）"""
     sentences = [s.strip() for s in SENTENCE_SPLIT_RE.split(text) if s.strip()]
     toilet_indices = set()
     for i, sent in enumerate(sentences):
@@ -107,6 +120,7 @@ def extract_toilet_contexts(text: str) -> list[str]:
 
 
 def _apply_keyword_scoring(target_text: str) -> tuple[float, list[str]]:
+    """POSITIVE/NEGATIVE キーワード辞書に基づくスコアとマッチリストを返す"""
     score = 0.0
     matched = []
     for kw, val in POSITIVE_KEYWORDS.items():
@@ -123,6 +137,8 @@ def _apply_keyword_scoring(target_text: str) -> tuple[float, list[str]]:
 
 
 def _apply_negation_correction(target_text: str, score: float, matched: list[str]) -> tuple[float, list[str]]:
+    """否定語がキーワードの近く（NEGATION_WINDOW 文字以内）にあればスコアを打消し"""
+    matched = list(matched)
     for neg_word in NEGATION_WORDS:
         if neg_word not in target_text:
             continue
@@ -147,6 +163,16 @@ def _apply_negation_correction(target_text: str, score: float, matched: list[str
 
 
 def score_toilet_from_review(text: str) -> tuple[float, list[str]]:
+    """
+    レビュー1件分の文字列からトイレスコアとマッチキーワードを計算。
+
+    戻り値:
+      - score: スコア（SCORE_CLAMP_MIN〜SCORE_CLAMP_MAX でクランプ）
+      - matched: マッチしたキーワードリスト（+/- 接頭辞付き）
+    注意:
+      - 本関数は「トイレに関連するレビュー文」を想定。mentions_toilet() チェックは呼び出し元（compute_toilet_score）で行う。
+      - トイレ文脈が抽出できない場合、全文を対象にスコアリングする。
+    """
     contexts = extract_toilet_contexts(text) or [text]
     target_text = "。".join(contexts)
     score, matched = _apply_keyword_scoring(target_text)
@@ -182,6 +208,24 @@ def _adjust_by_rating(score: float, matched: list[str], rating: float) -> tuple[
 
 
 def compute_toilet_score(place: PlaceDict) -> ToiletScoreInfo:
+    """
+    プレイス（店舗）のレビューからトイレスコアを計算。
+
+    処理:
+      1. user_reviews / user_reviews_extended をマージ
+      2. mentions_toilet() でトイレ関連レビューを選択
+      3. score_toilet_from_review() で個別スコア計算
+      4. レビュー評価（Rating）による補正
+      5. 最終スコア = レビュー平均スコア × 0.7 + 店舗評価 × 0.3
+      6. 信頼度 = min(1.0, トイレビュー数 / CONFIDENCE_MAX_REVIEWS)
+
+    戻り値:
+      score: -5.0〜+5.0 の範囲でクランプ
+      confidence: 0.0〜1.0
+      toilet_review_count: トイレ関連レビュー数
+      toilet_reviews: スコア付きレビューリスト（最大20件）
+      top_keywords: 出現頻度上位5キーワード
+    """
     reviews = (place.get("user_reviews") or []) + (place.get("user_reviews_extended") or [])
     toilet_reviews = []
     total_score = 0.0
@@ -218,12 +262,13 @@ def compute_toilet_score(place: PlaceDict) -> ToiletScoreInfo:
         avg_score = total_score / len(toilet_reviews)
         place_rating = float(place.get("review_rating") or 0)
         final_score = avg_score * 0.7 + (place_rating - 3.0) * 0.3
-        confidence = min(1.0, len(toilet_reviews) / CONFIDENCE_MAX_REVIEWS)
+        # 信頼度 = トイレビュー数 / 5 (最大1.0)
+        confidence = min(1.0, len(toilet_reviews) / CONFIDENCE_REVIEW_FACTOR)
     else:
         place_rating = float(place.get("review_rating") or 0)
         if place_rating > 0:
             final_score = (place_rating - 3.0) * 0.5
-            confidence = CONFIDENCE_LOW
+            confidence = CONFIDENCE_MIN
         else:
             final_score = 0.0
             confidence = 0.0
@@ -247,8 +292,24 @@ def is_toilet_place(place: PlaceDict) -> bool:
 
 
 def process_place(place: PlaceDict) -> Optional[ToiletResultDict]:
+    """
+    スクレイプされた1地点を処理し、アプリ表示用形式に変換。
+
+    初期チェック:
+      - 緯度・経度の存在 → なければ None
+      - タイトルの存在 → なければ None
+
+    計算:
+      - compute_toilet_score() でスコア・信頼度・キーワードを算出
+      - display_score = (score + 5) × 10 で 0-100 スケールへ変換
+
+    戻り値:
+      ToiletResultDict 形式の辞書、または None
+    """
     lat = place.get("latitude")
-    lon = place.get("longitude") or place.get("longtitude")
+    lon = place.get("longitude")
+    if lon is None:
+        lon = place.get("longtitude")
     if not lat or not lon:
         return None
     title = place.get("title", "")
@@ -280,7 +341,7 @@ def process_place(place: PlaceDict) -> Optional[ToiletResultDict]:
 
 def make_place_key(place: PlaceDict) -> str:
     lat = float(place.get("latitude") or 0)
-    lng = float(place.get("longitude") or place.get("longtitude") or 0)
+    lng = _get_longitude(place)
     return f"{place.get('title', '')}@{lat:.4f},{lng:.4f}"
 
 
@@ -289,11 +350,21 @@ def make_result_key(result: ToiletResultDict) -> str:
 
 
 def load_existing(path: str) -> dict:
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {"metadata": None, "toilets": []}
+    candidates = [path]
+    if not path.endswith(".gz"):
+        candidates.append(f"{path}.gz")
+    for candidate in candidates:
+        try:
+            if candidate.endswith(".gz"):
+                with gzip.open(candidate, "rt", encoding="utf-8") as f:
+                    return json.load(f)
+            with open(candidate, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            continue
+        except json.JSONDecodeError:
+            return {"metadata": None, "toilets": []}
+    return {"metadata": None, "toilets": []}
 
 
 def deduplicate(places: list[PlaceDict]) -> list[PlaceDict]:
@@ -372,7 +443,7 @@ def process_file(input_path: str, output_path: str, mode: str = "--full"):
         merged.update(new_results)
         results = list(merged.values())
         logger.info(f"差分マージ: 新規追加 {new_count}件 / 更新 {updated_count}件 / 既存維持 {len(merged) - new_count - updated_count}件")
-        metadata = existing.get("metadata") or build_metadata(results)
+        metadata = build_metadata(results)
     else:
         results = list(new_results.values())
         metadata = build_metadata(results)

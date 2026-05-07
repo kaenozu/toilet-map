@@ -2,8 +2,7 @@
 ui/popups.py
 Popup HTML builders for toilet map markers
 """
-from typing import Optional
-from app_config import esc, get_score_style
+from app_config import esc, safe_href, get_score_style, MAX_SAMPLE_REVIEWS, REVIEW_TEXT_MAX_LENGTH
 from .types import ToiletDict
 
 
@@ -40,7 +39,7 @@ def _build_review_html(reviews: list[dict]) -> str:
         return ""
     seen = set()
     parts = []
-    for r in reviews[:2]:
+    for r in reviews[:MAX_SAMPLE_REVIEWS]:
         txt = r.get("text", "")
         key = txt[:80]
         if key in seen:
@@ -55,24 +54,39 @@ def _build_review_html(reviews: list[dict]) -> str:
         if rating:
             meta += f' <span style="color:#f9a825;">★{rating}</span>'
         txt_safe = esc(txt).replace("\n", "<br>")
+        display_text = txt_safe[:REVIEW_TEXT_MAX_LENGTH]
+        suffix = "..." if len(txt_safe) > REVIEW_TEXT_MAX_LENGTH else ""
         parts.append(
             f'<div style="font-size:11px;color:#444;padding:4px 6px;background:#fafafa;'
             f'border-radius:4px;margin-top:3px;border-left:3px solid {border_color};">'
             f"{icon} {meta}<br>"
-            f'<span style="line-height:1.5;">{txt_safe[:120]}{"..." if len(txt_safe) > 120 else ""}</span></div>'
+            f'<span style="line-height:1.5;">{display_text}{suffix}</span></div>'
         )
     return "".join(parts)
 
 
 def _build_link_html(link: str) -> str:
-    if not link:
+    safe_link = safe_href(link)
+    if not safe_link:
         return ""
     return (
         '<div style="margin-top:6px;">'
-        f'<a href="{link}" target="_blank" rel="noopener noreferrer" '
+        f'<a href="{safe_link}" target="_blank" rel="noopener noreferrer" '
         'style="font-size:13px;color:#1a73e8;text-decoration:none;font-weight:600;'
         'display:inline-block;padding:4px 0;">'
         "🗺️ Google Mapsで開く →</a></div>"
+    )
+
+
+def _build_confidence_note(confidence: float, toilet_review_count: int) -> str:
+    if confidence >= 0.4 and toilet_review_count >= 3:
+        return ""
+    return (
+        '<div style="margin-top:6px;font-size:10px;line-height:1.5;'
+        'padding:6px 8px;border-radius:6px;background:#fff8e1;color:#8d6e63;'
+        'border:1px solid #ffe082;">'
+        '参考値: トイレ関連レビューが少ないため、スコアは暫定的です。'
+        '</div>'
     )
 
 
@@ -85,6 +99,7 @@ def build_popup_html(t: ToiletDict) -> str:
     kw_html = _build_keyword_tags(t.get("top_keywords", []))
     rev_html = _build_review_html(t.get("sample_reviews", []))
     link_html = _build_link_html(t.get("link", ""))
+    confidence_note_html = _build_confidence_note(t.get("confidence", 0), t.get("toilet_review_count", 0))
 
     review_section = ""
     if rev_html:
@@ -119,6 +134,7 @@ def build_popup_html(t: ToiletDict) -> str:
 
       <div style="font-size:10px;color:#555;margin-bottom:1px;">📍 {addr}</div>
       <div style="font-size:10px;color:#555;">⭐{t.get('rating', '-')} ({t.get('review_count', 0)}件) {phone_html}</div>
+    {confidence_note_html}
       {kw_html}
       {review_section}
       {link_html}

@@ -79,6 +79,29 @@ class TestConfidence:
         result = pd_module.compute_toilet_score(place)
         assert result["confidence"] == 0.1
 
+    def test_single_toilet_review_has_low_but_nonzero_confidence(self):
+        place = {
+            "title": "test",
+            "review_rating": 4.0,
+            "user_reviews": [{"Description": "トイレがきれい", "Rating": 5}],
+            "user_reviews_extended": [],
+        }
+        result = pd_module.compute_toilet_score(place)
+        assert result["toilet_review_count"] == 1
+        assert result["confidence"] == 0.2
+
+    def test_duplicate_reviews_are_counted_once(self):
+        review = {"Description": "トイレが清潔で広い", "Rating": 5, "When": "today", "Name": "A"}
+        place = {
+            "title": "test",
+            "review_rating": 4.0,
+            "user_reviews": [review],
+            "user_reviews_extended": [dict(review)],
+        }
+        result = pd_module.compute_toilet_score(place)
+        assert result["toilet_review_count"] == 1
+        assert len(result["toilet_reviews"]) == 1
+
 
 class TestPlaceDetection:
     def test_is_toilet_place(self):
@@ -122,6 +145,55 @@ class TestProcessPlace:
         assert result is not None
         assert result["title"] == "テスト施設"
         assert result["prefecture"] == "東京都"
+
+    def test_display_score_is_clamped_to_upper_bound(self, monkeypatch):
+        monkeypatch.setattr(pd_module, "compute_toilet_score", lambda place: {
+            "score": 5.0,
+            "confidence": 1.0,
+            "toilet_review_count": 1,
+            "toilet_reviews": [],
+            "top_keywords": [],
+        })
+        place = {
+            "title": "上限確認", "category": "公園",
+            "address": "東京都渋谷区", "latitude": 35.68, "longitude": 139.69,
+        }
+
+        result = pd_module.process_place(place)
+
+        assert result is not None
+        assert result["toilet_score"] == 100.0
+
+
+    def test_longtitude_fallback(self):
+        place = {
+            "title": "テスト施設", "category": "カフェ",
+            "address": "東京都渋谷区", "latitude": 35.68, "longtitude": 139.69,
+            "phone": "03-1234-5678", "review_rating": 4.0, "review_count": 50,
+            "link": "https://maps.google.com/",
+        }
+
+        result = pd_module.process_place(place)
+
+        assert result is not None
+        assert result["lng"] == pytest.approx(139.69)
+    def test_display_score_is_clamped_to_lower_bound(self, monkeypatch):
+        monkeypatch.setattr(pd_module, "compute_toilet_score", lambda place: {
+            "score": -5.0,
+            "confidence": 1.0,
+            "toilet_review_count": 1,
+            "toilet_reviews": [],
+            "top_keywords": [],
+        })
+        place = {
+            "title": "下限確認", "category": "公園",
+            "address": "東京都渋谷区", "latitude": 35.68, "longitude": 139.69,
+        }
+
+        result = pd_module.process_place(place)
+
+        assert result is not None
+        assert result["toilet_score"] == 0.0
     def test_missing_coords(self):
         place = {"title": "テスト", "address": "東京都"}
         assert pd_module.process_place(place) is None

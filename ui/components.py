@@ -3,8 +3,28 @@ ui/components.py
 Streamlit UI components for toilet map
 """
 import streamlit as st
-from app_config import get_score_style, esc
+from app_config import get_score_style, esc, safe_href
 from .types import ToiletDict
+
+
+def build_result_context_text(
+    list_items: int,
+    total_items: int,
+    map_items: int,
+    filter_elapsed_ms: float | None = None,
+    map_elapsed_ms: float | None = None,
+) -> str:
+    """一覧件数と地図件数、簡易計測結果を短い文で返す。"""
+    parts = [f"一覧 {list_items}件"]
+    parts.append(f"地図 {map_items}件")
+    timings = []
+    if filter_elapsed_ms is not None:
+        timings.append(f"絞り込み {filter_elapsed_ms:.0f}ms")
+    if map_elapsed_ms is not None:
+        timings.append(f"地図 {map_elapsed_ms:.0f}ms")
+    if timings:
+        parts.append(" / ".join(timings))
+    return " | ".join(parts)
 
 
 def render_score_legend():
@@ -30,8 +50,9 @@ def render_toilet_card(toilet: ToiletDict, rank: int = None):
 
     public_tag = ' <span style="background:#e3f2fd;color:#1565c0;padding:1px 6px;border-radius:3px;font-size:10px;">公共</span>' if t.get("is_public_toilet") else ""
 
-    link_start = f'<a href="{t["link"]}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit;">' if t.get("link") else ""
-    link_end = "</a>" if t.get("link") else ""
+    link_href = safe_href(t.get("link"))
+    link_start = f'<a href="{link_href}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit;">' if link_href else ""
+    link_end = "</a>" if link_href else ""
 
     rank_html = f'<span style="color:#999;font-weight:600;min-width:24px;">#{rank}</span>' if rank else ""
 

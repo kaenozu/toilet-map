@@ -4,6 +4,7 @@ batch/city_bounds.py
 Nominatim API 使用
 """
 import json
+import logging
 import os
 import time
 import urllib.request
@@ -14,7 +15,6 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CACHE_FILE = os.path.join(SCRIPT_DIR, "city_bounds_cache.json")
 
 # 簡易ロガー
-import logging
 logger = logging.getLogger(__name__)
 if not logger.handlers:
     handler = logging.StreamHandler()
@@ -99,11 +99,13 @@ def filter_raw_data(input_path: str, output_path: str, city_name: str, bounds: O
             except json.JSONDecodeError:
                 continue
 
-            address_match = city_name in entry.get("address", "")
+            address_match = bool(city_name) and city_name in entry.get("address", "")
             coord_match = False
             if bounds:
                 lat = entry.get("latitude")
-                lng = entry.get("longtitude") or entry.get("longitude")
+                lng = entry.get("longitude")
+                if lng is None:
+                    lng = entry.get("longtitude")
                 if lat and lng:
                     coord_match = is_in_bounds(float(lat), float(lng), bounds)
 
