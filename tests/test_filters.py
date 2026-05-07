@@ -4,7 +4,6 @@ ui/filters.py のユニットテスト
 """
 import pytest
 import pandas as pd
-import numpy as np
 from ui.filters import filter_toilets, search_toilets, haversine_distance
 
 

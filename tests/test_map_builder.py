@@ -69,6 +69,47 @@ class TestBuildMap:
         m = build_map([], 35.68, 139.69, 10)
         assert m is not None
 
+    def test_build_map_auto_fits_bounds(self):
+        toilets = [
+            {
+                "title": "A",
+                "category": "公園",
+                "address": "東京都",
+                "lat": 35.68,
+                "lng": 139.69,
+                "toilet_score": 80,
+                "is_public_toilet": False,
+                "confidence": 0.8,
+                "toilet_review_count": 3,
+                "top_keywords": [],
+                "sample_reviews": [],
+                "phone": "",
+                "rating": 4.0,
+                "review_count": 10,
+                "link": "",
+            },
+            {
+                "title": "B",
+                "category": "公園",
+                "address": "大阪府",
+                "lat": 34.69,
+                "lng": 135.50,
+                "toilet_score": 70,
+                "is_public_toilet": False,
+                "confidence": 0.8,
+                "toilet_review_count": 3,
+                "top_keywords": [],
+                "sample_reviews": [],
+                "phone": "",
+                "rating": 4.0,
+                "review_count": 10,
+                "link": "",
+            },
+        ]
+        m = build_map(toilets, 35.68, 139.69, 10)
+        rendered = m.get_root().render()
+        assert "fitBounds" in rendered
+
     def test_with_toilets(self):
         toilets = [
             {

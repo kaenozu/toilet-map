@@ -8,6 +8,7 @@ raw データ内の longtitude typo を longitude に正規化する。
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
 
 
@@ -23,25 +24,38 @@ def normalize_file(path: Path) -> int:
     """1ファイル内の longtitude を longitude に置換し、置換数を返す。"""
     replaced = 0
 
-    lines = path.read_text(encoding="utf-8").splitlines()
-    normalized_lines: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        if not stripped:
-            normalized_lines.append(line)
-            continue
-        try:
-            obj = json.loads(stripped)
-        except json.JSONDecodeError:
-            normalized_lines.append(line)
-            continue
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        newline="\n",
+        delete=False,
+        dir=str(path.parent),
+        prefix=f"{path.stem}.",
+        suffix=".tmp",
+    ) as tmp_file:
+        temp_path = Path(tmp_file.name)
+        with path.open("r", encoding="utf-8") as src:
+            for line in src:
+                stripped = line.strip()
+                if not stripped:
+                    tmp_file.write(line)
+                    continue
+                try:
+                    obj = json.loads(stripped)
+                except json.JSONDecodeError:
+                    tmp_file.write(line)
+                    continue
 
-        if isinstance(obj, dict) and "longtitude" in obj and "longitude" not in obj:
-            obj["longitude"] = obj.pop("longtitude")
-            replaced += 1
-        normalized_lines.append(json.dumps(obj, ensure_ascii=False))
+                if isinstance(obj, dict) and "longtitude" in obj and "longitude" not in obj:
+                    obj["longitude"] = obj.pop("longtitude")
+                    replaced += 1
 
-    path.write_text("\n".join(normalized_lines) + ("\n" if lines else ""), encoding="utf-8")
+                serialized = json.dumps(obj, ensure_ascii=False)
+                if line.endswith("\n"):
+                    serialized += "\n"
+                tmp_file.write(serialized)
+
+    temp_path.replace(path)
     return replaced
 
 

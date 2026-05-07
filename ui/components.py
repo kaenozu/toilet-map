@@ -7,6 +7,26 @@ from app_config import get_score_style, esc, safe_href
 from .types import ToiletDict
 
 
+def build_result_context_text(
+    list_items: int,
+    total_items: int,
+    map_items: int,
+    filter_elapsed_ms: float | None = None,
+    map_elapsed_ms: float | None = None,
+) -> str:
+    """一覧件数と地図件数、簡易計測結果を短い文で返す。"""
+    parts = [f"一覧 {list_items}件"]
+    parts.append(f"地図 {map_items}件")
+    timings = []
+    if filter_elapsed_ms is not None:
+        timings.append(f"絞り込み {filter_elapsed_ms:.0f}ms")
+    if map_elapsed_ms is not None:
+        timings.append(f"地図 {map_elapsed_ms:.0f}ms")
+    if timings:
+        parts.append(" / ".join(timings))
+    return " | ".join(parts)
+
+
 def render_score_legend():
     """スコア凡例を表示（レスポンシブ）"""
     st.markdown(

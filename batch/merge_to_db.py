@@ -17,41 +17,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 from db_utils import (
     DB_PATH, ensure_schema,
     fix_null_prefectures, update_metadata_from_db,
-    load_json, toilet_db_values, toilet_db_update_values,
+    load_json, upsert_metadata, upsert_toilets,
 )
-
-
-def upsert_toilets(cur: sqlite3.Cursor, toilets: list[dict]) -> tuple[int, int]:
-    new_count = 0
-    updated_count = 0
-    for t in toilets:
-        values = toilet_db_values(t)
-        title, lat, lng = values[0], values[3], values[4]
-
-        existing = cur.execute(
-            "SELECT id FROM toilets WHERE title = ? AND lat = ? AND lng = ?",
-            (title, lat, lng),
-        ).fetchone()
-
-        if existing:
-            cur.execute("""
-                UPDATE toilets SET
-                    category = ?, address = ?, rating = ?, review_count = ?,
-                    is_public_toilet = ?, toilet_score = ?, confidence = ?,
-                    toilet_review_count = ?, prefecture = ?, sample_reviews_json = ?
-                WHERE id = ?
-            """, toilet_db_update_values(t) + (existing[0],))
-            updated_count += 1
-        else:
-            cur.execute("""
-                INSERT INTO toilets (
-                    title, category, address, lat, lng, rating, review_count,
-                    is_public_toilet, toilet_score, confidence, toilet_review_count,
-                    prefecture, sample_reviews_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, values)
-            new_count += 1
-    return new_count, updated_count
 
 
 def merge(json_path: str, db_path: str = DB_PATH) -> None:
@@ -59,6 +26,7 @@ def merge(json_path: str, db_path: str = DB_PATH) -> None:
 
     logger.info(f"Loading JSON: {json_path}")
     data = load_json(json_path)
+    metadata = data.get("metadata", {})
     toilets = data.get("toilets", [])
     logger.info(f"JSON toilets: {len(toilets)}")
 
@@ -66,13 +34,15 @@ def merge(json_path: str, db_path: str = DB_PATH) -> None:
     cur = conn.cursor()
     ensure_schema(cur)
 
+    upsert_metadata(cur, metadata)
+
+    logger.info("Merging toilets (UPSERT by title+lat+lng)...")
+    upsert_toilets(cur, toilets)
+    logger.info(f"Upserted {len(toilets)} toilets")
+
     logger.info("Fixing prefecture=NULL rows...")
     fixed = fix_null_prefectures(conn)
     logger.info(f"Fixed {fixed} prefecture entries")
-
-    logger.info("Merging toilets (UPSERT by title+lat+lng)...")
-    new_count, updated_count = upsert_toilets(cur, toilets)
-    logger.info(f"Merged: +{new_count} new, ~{updated_count} updated")
 
     update_metadata_from_db(conn)
 

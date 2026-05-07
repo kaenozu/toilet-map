@@ -227,6 +227,9 @@ def detect_city_from_queries(queries_path: str) -> tuple[str, str]:
 def fetch_city_bounds(city: str, pref: str) -> Optional[dict]:
     """市のバウンディングボックスを取得（キャッシュ利用）"""
     from city_bounds import get_city_bounds
+    if pref and not city:
+        logger.info(f"Fetching bounding box for {pref}...")
+        return get_city_bounds(pref)
     if pref:
         logger.info(f"Fetching bounding box for {pref}{city}...")
         bounds = get_city_bounds(city, pref)
@@ -246,6 +249,23 @@ def apply_city_filter(city: str, pref: str, raw_output: str) -> tuple[str, int, 
     return filtered_path, total_raw, kept
 
 
+def run_postprocess_pipeline(input_path: str, processed_path: str) -> None:
+    """生データから JSON/SQLite の両方を更新する。"""
+    logger.info("Processing data (incremental merge)...")
+    process_result = subprocess.run(
+        [sys.executable, os.path.join(SCRIPT_DIR, "process_data.py"), input_path, processed_path, "--incremental"],
+    )
+    if process_result.returncode != 0:
+        raise RuntimeError("Data processing failed")
+
+    logger.info("Refreshing SQLite cache...")
+    sqlite_result = subprocess.run(
+        [sys.executable, os.path.join(SCRIPT_DIR, "to_sqlite.py"), processed_path, "--incremental"],
+    )
+    if sqlite_result.returncode != 0:
+        raise RuntimeError("SQLite conversion failed")
+
+
 def run_batch():
     """バッチスクレイプ全体を実行"""
     args = parse_args()
@@ -259,7 +279,7 @@ def run_batch():
     if not city:
         city, pref = detect_city_from_queries(QUERIES_FILE)
 
-    if city:
+    if city or pref:
         logger.info(f"City filter: {pref}{city}")
     else:
         logger.info("City filter: OFF (no --city specified, could not auto-detect)")
@@ -353,10 +373,11 @@ def run_batch():
 
     # 市フィルタ
     data_for_processing = RAW_OUTPUT
-    if city:
+    if city or pref:
         filtered_path, total_raw, kept = apply_city_filter(city, pref, RAW_OUTPUT)
         if kept == 0:
-            logger.warning(f"\n  WARNING: No entries matched city filter '{city}'")
+            filter_label = f"{pref}{city}" if pref else city
+            logger.warning(f"\n  WARNING: No entries matched city filter '{filter_label}'")
             logger.info(f"  ({total_raw} raw entries were checked)")
             logger.info("  Falling back to unfiltered data\n")
             data_for_processing = RAW_OUTPUT
@@ -365,13 +386,10 @@ def run_batch():
             logger.info(f"  City filter: {kept}/{total_raw} entries kept ({pct:.1f}%)")
             data_for_processing = filtered_path
 
-    # データ処理
-    logger.info("Processing data (incremental merge)...")
-    proc = subprocess.run(
-        [sys.executable, os.path.join(SCRIPT_DIR, "process_data.py"),
-         data_for_processing, PROCESSED, "--incremental"],
-    )
-    if proc.returncode != 0:
+    try:
+        run_postprocess_pipeline(data_for_processing, PROCESSED)
+    except RuntimeError as exc:
+        logger.error(f"[ERROR] {exc}")
         logger.error("[ERROR] Data processing failed")
         sys.exit(1)
 

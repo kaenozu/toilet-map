@@ -101,6 +101,13 @@ def mentions_toilet(text: str) -> bool:
     return bool(TOILET_MENTION_RE.search(text))
 
 
+def _get_longitude(place: PlaceDict) -> float:
+    lon = place.get("longitude")
+    if lon is None:
+        lon = place.get("longtitude")
+    return float(lon or 0)
+
+
 def extract_toilet_contexts(text: str) -> list[str]:
     """トイレが言及された文とその前後の文を抽出（2文分散ウィンドウ）"""
     sentences = [s.strip() for s in SENTENCE_SPLIT_RE.split(text) if s.strip()]
@@ -301,6 +308,8 @@ def process_place(place: PlaceDict) -> Optional[ToiletResultDict]:
     """
     lat = place.get("latitude")
     lon = place.get("longitude")
+    if lon is None:
+        lon = place.get("longtitude")
     if not lat or not lon:
         return None
     title = place.get("title", "")
@@ -332,7 +341,7 @@ def process_place(place: PlaceDict) -> Optional[ToiletResultDict]:
 
 def make_place_key(place: PlaceDict) -> str:
     lat = float(place.get("latitude") or 0)
-    lng = float(place.get("longitude") or 0)
+    lng = _get_longitude(place)
     return f"{place.get('title', '')}@{lat:.4f},{lng:.4f}"
 
 

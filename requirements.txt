@@ -1,6 +1,6 @@
-python>=3.11
 streamlit>=1.30.0
 folium>=0.15.0
 streamlit-folium>=0.20.0
 pandas>=2.0.0
 streamlit-js-eval
+pytest>=8.0.0

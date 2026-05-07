@@ -17,6 +17,8 @@ from .types import ToiletDict
 
 
 CLUSTER_THRESHOLDS = [(500, 50), (1000, 80), (float("inf"), 100)]
+FIT_BOUNDS_PADDING = (24, 24)
+FIT_BOUNDS_EPSILON = 0.01
 
 
 def calc_cluster_radius(count: int) -> int:
@@ -41,6 +43,33 @@ def calc_map_center(
         lat, lng = PREFECTURE_CENTERS[selected_pref]
         return lat, lng, 11
     return meta["center_lat"], meta["center_lng"], meta["zoom"]
+
+
+def _calc_fit_bounds(toilets: list[ToiletDict]) -> list[list[float]] | None:
+    """マーカーを包む bounds を返す。1点だけの場合は少しだけ広げる。"""
+    coords = [
+        (t.get("lat"), t.get("lng"))
+        for t in toilets
+        if t.get("lat") is not None and t.get("lng") is not None
+    ]
+    if not coords:
+        return None
+
+    lats = [lat for lat, _ in coords]
+    lngs = [lng for _, lng in coords]
+    south = min(lats)
+    north = max(lats)
+    west = min(lngs)
+    east = max(lngs)
+
+    if south == north:
+        south -= FIT_BOUNDS_EPSILON
+        north += FIT_BOUNDS_EPSILON
+    if west == east:
+        west -= FIT_BOUNDS_EPSILON
+        east += FIT_BOUNDS_EPSILON
+
+    return [[south, west], [north, east]]
 
 
 def build_map(
@@ -80,5 +109,9 @@ def build_map(
             popup=folium.Popup(popup_html, max_width=320, auto_pan=True),
             tooltip=f"{emoji} {t['title']}",
         ).add_to(cluster)
+
+    bounds = _calc_fit_bounds(toilets)
+    if bounds:
+        m.fit_bounds(bounds, padding=FIT_BOUNDS_PADDING)
 
     return m

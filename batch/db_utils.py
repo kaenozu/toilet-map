@@ -5,15 +5,21 @@ SQLite 共通ユーティリティ (to_sqlite.py, merge_to_db.py で共用)
 import sqlite3
 import json
 import gzip
+import importlib
 import os
-import sys
 from datetime import datetime
-from typing import Optional
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "toilets.db")
 
-sys.path.insert(0, os.path.dirname(__file__))
-from scoring_config import PREFECTURES
+
+def _load_prefectures() -> list[str]:
+    try:
+        return importlib.import_module("scoring_config").PREFECTURES
+    except ModuleNotFoundError:
+        return importlib.import_module("batch.scoring_config").PREFECTURES
+
+
+PREFECTURES = _load_prefectures()
 
 TOILET_TABLE_SCHEMA = """
     CREATE TABLE IF NOT EXISTS toilets (
@@ -43,14 +49,59 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_score ON toilets(toilet_score)",
 ]
 
+TOILET_UNIQUE_INDEX = "CREATE UNIQUE INDEX IF NOT EXISTS ux_toilets_key ON toilets(title, lat, lng)"
+
+TOILET_UPSERT_SQL = """
+    INSERT INTO toilets (
+        title, category, address, lat, lng, rating, review_count,
+        is_public_toilet, toilet_score, confidence, toilet_review_count,
+        prefecture, sample_reviews_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(title, lat, lng) DO UPDATE SET
+        category = excluded.category,
+        address = excluded.address,
+        rating = excluded.rating,
+        review_count = excluded.review_count,
+        is_public_toilet = excluded.is_public_toilet,
+        toilet_score = excluded.toilet_score,
+        confidence = excluded.confidence,
+        toilet_review_count = excluded.toilet_review_count,
+        prefecture = excluded.prefecture,
+        sample_reviews_json = excluded.sample_reviews_json
+"""
+
 
 def get_schema_sql() -> list[str]:
     return [TOILET_TABLE_SCHEMA, METADATA_TABLE_SCHEMA] + INDEXES
 
 
+def dedupe_duplicate_toilets(cur: sqlite3.Cursor) -> int:
+    """既存の重複行を title/lat/lng 単位で 1 件にまとめる"""
+    before = cur.execute("SELECT COUNT(*) FROM toilets").fetchone()[0]
+    cur.execute(
+        """
+        DELETE FROM toilets
+        WHERE id NOT IN (
+            SELECT MIN(id)
+            FROM toilets
+            GROUP BY title, lat, lng
+        )
+        """
+    )
+    after = cur.execute("SELECT COUNT(*) FROM toilets").fetchone()[0]
+    return before - after
+
+
 def ensure_schema(cur: sqlite3.Cursor) -> None:
-    for sql in get_schema_sql():
+    for sql in (TOILET_TABLE_SCHEMA, METADATA_TABLE_SCHEMA):
         cur.execute(sql)
+    for sql in INDEXES:
+        cur.execute(sql)
+    try:
+        cur.execute(TOILET_UNIQUE_INDEX)
+    except sqlite3.IntegrityError:
+        dedupe_duplicate_toilets(cur)
+        cur.execute(TOILET_UNIQUE_INDEX)
 
 
 def extract_prefecture(address: str) -> str:
@@ -64,7 +115,7 @@ def extract_prefecture(address: str) -> str:
 
 
 def fix_null_prefectures(conn: sqlite3.Connection) -> int:
-    """prefecture が NULL または空文字の行を地址から修復"""
+    """prefecture が NULL または空文字の行を住所から修復"""
     cur = conn.cursor()
     rows = cur.execute(
         "SELECT id, address FROM toilets WHERE prefecture IS NULL OR prefecture = ''"
@@ -98,6 +149,15 @@ def update_metadata_from_db(conn: sqlite3.Connection) -> None:
         )
 
 
+def upsert_metadata(cur: sqlite3.Cursor, metadata: dict) -> None:
+    """metadata テーブルへ key/value を upsert する"""
+    for key, value in metadata.items():
+        cur.execute(
+            "INSERT INTO metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, str(value)),
+        )
+
+
 def load_json(path: str) -> dict:
     """JSON (gz対応) を読み込む"""
     if path.endswith(".gz"):
@@ -109,6 +169,11 @@ def load_json(path: str) -> dict:
 
 def reviews_to_json(reviews: list) -> str:
     return json.dumps(reviews, ensure_ascii=False)
+
+
+def upsert_toilets(cur: sqlite3.Cursor, toilets: list[dict]) -> None:
+    """toilets テーブルへまとめて upsert する"""
+    cur.executemany(TOILET_UPSERT_SQL, (toilet_db_values(toilet) for toilet in toilets))
 
 
 def toilet_db_values(toilet: dict) -> tuple:

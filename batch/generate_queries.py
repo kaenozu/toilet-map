@@ -11,7 +11,7 @@ QUERIES_DIR = os.path.join(SCRIPT_DIR, "queries.d")
 DATA_FILE = os.path.join(SCRIPT_DIR, "prefecture_cities.json")
 BATCH_SIZE = 12
 
-QUERY_TEMPLATES = [
+CITY_QUERY_TEMPLATES = [
     "公共トイレ in {city}",
     "トイレ in {city}",
     "道の駅 in {city}",
@@ -36,14 +36,29 @@ QUERY_TEMPLATES = [
     "学校 トイレ in {city}",
 ]
 
+# Backward-compatible alias for existing callers/tests
+QUERY_TEMPLATES = CITY_QUERY_TEMPLATES
+
+PREFECTURE_QUERY_TEMPLATES = [
+    "公共トイレ in {place}",
+    "公衆トイレ in {place}",
+    "トイレ in {place}",
+    "お手洗い in {place}",
+    "道の駅 トイレ in {place}",
+    "サービスエリア トイレ in {place}",
+    "パーキングエリア トイレ in {place}",
+    "観光案内所 トイレ in {place}",
+]
+
 
 def load_prefectures() -> dict:
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-def build_queries(cities: list[str]) -> list[str]:
-    return [tmpl.format(city=city) for city in cities for tmpl in QUERY_TEMPLATES]
+def build_queries(locations: list[str], templates: list[str] | None = None) -> list[str]:
+    templates = templates or CITY_QUERY_TEMPLATES
+    return [tmpl.format(city=location, place=location) for location in locations for tmpl in templates]
 
 
 def write_batches(
@@ -83,7 +98,7 @@ def main():
         pref_query_count = 0
         next_batch_index = 1
         for city in cities:
-            city_queries = build_queries([city])
+            city_queries = build_queries([city], CITY_QUERY_TEMPLATES)
             n_files = write_batches(
                 city_queries,
                 pref_dir,
@@ -94,6 +109,17 @@ def main():
             file_count += n_files
             next_batch_index += n_files
             pref_query_count += len(city_queries)
+
+        prefecture_queries = build_queries([pref], PREFECTURE_QUERY_TEMPLATES)
+        n_files = write_batches(
+            prefecture_queries,
+            pref_dir,
+            city="",
+            prefecture=pref,
+            start_index=next_batch_index,
+        )
+        file_count += n_files
+        pref_query_count += len(prefecture_queries)
 
         total_queries += pref_query_count
         total_files += file_count
