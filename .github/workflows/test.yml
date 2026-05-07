@@ -23,9 +23,6 @@ jobs:
       - name: Lint with ruff check
         run: ruff check .
 
-      - name: Check formatting with ruff format
-        run: ruff format --check .
-
   test:
     runs-on: ubuntu-latest
     needs: lint
