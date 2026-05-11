@@ -2,9 +2,10 @@
 tests/test_filters.py
 ui/filters.py のユニットテスト
 """
+import numpy as np
 import pytest
 import pandas as pd
-from ui.filters import filter_toilets, search_toilets, haversine_distance
+from ui.filters import filter_toilets, search_toilets, haversine_distance, filter_by_viewport, get_underserved_areas_in_viewport
 
 
 def _make_df(rows=None):
@@ -116,9 +117,27 @@ class TestHaversineDistance:
         lat2 = pd.Series([35.70, 34.69])
         lng2 = pd.Series([139.70, 135.50])
         result = haversine_distance(35.68, 139.69, lat2, lng2)
-        assert isinstance(result, pd.Series)
+        assert isinstance(result, (np.ndarray, pd.Series))
         assert len(result) == 2
-        assert result.iloc[0] < 5.0
+        assert result[0] < 5.0
+
+
+class TestViewportFilters:
+    def test_filter_by_viewport_ignores_incomplete_bounds(self):
+        df = _make_df()
+        bounds = {"_southWest": {"lat": None, "lng": None}, "_northEast": {"lat": None, "lng": None}}
+
+        result = filter_by_viewport(df, bounds)
+
+        assert len(result) == len(df)
+
+    def test_get_underserved_areas_ignores_incomplete_bounds(self):
+        stats = {"東京都": {"渋谷区": 5}}
+        bounds = {"_southWest": {"lat": None, "lng": None}, "_northEast": {"lat": None, "lng": None}}
+
+        result = get_underserved_areas_in_viewport(bounds, stats)
+
+        assert result == []
 
 
 if __name__ == "__main__":

@@ -22,9 +22,20 @@ SCORE_RANGES = [
     (0, "#e74c3c", "💩", "要注意"),
 ]
 
+SCORE_DISTRIBUTION_RANGES = [
+    (80, 101, "✨ 80-100", "#27ae60"),
+    (65, 80, "😊 65-79", "#2ecc71"),
+    (50, 65, "😐 50-64", "#f1c40f"),
+    (35, 50, "😨 35-49", "#f39c12"),
+    (0, 35, "💩 0-34", "#e74c3c"),
+]
+
 FILTER_CONFIG = {
     "すべて": None,
     "公共トイレ": "__public__",  # 特殊値: is_public_toilet == True でフィルタ
+    "多目的トイレ": "__keyword__multi",  # top_keywords に含まれるかでフィルタ
+    "おむつ替え": "__keyword__diaper",
+    "車椅子対応": "__keyword__wheelchair",
     "カフェ・飲食": "カフェ|喫茶|レストラン|食堂|ダイニング|コーヒー|パン|ケーキ",
     "コンビニ・店舗": "コンビニ|スーパー|ドラッグ|ストア|マート|商店",
     "ホテル・旅館": "ホテル|旅馆|民宿|ビジネスホテル",
@@ -33,6 +44,13 @@ FILTER_CONFIG = {
 }
 
 PUBLIC_FILTER_VALUE = "__public__"
+
+# top_keywords から抽出する設備フィルタのキーワード定義
+EQUIPMENT_KEYWORDS = {
+    "multi": {"多目的トイレ", "多目的", "多機能"},
+    "diaper": {"おむつ", "オムツ", "おむつ替え", "おむつ交換"},
+    "wheelchair": {"車椅子", "車いす", "バリアフリー"},
+}
 
 PUBLIC_MARKER_RADIUS = 14
 NORMAL_MARKER_RADIUS = 10
@@ -126,6 +144,11 @@ PREFECTURE_CENTERS = {
 
 POPUP_FIX_JS = """
 <script>
+/**
+ * Leafletのポップアップが地図枠外にはみ出す問題を修正するスクリプト。
+ * Streamlitのiframe環境下でLeafletオブジェクトを動的に探索し、
+ * ポップアップが開いた際に位置を自動調整(panBy)します。
+ */
 (function(){
   function fixPopups(){
     var mapEl = document.getElementById('map');

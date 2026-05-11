@@ -18,28 +18,30 @@ import tempfile
 import re
 from pathlib import Path
 from typing import Optional
-from utils import logger, count_lines
+from utils import logger, count_lines, file_lock, update_expansion_status
 
 # ============================================================
 # 設定
 # ============================================================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SYNC_LOCK_PATH = os.path.join(SCRIPT_DIR, "..", "data", ".toilet_sync.lock")
 QUERIES_FILE = os.path.join(SCRIPT_DIR, os.environ.get("QUERIES", "queries.txt"))
-RAW_DIR = os.path.join(SCRIPT_DIR, "raw_parts")
-RAW_OUTPUT = os.path.join(SCRIPT_DIR, "raw_data.json")
+RAW_DIR = os.path.join(SCRIPT_DIR, os.environ.get("RAW_DIR", "raw_parts"))
+RAW_OUTPUT = os.path.join(SCRIPT_DIR, os.environ.get("RAW_OUTPUT", "raw_data.json"))
 PROCESSED = os.path.join(SCRIPT_DIR, "..", "data", "toilets.json.gz")
 PROGRESS_FILE = os.path.join(SCRIPT_DIR, os.environ.get("PROGRESS_FILE", ".progress"))
 
 SLEEP_BETWEEN = int(os.environ.get("SLEEP_BETWEEN", "120"))
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "2"))  # 0-based: 実際は MAX_RETRIES+1 回実行
 RETRY_SLEEP = int(os.environ.get("RETRY_SLEEP", "300"))
+SYNC_EVERY_SUCCESS = int(os.environ.get("SYNC_EVERY_SUCCESS", "0"))
 
 FILTER_CITY = os.environ.get("CITY", "")
 FILTER_PREF = os.environ.get("PREFECTURE", "")
 
 # Docker設定 (環境変数で上書き可能)
 DOCKER_IMAGE = os.environ.get("SCRAPER_IMAGE", "gosom/google-maps-scraper")
-SCRAPER_DEPTH = os.environ.get("SCRAPER_DEPTH", "1")
+SCRAPER_DEPTH = os.environ.get("SCRAPER_DEPTH", "2")
 SCRAPER_LANG = os.environ.get("SCRAPER_LANG", "ja")
 EXIT_ON_INACTIVITY = os.environ.get("EXIT_ON_INACTIVITY", "5m")
 
@@ -68,6 +70,39 @@ def save_progress(done: set[int], path: str = PROGRESS_FILE) -> None:
     with open(path, "w") as f:
         for idx in sorted(done):
             f.write(f"{idx}\n")
+
+
+def _publish_expansion_status(
+    run_id: str,
+    *,
+    pref: str,
+    city: str,
+    total: int,
+    done: int,
+    success: int,
+    failed: int,
+    started_at: float,
+    status: str = "running",
+    message: str = "",
+) -> None:
+    """共有 status file に進捗を書き込む。"""
+    update_expansion_status(
+        run_id,
+        {
+            "prefecture": pref,
+            "city": city,
+            "status": status,
+            "message": message,
+            "pid": os.getpid(),
+            "started_at": started_at,
+            "progress": {
+                "completed_queries": done,
+                "total_queries": total,
+                "success_count": success,
+                "failed_count": failed,
+            },
+        },
+    )
 
 
 def merge_part_files(raw_dir: str, output_path: str, total: int) -> None:
@@ -215,8 +250,8 @@ def detect_city_from_queries(queries_path: str) -> tuple[str, str]:
                         c = m.group(1)
                         if len(c) >= 2:
                             city_counts[c] = city_counts.get(c, 0) + 1
-    except OSError:
-        pass
+    except OSError as exc:
+        logger.warning(f"Failed to read query file: {queries_path} ({exc})")
 
     if not city and city_counts:
         city = max(city_counts, key=city_counts.get)
@@ -251,64 +286,48 @@ def apply_city_filter(city: str, pref: str, raw_output: str) -> tuple[str, int, 
 
 def run_postprocess_pipeline(input_path: str, processed_path: str) -> None:
     """生データから JSON/SQLite の両方を更新する。"""
-    logger.info("Processing data (incremental merge)...")
-    process_result = subprocess.run(
-        [sys.executable, os.path.join(SCRIPT_DIR, "process_data.py"), input_path, processed_path, "--incremental"],
-    )
-    if process_result.returncode != 0:
-        raise RuntimeError("Data processing failed")
+    with file_lock(SYNC_LOCK_PATH):
+        logger.info("Processing data (incremental merge)...")
+        process_result = subprocess.run(
+            [sys.executable, os.path.join(SCRIPT_DIR, "process_data.py"), input_path, processed_path, "--incremental"],
+        )
+        if process_result.returncode != 0:
+            raise RuntimeError("Data processing failed")
 
-    logger.info("Refreshing SQLite cache...")
-    sqlite_result = subprocess.run(
-        [sys.executable, os.path.join(SCRIPT_DIR, "to_sqlite.py"), processed_path, "--incremental"],
-    )
-    if sqlite_result.returncode != 0:
-        raise RuntimeError("SQLite conversion failed")
+        logger.info("Refreshing SQLite cache...")
+        sqlite_result = subprocess.run(
+            [sys.executable, os.path.join(SCRIPT_DIR, "to_sqlite.py"), processed_path, "--incremental"],
+        )
+        if sqlite_result.returncode != 0:
+            raise RuntimeError("SQLite conversion failed")
 
 
-def run_batch():
-    """バッチスクレイプ全体を実行"""
-    args = parse_args()
-    queries = load_queries()
-    total = len(queries)
+def _sync_canonical_data(city: str, pref: str) -> None:
+    """現在までに取得済みの raw データを canonical JSON/SQLite に反映する。"""
+    data_for_processing = _prepare_input_data(city, pref)
+    run_postprocess_pipeline(data_for_processing, PROCESSED)
 
-    progress_file = args.get("progress_file") or PROGRESS_FILE
 
-    city = args["city"]
-    pref = args["prefecture"]
-    if not city:
-        city, pref = detect_city_from_queries(QUERIES_FILE)
+def _maybe_sync_after_success(city: str, pref: str, success_count: int) -> None:
+    """成功件数に応じて中間同期を行う。"""
+    if SYNC_EVERY_SUCCESS > 0 and success_count % SYNC_EVERY_SUCCESS == 0:
+        logger.info(f"Syncing canonical data after {success_count} successful queries...")
+        _sync_canonical_data(city, pref)
 
-    if city or pref:
-        logger.info(f"City filter: {pref}{city}")
-    else:
-        logger.info("City filter: OFF (no --city specified, could not auto-detect)")
 
-    logger.info(f"Queries: {total}")
-    logger.info(f"Sleep between: {SLEEP_BETWEEN}s")
-    logger.info(f"Est. time: ~{total * (180 + SLEEP_BETWEEN) // 60} min")
-
-    os.makedirs(RAW_DIR, exist_ok=True)
-
-    # 進捗読み込み
-    done = load_progress(progress_file)
-    if done:
-        logger.info(f"Resuming: {len(done)}/{total} already done.")
-        for idx in list(done):
-            if not os.path.exists(os.path.join(RAW_DIR, f"part_{idx:03d}.json")):
-                logger.warning(f"Missing part file for query #{idx} - will re-run")
-                done.discard(idx)
-        logger.info("")
-    else:
-        if os.path.exists(RAW_OUTPUT):
-            shutil.copy2(RAW_OUTPUT, RAW_OUTPUT + ".bak")
-            logger.info("Previous data backed up.")
-        if os.path.exists(RAW_DIR):
-            shutil.rmtree(RAW_DIR)
-        os.makedirs(RAW_DIR, exist_ok=True)
-        logger.info("")
-
+def _execute_scraping_loop(
+    queries: list[str],
+    total: int,
+    done: set[int],
+    progress_file: str,
+    args: dict,
+    run_id: str,
+    started_at: float,
+) -> tuple[int, int, int, set[int]]:
+    """クエリごとのスクレイプを実行。戻り値: (success, skipped, failed, done)"""
     success = skipped = failed = 0
+    city = args.get("city", "")
+    pref = args.get("prefecture", "")
 
     max_q = args.get("max_queries")
     if max_q is not None:
@@ -326,8 +345,20 @@ def run_batch():
             if i not in done:
                 done.add(i)
         save_progress(done, progress_file)
+        _publish_expansion_status(
+            run_id,
+            pref=args.get("prefecture", ""),
+            city=args.get("city", ""),
+            total=total,
+            done=len(done),
+            success=0,
+            failed=0,
+            started_at=started_at,
+            status="running",
+            message="dry-run",
+        )
         logger.info(f"[DRY-RUN] 進捗ファイルに {len(done)}/{total} 件を記録しました。")
-        return 0
+        return 0, 0, 0, done
 
     for i, query in enumerate(queries, 1):
         part_file = os.path.join(RAW_DIR, f"part_{i:03d}.json")
@@ -353,47 +384,56 @@ def run_batch():
             success += 1
             done.add(i)
             save_progress(done, progress_file)
+            _maybe_sync_after_success(city, pref, success)
         else:
             failed += 1
             logger.error(f"  !! FAILED: {query}")
             logger.info("  Rerun to resume from here.")
 
+        _publish_expansion_status(
+            run_id,
+            pref=pref,
+            city=city,
+            total=total,
+            done=len(done),
+            success=success,
+            failed=failed,
+            started_at=started_at,
+            status="running",
+            message=query,
+        )
+
         if ok and i < total:
             logger.info(f"  Sleeping {SLEEP_BETWEEN}s ...")
             time.sleep(SLEEP_BETWEEN)
 
-    logger.info(f"\n{'=' * 50}")
-    logger.info(f"  Scraping done  OK: {success} / Skip: {skipped} / Fail: {failed}")
-    logger.info(f"{'=' * 50}\n")
+    return success, skipped, failed, done
 
+
+def _prepare_input_data(city: str, pref: str) -> str:
+    """生データのマージと市フィルタ適用。戻り値: 処理対象ファイルパス"""
     logger.info("Merging results...")
-    merge_part_files(RAW_DIR, RAW_OUTPUT, total)
+    merge_part_files(RAW_DIR, RAW_OUTPUT, len(load_queries()))
     total_lines = count_lines(RAW_OUTPUT)
     logger.info(f"Total raw data: {total_lines} entries")
 
-    # 市フィルタ
-    data_for_processing = RAW_OUTPUT
-    if city or pref:
-        filtered_path, total_raw, kept = apply_city_filter(city, pref, RAW_OUTPUT)
-        if kept == 0:
-            filter_label = f"{pref}{city}" if pref else city
-            logger.warning(f"\n  WARNING: No entries matched city filter '{filter_label}'")
-            logger.info(f"  ({total_raw} raw entries were checked)")
-            logger.info("  Falling back to unfiltered data\n")
-            data_for_processing = RAW_OUTPUT
-        else:
-            pct = kept / total_raw * 100 if total_raw > 0 else 0
-            logger.info(f"  City filter: {kept}/{total_raw} entries kept ({pct:.1f}%)")
-            data_for_processing = filtered_path
+    if not city and not pref:
+        return RAW_OUTPUT
 
-    try:
-        run_postprocess_pipeline(data_for_processing, PROCESSED)
-    except RuntimeError as exc:
-        logger.error(f"[ERROR] {exc}")
-        logger.error("[ERROR] Data processing failed")
-        sys.exit(1)
+    filtered_path, total_raw, kept = apply_city_filter(city, pref, RAW_OUTPUT)
+    if kept == 0:
+        filter_label = f"{pref}{city}" if pref else city
+        logger.warning(f"\n  WARNING: No entries matched city filter '{filter_label}'")
+        logger.info(f"  ({total_raw} raw entries were checked)")
+        raise RuntimeError(f"No entries matched city filter '{filter_label}'")
 
-    # 成功時クリーンアップ
+    pct = kept / total_raw * 100 if total_raw > 0 else 0
+    logger.info(f"  City filter: {kept}/{total_raw} entries kept ({pct:.1f}%)")
+    return filtered_path
+
+
+def _cleanup_on_success(failed: int, progress_file: str) -> None:
+    """成功時に進捗ファイルと一時ディレクトリを削除"""
     if failed == 0:
         for path in [progress_file, RAW_DIR]:
             if os.path.exists(path):
@@ -403,6 +443,119 @@ def run_batch():
                     os.remove(path)
                 logger.info(f"Cleaned up: {path}")
 
+
+def run_batch():
+    """バッチスクレイプ全体を実行"""
+    args = parse_args()
+    queries = load_queries()
+    total = len(queries)
+    started_at = time.time()
+
+    progress_file = args.get("progress_file") or PROGRESS_FILE
+
+    city = args["city"]
+    pref = args["prefecture"]
+    if not city:
+        city, pref = detect_city_from_queries(QUERIES_FILE)
+    run_id = f"{pref}_{city}".replace(" ", "_")
+
+    if city or pref:
+        logger.info(f"City filter: {pref}{city}")
+    else:
+        logger.info("City filter: OFF (no --city specified, could not auto-detect)")
+
+    logger.info(f"Queries: {total}")
+    logger.info(f"Sleep between: {SLEEP_BETWEEN}s")
+    logger.info(f"Est. time: ~{total * (180 + SLEEP_BETWEEN) // 60} min")
+
+    os.makedirs(RAW_DIR, exist_ok=True)
+    _publish_expansion_status(
+        run_id,
+        pref=pref,
+        city=city,
+        total=total,
+        done=0,
+        success=0,
+        failed=0,
+        started_at=started_at,
+        status="running",
+        message="started",
+    )
+
+    # 進捗読み込み
+    done = load_progress(progress_file)
+    if done:
+        logger.info(f"Resuming: {len(done)}/{total} already done.")
+        for idx in list(done):
+            if not os.path.exists(os.path.join(RAW_DIR, f"part_{idx:03d}.json")):
+                logger.warning(f"Missing part file for query #{idx} - will re-run")
+                done.discard(idx)
+        logger.info("")
+    else:
+        if os.path.exists(RAW_OUTPUT):
+            shutil.copy2(RAW_OUTPUT, RAW_OUTPUT + ".bak")
+            logger.info("Previous data backed up.")
+        if os.path.exists(RAW_DIR):
+            shutil.rmtree(RAW_DIR)
+        os.makedirs(RAW_DIR, exist_ok=True)
+        logger.info("")
+
+    success, skipped, failed, done = _execute_scraping_loop(
+        queries, total, done, progress_file, args, run_id, started_at,
+    )
+
+    logger.info(f"\n{'=' * 50}")
+    logger.info(f"  Scraping done  OK: {success} / Skip: {skipped} / Fail: {failed}")
+    logger.info(f"{'=' * 50}\n")
+
+    try:
+        data_for_processing = _prepare_input_data(city, pref)
+        run_postprocess_pipeline(data_for_processing, PROCESSED)
+    except RuntimeError as exc:
+        _publish_expansion_status(
+            run_id,
+            pref=pref,
+            city=city,
+            total=total,
+            done=len(done),
+            success=success,
+            failed=failed + 1,
+            started_at=started_at,
+            status="failed",
+            message=str(exc),
+        )
+        logger.error(f"[ERROR] {exc}")
+        sys.exit(1)
+
+    _cleanup_on_success(failed, progress_file)
+    if failed > 0:
+        _publish_expansion_status(
+            run_id,
+            pref=pref,
+            city=city,
+            total=total,
+            done=len(done),
+            success=success,
+            failed=failed,
+            started_at=started_at,
+            status="failed",
+            message=f"{failed} queries failed",
+        )
+        logger.error(f"[ERROR] Scrape finished with {failed} failed queries")
+        sys.exit(1)
+
+    _publish_expansion_status(
+        run_id,
+        pref=pref,
+        city=city,
+        total=total,
+        done=len(done),
+        success=success,
+        failed=failed,
+        started_at=started_at,
+        status="done",
+        message="completed",
+    )
     logger.info(f"\nOutput: {os.path.abspath(PROCESSED)}")
 
 

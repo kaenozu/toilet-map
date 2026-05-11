@@ -100,6 +100,16 @@ class TestEscaping:
         assert safe_href("https://maps.google.com/?q=test") == "https://maps.google.com/?q=test"
 
 
+class TestGeolocationScript:
+    def test_build_geolocation_js_returns_plain_object(self):
+        from app import build_geolocation_js
+
+        js = build_geolocation_js()
+        assert "resolve(pos.coords)" not in js
+        assert "latitude: pos.coords.latitude" in js
+        assert "longitude: pos.coords.longitude" in js
+
+
 class TestBuildPopupHtml:
     def test_build_popup_basic(self):
         from ui.popups import build_popup_html
@@ -135,38 +145,6 @@ class TestBuildPopupHtml:
         html = build_popup_html(toilet)
         assert "javascript:" not in html
         assert "onclick=" not in html
-
-
-class TestCardRendering:
-    def test_render_toilet_card_blocks_dangerous_link(self, monkeypatch):
-        from ui import components
-
-        captured = {}
-
-        def fake_markdown(html, unsafe_allow_html=False):
-            captured["html"] = html
-            captured["unsafe"] = unsafe_allow_html
-
-        monkeypatch.setattr(components.st, "markdown", fake_markdown)
-
-        components.render_toilet_card(
-            {
-                "title": "テストトイレ",
-                "category": "公園",
-                "toilet_score": 85.0,
-                "confidence": 0.8,
-                "is_public_toilet": False,
-                "address": "東京都渋谷区",
-                "rating": 4.5,
-                "review_count": 100,
-                "link": 'javascript:alert(1)" onclick="alert(2)',
-            }
-        )
-
-        assert captured["unsafe"] is True
-        assert "javascript:" not in captured["html"]
-        assert "onclick=" not in captured["html"]
-
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

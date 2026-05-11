@@ -29,26 +29,37 @@ class TestContextExtraction:
 class TestKeywordScoring:
     def test_positive(self):
         text = "トイレがきれいで清潔です"
-        score, matched = pd_module._apply_keyword_scoring(text)
+        score, matched = pd_module._apply_scoring_and_negation(text)
         assert score > 0
         assert len(matched) > 0
     def test_negative(self):
         text = "トイレが汚くて臭い"
-        score, matched = pd_module._apply_keyword_scoring(text)
+        score, matched = pd_module._apply_scoring_and_negation(text)
         assert score < 0
 
 
 class TestNegationCorrection:
     def test_negation_reduces(self):
         text = "トイレは清潔ではない"
-        score, _ = pd_module._apply_keyword_scoring(text)
-        corrected, _ = pd_module._apply_negation_correction(text, score, ["+清潔"])
-        assert corrected <= score
+        # 肯定キーワード「清潔」が否定されるため、スコアは加算されない
+        score, matched = pd_module._apply_scoring_and_negation(text)
+        assert score == 0
+        assert "+清潔" not in matched
+
     def test_no_negation(self):
         text = "トイレは清潔です"
-        score, matched = pd_module._apply_keyword_scoring(text)
-        corrected, _ = pd_module._apply_negation_correction(text, score, matched)
-        assert corrected == score
+        score, matched = pd_module._apply_scoring_and_negation(text)
+        assert score > 0
+        assert "+清潔" in matched
+
+    def test_negative_keyword_negation(self):
+        """「汚いではない」→負キーワードが否定されてスコアが改善される（~タグがつく）"""
+        text = "トイレは汚いではない"
+        score, matched = pd_module._apply_scoring_and_negation(text)
+        # 負キーワード「汚い」が否定により ~ 扱いに
+        assert any(kw.startswith("~汚い") for kw in matched)
+        # スコアは負の影響を受けない（0以上）
+        assert score >= 0
 
 
 class TestOverallScoring:

@@ -1,15 +1,23 @@
 # Batch / scraping temp files
 batch/raw_data.json
+batch/raw_data_*.json
+batch/raw_data_*_filtered.json
 batch/raw_parts/
+batch/raw_parts_*/
 batch/.progress
+batch/.progress_*
 batch/.qcache
 batch/.tmp_query.txt
 batch/queries.d/
+batch/.queries.lock
+batch/.expansion_status.lock
 batch/kanto_*.log
 batch/prefecture_distribution.txt
 batch/raw_data.json.bak*
 batch/raw_data_filtered.json
 batch/.progress_*_phase1
+batch/tmp*.txt
+batch/tmp*.json
 kanto_*.log
 
 # Debug scripts
@@ -29,6 +37,9 @@ ui/start.bat
 
 # Scraper data
 batch/data/
+data/.toilet_sync.lock
+data/*.bak
+static/expansion_status.json
 
 # IDE
 .idea/

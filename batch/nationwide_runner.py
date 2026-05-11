@@ -8,7 +8,10 @@ import subprocess
 import importlib
 from pathlib import Path
 
+from utils import file_lock
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+QUERY_LOCK_PATH = os.path.join(SCRIPT_DIR, ".queries.lock")
 
 
 def _load_prefectures() -> list[str]:
@@ -43,6 +46,7 @@ def run_prefecture(pref: str):
         env = os.environ.copy()
         env["QUERIES"] = str(query_file)
         env["PROGRESS_FILE"] = os.path.join(SCRIPT_DIR, f".progress_{pref}_{query_file.stem}")
+        env["SYNC_EVERY_SUCCESS"] = os.environ.get("SYNC_EVERY_SUCCESS", "10")
 
         cmd = [sys.executable, os.path.join(SCRIPT_DIR, "scrape_runner.py"), "--prefecture", pref]
         try:
@@ -58,7 +62,8 @@ def run_prefecture(pref: str):
 
 
 def main():
-    generate_queries_main()
+    with file_lock(QUERY_LOCK_PATH):
+        generate_queries_main()
     for pref in PREFECTURES:
         run_prefecture(pref)
 

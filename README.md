@@ -1,165 +1,120 @@
-# 🚽 トイレきれい度マップ
+# トイレきれい度マップ
 
-Google Maps のレビューからトイレのきれい度を自動判定して、地図と一覧で確認できる Streamlit アプリ。
+Google Mapsのレビューからトイレのきれい度を自動判定して地図上に表示するStreamlitアプリケーション。
 
-## フォルダ構成
+## プロジェクト概要
+- **目的**: 日本全国のトイレ情報を収集し、レビューのテキスト分析から「きれい度」をスコア化して可視化
+- **機能**:
+  - 地域別・カテゴリ別フィルタリング
+  - 現在地からの距離順ソート
+  - スコア分布の統計表示
+   - データ鮮度表示（生成日時 / SQLite同期日時）
+  - 多言語対応（日本語・英語）
 
-```
-toilet-map/
-├── app.py                  # Streamlit メインアプリ
-├── app_config.py           # 共有設定定数
-├── data/
-│   └── toilets.json      # 処理済みデータ
-├── ui/
-│   ├── styles.py        # Mobile CSS
-│   ├── components.py    # Streamlit UIコンポーネント
-│   └── popups.py        # ポップアップHTML生成
-├── batch/
-│   ├── scrape.bat          # Windows用スクレイプ
-│   ├── scrape_runner.py    # スクレイプ実行エンジン
-│   ├── process_data.py     # データ処理・スコアリング
-│   ├── generate_queries.py # 全国クエリ生成
-│   └── city_bounds.py      # 地理バウンディング取得
-├── tests/
-│   ├── test_app.py
-│   ├── test_app_config.py
-│   ├── test_popups.py
-│   ├── test_ui_components.py
-│   ├── test_batch.py
-│   └── test_process_data.py
-├── requirements.txt
-├── .streamlit/config.toml
-├── .gitignore
-└── README.md
-```
+## 技術スタック
+- **アプリ**: Python 3.11+ / Streamlit / Folium / streamlit-folium / Pandas
+- **スクレイピング**: Docker / Google Maps Scraper
+- **データ処理**: JSON / JSONL / SQLite
+- **テスト**: pytest
 
-## ローカル実行
+## クイックスタート
 
+### アプリ起動
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-アプリは [data/toilets.db](data/toilets.db) を参照します。JSON を更新しただけでは画面に反映されず、SQLite 変換まで完了している必要があります。
+### データ処理フロー
+1. **スクレイピング**:
+   ```bash
+   cd batch
+   # 関東地方のスクレイピング（例）
+   python scrape_runner.py --city さいたま市 --prefecture 埼玉県
+   ```
 
-## 機能
+2. **データ処理**:
+   ```bash
+   cd batch
+   python process_data.py raw_data.json ../data/toilets.json.gz --incremental
+   ```
+   - 同一クエリの重複は自動で除外されます。
 
-- **インタラクティブマップ**: Folium のクラスタ表示で現在ページの施設を地図に表示
-- **都道府県フィルター**: 都道府県ごとに絞り込み、件数が十分あれば都道府県中心へ移動
-- **カテゴリフィルター**: すべて / 公共トイレ / カフェ・飲食 / コンビニ・店舗 / ホテル・旅館 / 道の駅 / SA・PA
-- **全文検索**: 名前・住所の部分一致検索
-- **ページネーション**: 一覧と地図は 20 件単位で同期表示し、描画負荷を抑制
-- **簡易パフォーマンス表示**: 絞り込み時間と地図生成時間を画面下に表示
-- **低信頼データの注記**: トイレ関連レビューが少ない施設はポップアップで参考値として表示
+3. **SQLite変換**:
+   ```bash
+   cd batch
+   python to_sqlite.py ../data/toilets.json.gz --incremental
+   ```
 
-## スコアリング仕様
+4. **まとめて更新**:
+   ```bash
+   batch/update_data.bat
+   ```
+   - スクレイプ → SQLite同期 → 検証を順に実行します。
+   - `batch/verify_data.py` は JSON と SQLite の件数、都道府県分布、更新日時を突き合わせます。
 
+## プロジェクト構造
+```
+toilet-map/
+├── app.py                  # Streamlitメインアプリ
+├── app_config.py           # 定数定義
+├── ui/                    # UIコンポーネント
+│   ├── components.py      # 凡例などの共通表示
+│   ├── data_loader.py     # データ読み込み
+│   ├── filters.py         # フィルタリング・検索
+│   ├── map_builder.py     # Folium地図構築
+│   ├── popups.py         # ポップアップHTML生成
+│   ├── stats.py          # 統計表示
+│   ├── pagination.py      # ページネーション
+│   └── i18n.py          # 多言語対応
+├── batch/                 # バッチ処理
+│   ├── process_data.py    # スクレイピングデータ処理
+│   ├── scrape_runner.py  # スクレイピング実行エンジン
+│   ├── to_sqlite.py      # JSON→SQLite変換
+│   ├── sync_db.py        # JSON→SQLite同期ラッパー
+│   ├── update_data.bat    # 一括更新バッチ
+│   ├── generate_queries.py # クエリ自動生成
+│   └── verify_data.py    # データ品質検証
+├── data/                  # データファイル
+│   ├── toilets.json.gz   # 処理済みデータ（コミット対象）
+│   └── toilets.db        # SQLiteデータベース
+└── tests/                # テストコード
+```
+
+## スコアリング手法
 | スコア | 表示 | 判定 |
-|---|---|---|
+|--------|------|------|
 | 80-100 | ✨ | とてもきれい |
-| 65-79 | 😊 | きれい |
-| 50-64 | 😐 | 普通 |
-| 35-49 | 😨 | 少し気になる |
-| 0-34 | 💩 | 要注意 |
+| 65-79  | 😊 | きれい |
+| 50-64  | 😐 | 普通 |
+| 35-49  | 😨 | 少し気になる |
+| 0-34   | 💩 | 要注意 |
 
-**補正ロジック：**
-- トイレ言及周辺の文だけをスコアリング（店舗全体の評価と分離）
-- レビュー★5のネガティブは軽減、★1のポジティブは軽減
-- 否定文脈検知（「清潔さが残念」等の誤検出防止）
+スコア = (raw_score + 5) × 10（-5〜+5 → 0〜100 変換）
 
-**注意点：**
-- トイレ関連レビューが 1〜2 件程度しかない施設は、信頼度が低く参考値寄りになります。
-- スコアはレビュー由来の自動推定であり、現地状態を保証しません。
-
-## スクレイプ実行
-
+## バッチ処理コマンド例
 ```bash
-cd batch
+# 全国クエリ生成
+python batch/generate_queries.py
 
-# 熊谷市（デフォルト）
-scrape.bat
+# 関東Phase1実行
+python batch/kanto_phase1.py
 
-# さいたま市
-set QUERIES=queries_saitama_city.txt
-scrape.bat
-
-# 最初からやり直し
-scrape.bat --reset
+# データ検証
+python batch/verify_data.py
 ```
 
-エラーで中断しても `.progress` ファイルで途中から再開されます。
+## 品質チェック
+- `batch/generate_queries.py` は重複クエリを除外して batch を生成します
+- `batch/verify_data.py` は JSON と SQLite の差分を都道府県単位まで確認します
+- `tests/test_batch_regressions.py` と `tests/test_map_builder.py` が主要回帰をカバーします
 
-## 更新フロー
-
-標準の更新は [batch/update_data.bat](batch/update_data.bat) を使います。
-
-```bash
-cd batch
-update_data.bat
-```
-
-内部では次の順で実行されます。
-
-1. `nationwide_runner.py` が全国クエリを再生成し、全 batch ファイルを順にスクレイプ
-2. 各 batch ごとに `process_data.py` と `to_sqlite.py` で JSON / SQLite を更新
-3. `verify_data.py` で品質ゲートを実行
-
-品質ゲートでは主に以下を確認します。
-
-- スコア欠損率
-- 住所・都道府県欠損率
-- 重複率
-- 想定都道府県に 0 件の偏りがないか
-
-## Streamlit Cloud デプロイ
-
-```bash
-cd toilet-map
-git init
-git add .
-git commit -m "Initial commit"
-git remote add origin https://github.com/<user>/toilet-map.git
-git push -u origin main
-```
-
-→ https://share.streamlit.io/ で New app → Deploy
-
-## データ拡充（関東広域）
-
-県庁所在地7市（さいたま・新宿・千葉・横浜・水戸・宇都宮・前橋）を順次スクレイピング。
-
-### 実行
-
-```bash
-cd batch
-
-# Phase 1 のみ実行（約7時間、84クエリ）
-kanto_phase1.bat
-```
-
-### 中断・再開
-
-各都市ごとに独立した進捗ファイル（`.progress_<都道府県>_phase1`）を使用しているため、途中で中断しても再実行で続きから自動再開されます。
-
-### 個別実行（任意）
-
-```bash
-set QUERIES=queries.d\埼玉県\batch_001.txt
-python scrape_runner.py --city さいたま市 --prefecture 埼玉県 --progress-file .progress_saitama_phase1
-```
-
-## テスト
-
+## テスト実行
 ```bash
 pytest tests/ -v
 ```
 
-主要な回帰テストは以下です。
-
-- [tests/test_process_data.py](tests/test_process_data.py): スコアリング、重複レビュー、境界値
-- [tests/test_batch_regressions.py](tests/test_batch_regressions.py): 経度キー回帰、後処理パイプライン、品質ゲート
-- [tests/test_popups.py](tests/test_popups.py): ポップアップの安全性と低信頼注記
-
-## ライセンス
-
-MIT
+## 注意事項
+- `data/toilets.json.gz` と `data/toilets.db` はコミット対象です
+- `batch/raw_data.json` や `batch/raw_parts_*/` は `.gitignore` で除外されています
+- Docker Desktopが起動している状態でスクレイピングを実行してください

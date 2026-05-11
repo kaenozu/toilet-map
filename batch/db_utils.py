@@ -5,21 +5,12 @@ SQLite 共通ユーティリティ (to_sqlite.py, merge_to_db.py で共用)
 import sqlite3
 import json
 import gzip
-import importlib
 import os
 from datetime import datetime
+from utils import extract_prefecture
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "toilets.db")
 
-
-def _load_prefectures() -> list[str]:
-    try:
-        return importlib.import_module("scoring_config").PREFECTURES
-    except ModuleNotFoundError:
-        return importlib.import_module("batch.scoring_config").PREFECTURES
-
-
-PREFECTURES = _load_prefectures()
 
 TOILET_TABLE_SCHEMA = """
     CREATE TABLE IF NOT EXISTS toilets (
@@ -104,16 +95,6 @@ def ensure_schema(cur: sqlite3.Cursor) -> None:
         cur.execute(TOILET_UNIQUE_INDEX)
 
 
-def extract_prefecture(address: str) -> str:
-    """住所文字列から都道府県を抽出"""
-    if not address:
-        return ""
-    for pref in PREFECTURES:
-        if pref in address:
-            return pref
-    return ""
-
-
 def fix_null_prefectures(conn: sqlite3.Connection) -> int:
     """prefecture が NULL または空文字の行を住所から修復"""
     cur = conn.cursor()
@@ -135,13 +116,16 @@ def update_metadata_from_db(conn: sqlite3.Connection) -> None:
     total = cur.execute("SELECT COUNT(*) FROM toilets").fetchone()[0]
     scored = cur.execute("SELECT COUNT(*) FROM toilets WHERE confidence > 0").fetchone()[0]
     public = cur.execute("SELECT COUNT(*) FROM toilets WHERE is_public_toilet = 1").fetchone()[0]
-    now = datetime.now().strftime("%Y-%m-%d")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    last_updated_row = cur.execute("SELECT value FROM metadata WHERE key = 'last_updated'").fetchone()
+    last_updated = last_updated_row[0] if last_updated_row and last_updated_row[0] else now
 
     for key, value in [
         ("total", str(total)),
         ("scored", str(scored)),
         ("public_toilets", str(public)),
-        ("last_updated", now),
+        ("last_updated", last_updated),
+        ("db_synced_at", now),
     ]:
         cur.execute(
             "INSERT INTO metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",

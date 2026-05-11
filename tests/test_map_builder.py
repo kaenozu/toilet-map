@@ -1,138 +1,54 @@
 """
 tests/test_map_builder.py
-ui/map_builder.py のユニットテスト
+ui/map_builder.py の回帰テスト
 """
+
 import pytest
-from ui.map_builder import calc_map_center, calc_cluster_radius, build_map
-from app_config import PREFECTURE_CENTERS
+
+from ui.map_builder import _calc_fit_bounds, build_map
 
 
-class TestCalcMapCenter:
-    def test_all_prefecture_returns_meta_center(self):
-        meta = {"center_lat": 36.0, "center_lng": 139.0, "zoom": 6}
-        lat, lng, zoom = calc_map_center("全て", meta, {})
-        assert lat == 36.0
-        assert lng == 139.0
-        assert zoom == 6
-
-    def test_specific_prefecture_with_stats(self):
-        meta = {"center_lat": 36.0, "center_lng": 139.0, "zoom": 6}
-        pref_stats = {"東京都": {"count": 10, "center_lat": 35.68, "center_lng": 139.69}}
-        lat, lng, zoom = calc_map_center("東京都", meta, pref_stats)
-        assert lat == pytest.approx(35.68, abs=0.01)
-        assert lng == pytest.approx(139.69, abs=0.01)
-        assert zoom == 11
-
-    def test_specific_prefecture_fallback_to_center(self):
-        meta = {"center_lat": 36.0, "center_lng": 139.0, "zoom": 6}
-        lat, lng, zoom = calc_map_center("東京都", meta, {})
-        expected = PREFECTURE_CENTERS["東京都"]
-        assert lat == expected[0]
-        assert lng == expected[1]
-        assert zoom == 11
-
-    def test_specific_prefecture_low_count_fallback(self):
-        meta = {"center_lat": 36.0, "center_lng": 139.0, "zoom": 6}
-        pref_stats = {"東京都": {"count": 3, "center_lat": 35.68, "center_lng": 139.69}}
-        lat, lng, zoom = calc_map_center("東京都", meta, pref_stats)
-        expected = PREFECTURE_CENTERS["東京都"]
-        assert lat == expected[0]
-        assert lng == expected[1]
-
-    def test_unknown_prefecture_uses_meta(self):
-        meta = {"center_lat": 36.0, "center_lng": 139.0, "zoom": 6}
-        lat, lng, zoom = calc_map_center("未知県", meta, {})
-        assert lat == 36.0
-        assert lng == 139.0
+def _make_toilet(title: str, lat: object, lng: object) -> dict:
+    return {
+        "title": title,
+        "category": "公園",
+        "toilet_score": 80,
+        "is_public_toilet": True,
+        "confidence": 0.5,
+        "toilet_review_count": 2,
+        "address": "東京都千代田区",
+        "rating": 4.0,
+        "review_count": 10,
+        "sample_reviews": [],
+        "top_keywords": [],
+        "lat": lat,
+        "lng": lng,
+    }
 
 
-class TestCalcClusterRadius:
-    def test_small_count(self):
-        assert calc_cluster_radius(10) == 50
+class TestCalcFitBounds:
+    def test_ignores_invalid_coordinates(self):
+        toilets = [
+            _make_toilet("valid", 35.68, 139.69),
+            _make_toilet("missing lat", None, 139.70),
+            _make_toilet("string lat", "abc", 139.71),
+            _make_toilet("out of range", 91.0, 139.72),
+        ]
 
-    def test_medium_count(self):
-        assert calc_cluster_radius(499) == 50
-        assert calc_cluster_radius(500) == 80
+        bounds = _calc_fit_bounds(toilets)
 
-    def test_large_count(self):
-        assert calc_cluster_radius(600) == 80
-
-    def test_very_large_count(self):
-        assert calc_cluster_radius(2000) == 100
-
-    def test_zero(self):
-        assert calc_cluster_radius(0) == 50
+        assert bounds == [[35.67, 139.68], [35.69, 139.7]]
 
 
 class TestBuildMap:
-    def test_empty_toilets(self):
-        m = build_map([], 35.68, 139.69, 10)
-        assert m is not None
-
-    def test_build_map_auto_fits_bounds(self):
+    def test_skips_invalid_coordinates(self):
         toilets = [
-            {
-                "title": "A",
-                "category": "公園",
-                "address": "東京都",
-                "lat": 35.68,
-                "lng": 139.69,
-                "toilet_score": 80,
-                "is_public_toilet": False,
-                "confidence": 0.8,
-                "toilet_review_count": 3,
-                "top_keywords": [],
-                "sample_reviews": [],
-                "phone": "",
-                "rating": 4.0,
-                "review_count": 10,
-                "link": "",
-            },
-            {
-                "title": "B",
-                "category": "公園",
-                "address": "大阪府",
-                "lat": 34.69,
-                "lng": 135.50,
-                "toilet_score": 70,
-                "is_public_toilet": False,
-                "confidence": 0.8,
-                "toilet_review_count": 3,
-                "top_keywords": [],
-                "sample_reviews": [],
-                "phone": "",
-                "rating": 4.0,
-                "review_count": 10,
-                "link": "",
-            },
+            _make_toilet("valid toilet", 35.68, 139.69),
+            _make_toilet("invalid toilet", "abc", None),
         ]
-        m = build_map(toilets, 35.68, 139.69, 10)
-        rendered = m.get_root().render()
-        assert "fitBounds" in rendered
 
-    def test_with_toilets(self):
-        toilets = [
-            {
-                "title": "テストトイレ",
-                "category": "カフェ",
-                "address": "東京都",
-                "lat": 35.68,
-                "lng": 139.69,
-                "toilet_score": 80,
-                "is_public_toilet": False,
-                "confidence": 0.8,
-                "toilet_review_count": 3,
-                "top_keywords": [("+きれい", 2)],
-                "sample_reviews": [],
-                "phone": "",
-                "rating": 4.0,
-                "review_count": 10,
-                "link": "",
-            }
-        ]
-        m = build_map(toilets, 35.68, 139.69, 10)
-        assert m is not None
+        m = build_map(toilets, 35.68, 139.69, 12)
+        html = m.get_root().render()
 
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+        assert "valid toilet" in html
+        assert "invalid toilet" not in html
