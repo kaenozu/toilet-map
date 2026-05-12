@@ -5,7 +5,7 @@ Streamlit版トイレきれい度マップ
 import streamlit as st
 from streamlit_folium import st_folium
 from streamlit_js_eval import streamlit_js_eval
-from app_config import FILTER_CONFIG, TILE_OPTIONS
+from app_config import FILTER_CONFIG
 from ui.styles import MOBILE_CSS
 from ui.components import render_score_legend, render_toilet_card
 from ui.data_loader import load_toilet_data, toilets_to_dataframe, get_prefectures

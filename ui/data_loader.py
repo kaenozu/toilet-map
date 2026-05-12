@@ -45,7 +45,8 @@ def load_toilet_data():
         pref_stats = {}
         for t in toilets:
             pref = t.get("prefecture")
-            if not pref: continue
+            if not pref:
+                continue
             if pref not in pref_stats:
                 pref_stats[pref] = {"count": 0, "lats": [], "lngs": []}
             pref_stats[pref]["count"] += 1

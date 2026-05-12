@@ -4,9 +4,7 @@ JSON データを SQLite データベースに変換し、検索と読み込み�
 """
 import sqlite3
 import json
-import os
 import gzip
-from typing import Optional
 from utils import logger
 
 DB_PATH = "data/toilets.db"

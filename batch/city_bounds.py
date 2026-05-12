@@ -4,6 +4,7 @@ batch/city_bounds.py
 Nominatim API 使用
 """
 import json
+import logging
 import os
 import time
 import urllib.request
@@ -13,8 +14,6 @@ from typing import Optional
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CACHE_FILE = os.path.join(SCRIPT_DIR, "city_bounds_cache.json")
 
-# 簡易ロガー
-import logging
 logger = logging.getLogger(__name__)
 if not logger.handlers:
     handler = logging.StreamHandler()
