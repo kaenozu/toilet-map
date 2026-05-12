@@ -9,14 +9,16 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from collections import Counter
 from functools import lru_cache
 from typing import Any
 
-try:
-    from utils import extract_prefecture
-except ModuleNotFoundError:  # pragma: no cover - import path fallback
-    from batch.utils import extract_prefecture
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from utils import extract_prefecture
+from utils import logger
+
+from app_config import THRESHOLD
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -133,8 +135,8 @@ def get_stats(toilets: list[dict]) -> dict:
             try:
                 score_sum += float(score)
                 scored += 1
-            except (TypeError, ValueError):
-                pass
+            except (TypeError, ValueError) as exc:
+                logger.warning(f"Skipping invalid toilet_score value: {score!r} ({exc})")
 
     return {
         "total": len(toilets),
@@ -149,7 +151,7 @@ def get_stats(toilets: list[dict]) -> dict:
     }
 
 
-def find_gaps(stats: dict, threshold: int = 10, include_catalog: bool = False) -> list[dict]:
+def find_gaps(stats: dict, threshold: int = THRESHOLD, include_catalog: bool = False) -> list[dict]:
     """エリア別のスコアギャップを検出する。"""
     prefecture_city_counts = _coerce_prefecture_city_counts(stats)
 

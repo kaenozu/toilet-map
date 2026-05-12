@@ -21,6 +21,7 @@ from .types import ToiletDict
 CLUSTER_THRESHOLDS = [(500, 50), (1000, 80), (float("inf"), 100)]
 FIT_BOUNDS_PADDING = (24, 24)
 FIT_BOUNDS_EPSILON = 0.01
+COORD_DEDUPE_PRECISION = 6
 
 
 def _coerce_coordinate(value: object) -> float | None:
@@ -33,8 +34,13 @@ def _coerce_coordinate(value: object) -> float | None:
     return coordinate
 
 
+def _coordinate_key(lat: float, lng: float) -> tuple[float, float]:
+    return (round(lat, COORD_DEDUPE_PRECISION), round(lng, COORD_DEDUPE_PRECISION))
+
+
 def _collect_valid_coordinates(toilets: list[ToiletDict]) -> list[tuple[float, float]]:
     coords: list[tuple[float, float]] = []
+    seen: set[tuple[float, float]] = set()
     for toilet in toilets:
         lat = _coerce_coordinate(toilet.get("lat"))
         lng = _coerce_coordinate(toilet.get("lng"))
@@ -42,8 +48,30 @@ def _collect_valid_coordinates(toilets: list[ToiletDict]) -> list[tuple[float, f
             continue
         if not (-90 <= lat <= 90 and -180 <= lng <= 180):
             continue
+        key = _coordinate_key(lat, lng)
+        if key in seen:
+            continue
+        seen.add(key)
         coords.append((lat, lng))
     return coords
+
+
+def _collect_valid_toilets(toilets: list[ToiletDict]) -> list[tuple[ToiletDict, float, float]]:
+    valid_toilets: list[tuple[ToiletDict, float, float]] = []
+    seen: set[tuple[float, float]] = set()
+    for toilet in toilets:
+        lat = _coerce_coordinate(toilet.get("lat"))
+        lng = _coerce_coordinate(toilet.get("lng"))
+        if lat is None or lng is None:
+            continue
+        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+            continue
+        key = _coordinate_key(lat, lng)
+        if key in seen:
+            continue
+        seen.add(key)
+        valid_toilets.append((toilet, lat, lng))
+    return valid_toilets
 
 
 def calc_cluster_radius(count: int) -> int:
@@ -109,13 +137,7 @@ def build_map(
     )
     m.get_root().html.add_child(folium.Element(POPUP_FIX_JS))
 
-    valid_toilets = [
-        (toilet, lat, lng)
-        for toilet in toilets
-        if (lat := _coerce_coordinate(toilet.get("lat"))) is not None
-        if (lng := _coerce_coordinate(toilet.get("lng"))) is not None
-        if -90 <= lat <= 90 and -180 <= lng <= 180
-    ]
+    valid_toilets = _collect_valid_toilets(toilets)
 
     cluster = MarkerCluster(
         options={"maxClusterRadius": calc_cluster_radius(len(valid_toilets)), "spiderfyOnMaxZoom": True},

@@ -107,6 +107,7 @@ python batch/verify_data.py
 ## 品質チェック
 - `batch/generate_queries.py` は重複クエリを除外して batch を生成します
 - `batch/verify_data.py` は JSON と SQLite の差分を都道府県単位まで確認します
+- CI では `pytest` に加えて `batch/verify_data.py` も実行します
 - `tests/test_batch_regressions.py` と `tests/test_map_builder.py` が主要回帰をカバーします
 
 ## テスト実行

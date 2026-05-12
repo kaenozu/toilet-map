@@ -53,6 +53,7 @@ class TestCalcPagination:
         assert total_pages == 1
         assert start == 80
         assert end == 10
+        assert page == 5  # calc_pagination does not clamp; caller must handle
 
     def test_boundary_values(self):
         """境界値のテスト"""
@@ -77,6 +78,17 @@ class TestCalcPagination:
         total_pages, start, end, page = calc_pagination(21, 2)
         assert start == 20
         assert end == 21
+
+    def test_page_zero_returns_negative_start(self):
+        """page=0 は負のstart_idxになる（callerが制御する想定）"""
+        total_pages, start, end, page = calc_pagination(20, 0)
+        assert start == -20
+        assert end == 0
+
+    def test_very_large_page_number(self):
+        total_pages, start, end, page = calc_pagination(100, 999)
+        assert start == 19960
+        assert end == 100
 
 
 if __name__ == "__main__":

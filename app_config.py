@@ -60,6 +60,9 @@ TILE_OPTIONS = {
     "モノクロ（Cartodb）": "CartoDB positron",
 }
 
+# ギャップ検出しきい値（gap_analyzer.find_gaps と統一）
+THRESHOLD = 10
+
 # UI表示上限
 MAX_SAMPLE_REVIEWS = 2  # ポップアップ内の最大レビュー数
 REVIEW_TEXT_MAX_LENGTH = 120  # レビュー文の最大表示文字数
@@ -142,47 +145,18 @@ PREFECTURE_CENTERS = {
     "沖縄県": (26.2124, 127.6809),
 }
 
-POPUP_FIX_JS = """
-<script>
-/**
- * Leafletのポップアップが地図枠外にはみ出す問題を修正するスクリプト。
- * Streamlitのiframe環境下でLeafletオブジェクトを動的に探索し、
- * ポップアップが開いた際に位置を自動調整(panBy)します。
- */
-(function(){
-  function fixPopups(){
-    var mapEl = document.getElementById('map');
-    if(!mapEl) { setTimeout(fixPopups, 500); return; }
-    var lmap = null;
-    for(var k in window){
-      try{ if(window[k] && window[k].getContainer && window[k].getContainer()===mapEl){ lmap=window[k]; break; } }catch(e){}
-    }
-    if(!lmap){ setTimeout(fixPopups, 500); return; }
+import os
 
-    lmap.on('popupopen', function(e){
-      setTimeout(function(){
-        var popup = e.popup._container;
-        if(!popup) return;
-        var mapRect = lmap.getContainer().getBoundingClientRect();
-        var popRect = popup.getBoundingClientRect();
-        if(popRect.left < mapRect.left + 8){
-          popup.style.left = (mapRect.left + 8 - popRect.left + parseFloat(popup.style.left||0)) + 'px';
-        }
-        if(popRect.right > mapRect.right - 8){
-          popup.style.left = (parseFloat(popup.style.left||0) - (popRect.right - mapRect.right + 8)) + 'px';
-        }
-        if(popRect.top < mapRect.top + 8){
-          var dy = mapRect.top + 8 - popRect.top;
-          lmap.panBy([0, -dy], {animate: true, duration: 0.2});
-        }
-        if(popRect.bottom > mapRect.bottom - 8){
-          var dy = popRect.bottom - mapRect.bottom + 8;
-          lmap.panBy([0, dy], {animate: true, duration: 0.2});
-        }
-      }, 50);
-    });
-  }
-  fixPopups();
-})();
-</script>
-"""
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+POPUP_FIX_PATH = os.path.join(_SCRIPT_DIR, "static", "popup_fix.js")
+
+
+def _load_popup_fix_js() -> str:
+    try:
+        with open(POPUP_FIX_PATH, "r", encoding="utf-8") as f:
+            return "<script>\n" + f.read() + "\n</script>"
+    except FileNotFoundError:
+        return ""
+
+
+POPUP_FIX_JS = _load_popup_fix_js()

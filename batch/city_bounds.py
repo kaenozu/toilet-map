@@ -59,8 +59,8 @@ def get_city_bounds(city: str, prefecture: str = "") -> Optional[dict]:
             results = json.loads(resp.read().decode("utf-8"))
     except Exception as e:
         logger.warning(f"Failed to fetch bounds for {key}: {e}")
-    finally:
-        time.sleep(1.1)  # Nominatim rate limit: 1 req/sec
+
+    time.sleep(1.1)  # Nominatim rate limit: 1 req/sec
 
     if not results:
         logger.warning(f"No results for: {query}")

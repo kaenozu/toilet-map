@@ -67,16 +67,20 @@ def get_schema_sql() -> list[str]:
 
 
 def dedupe_duplicate_toilets(cur: sqlite3.Cursor) -> int:
-    """既存の重複行を title/lat/lng 単位で 1 件にまとめる"""
+    """既存の重複行を座標単位で 1 件にまとめる。"""
     before = cur.execute("SELECT COUNT(*) FROM toilets").fetchone()[0]
     cur.execute(
         """
         DELETE FROM toilets
-        WHERE id NOT IN (
-            SELECT MIN(id)
-            FROM toilets
-            GROUP BY title, lat, lng
-        )
+        WHERE lat IS NOT NULL
+          AND lng IS NOT NULL
+          AND id NOT IN (
+              SELECT MIN(id)
+              FROM toilets
+              WHERE lat IS NOT NULL
+                AND lng IS NOT NULL
+              GROUP BY ROUND(lat, 5), ROUND(lng, 5)
+          )
         """
     )
     after = cur.execute("SELECT COUNT(*) FROM toilets").fetchone()[0]

@@ -19,9 +19,16 @@ def render_score_distribution(toilets: list):
     if not scored:
         return
     total = len(scored)
+    counts = [0] * len(SCORE_DISTRIBUTION_RANGES)
+    for t in scored:
+        s = t["toilet_score"]
+        for i, (lo, hi, _, _) in enumerate(SCORE_DISTRIBUTION_RANGES):
+            if lo <= s < hi:
+                counts[i] += 1
+                break
+
     bars_html = "<div style='margin-top:12px;'>"
-    for lo, hi, label, color in SCORE_DISTRIBUTION_RANGES:
-        count = sum(1 for t in scored if lo <= t["toilet_score"] < hi)
+    for count, (_, _, label, color) in zip(counts, SCORE_DISTRIBUTION_RANGES):
         pct = count / total * 100 if total > 0 else 0
         bars_html += (
             f"<div style='display:flex;align-items:center;margin:4px 0;font-size:13px;'>"

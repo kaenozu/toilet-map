@@ -5,31 +5,16 @@ batch/nationwide_runner.py
 import os
 import sys
 import subprocess
-import importlib
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from utils import file_lock
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 QUERY_LOCK_PATH = os.path.join(SCRIPT_DIR, ".queries.lock")
 
-
-def _load_prefectures() -> list[str]:
-    try:
-        return importlib.import_module("scoring_config").PREFECTURES
-    except ModuleNotFoundError:
-        return importlib.import_module("batch.scoring_config").PREFECTURES
-
-
-def _load_generate_queries_main():
-    try:
-        return importlib.import_module("generate_queries").main
-    except ModuleNotFoundError:
-        return importlib.import_module("batch.generate_queries").main
-
-
-PREFECTURES = _load_prefectures()
-generate_queries_main = _load_generate_queries_main()
+from scoring_config import PREFECTURES
+from generate_queries import main as generate_queries_main
 
 
 def collect_query_files(prefecture: str) -> list[Path]:

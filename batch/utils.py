@@ -4,8 +4,10 @@ Common utility functions for batch processing.
 """
 import json
 import os
+import sys
 import logging
 import gzip
+import re
 import time
 import tempfile
 from contextlib import contextmanager
@@ -69,6 +71,10 @@ def ensure_dir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
 
 
+def _normalize_address_text(address: str) -> str:
+    return re.sub(r"[\s\u3000/・,、\-()（）]+", "", address or "")
+
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 EXPANSION_STATUS_PATH = os.path.join(PROJECT_ROOT, "static", "expansion_status.json")
@@ -83,7 +89,8 @@ def read_json_file(path: str, default: Any) -> Any:
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning(f"Failed to read JSON file: {path} ({exc})")
         return default
 
 
@@ -175,17 +182,41 @@ def file_lock(path: str, timeout: float = 600.0, poll_interval: float = 0.5):
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
-try:
-    from scoring_config import PREFECTURES
-except ModuleNotFoundError:
-    from batch.scoring_config import PREFECTURES
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from scoring_config import PREFECTURES
+
+
+def _build_prefecture_aliases() -> dict[str, str]:
+    aliases: dict[str, str] = {}
+    for prefecture in PREFECTURES:
+        if prefecture == "北海道":
+            continue
+        if prefecture.endswith(("都", "道", "府", "県")):
+            alias = prefecture[:-1]
+            if alias:
+                aliases.setdefault(alias, prefecture)
+    return aliases
+
+
+PREFECTURE_ALIASES = _build_prefecture_aliases()
 
 
 def extract_prefecture(address: str) -> str:
     """住所文字列から都道府県を抽出"""
     if not address:
         return ""
+
+    normalized = _normalize_address_text(address)
+
     for pref in PREFECTURES:
-        if pref in address:
+        if pref in normalized:
             return pref
+
+    for alias, prefecture in sorted(PREFECTURE_ALIASES.items(), key=lambda item: len(item[0]), reverse=True):
+        if alias and alias in normalized:
+            return prefecture
+
+    if "北海道" in normalized:
+        return "北海道"
+
     return ""

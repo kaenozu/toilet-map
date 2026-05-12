@@ -93,6 +93,10 @@ LANGUAGES = {
     },
 }
 
+LANGUAGE_CODE_TO_LABEL = {
+    "ja": "日本語",
+    "en": "English",
+}
 LANGUAGE_OPTIONS = tuple(LANGUAGES.keys())
 APP_TITLE = LANGUAGES[DEFAULT_LANGUAGE]["title"]
 

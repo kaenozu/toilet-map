@@ -15,10 +15,6 @@ omit = [
     "batch/scrape_runner.py",
     "batch/kanto_phase1.py",
     "batch/nationwide_runner.py",
-    "batch/verify_data.py",
-    "batch/generate_queries.py",
-    "batch/city_bounds.py",
-    "batch/utils.py",
     "ui/styles.py",
 ]
 

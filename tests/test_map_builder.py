@@ -3,8 +3,9 @@ tests/test_map_builder.py
 ui/map_builder.py の回帰テスト
 """
 
+import pytest
 
-from ui.map_builder import _calc_fit_bounds, build_map
+from ui.map_builder import _calc_fit_bounds, _collect_valid_coordinates, _collect_valid_toilets, build_map
 
 
 def _make_toilet(title: str, lat: object, lng: object) -> dict:
@@ -38,6 +39,16 @@ class TestCalcFitBounds:
 
         assert bounds == [[35.67, 139.68], [35.69, 139.7]]
 
+    def test_deduplicates_same_coordinates_for_bounds(self):
+        toilets = [
+            _make_toilet("first", 35.68, 139.69),
+            _make_toilet("second", 35.68, 139.69),
+        ]
+
+        coords = _collect_valid_coordinates(toilets)
+
+        assert coords == [(35.68, 139.69)]
+
 
 class TestBuildMap:
     def test_skips_invalid_coordinates(self):
@@ -51,3 +62,16 @@ class TestBuildMap:
 
         assert "valid toilet" in html
         assert "invalid toilet" not in html
+
+    def test_deduplicates_same_coordinates(self):
+        toilets = [
+            _make_toilet("first toilet", 35.68, 139.69),
+            _make_toilet("second toilet", 35.68, 139.69),
+        ]
+
+        valid_toilets = _collect_valid_toilets(toilets)
+        m = build_map(toilets, 35.68, 139.69, 12)
+        html = m.get_root().render()
+
+        assert len(valid_toilets) == 1
+        assert "second toilet" not in html

@@ -103,7 +103,7 @@ def filter_by_viewport(df: pd.DataFrame, bounds: dict) -> pd.DataFrame:
     return df[mask]
 
 
-THRESHOLD = 10  # gap_analyzer.THRESHOLD と統一
+from app_config import THRESHOLD  # gap_analyzer.find_gaps のデフォルトしきい値と統一
 
 
 def _extract_bounds_coordinates(bounds: dict) -> tuple[float, float, float, float] | None:
