@@ -73,6 +73,7 @@ def run_scrape(pref: str, city: str, queries_rel: str, dry_run: bool = False) ->
     env = os.environ.copy()
     env["QUERIES"] = queries_abs
     env["PROGRESS_FILE"] = progress_file
+    env["SYNC_EVERY_SUCCESS"] = os.environ.get("SYNC_EVERY_SUCCESS", "10")
 
     cmd = [
         sys.executable,

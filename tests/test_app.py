@@ -5,6 +5,7 @@ app.py モジュールのユニットテスト
 import pytest
 import pandas as pd
 from ui.filters import filter_toilets, search_toilets
+from ui.query_params import resolve_ui_state_from_query_params, build_query_params_from_state
 
 
 class TestFilterToilets:
@@ -100,6 +101,16 @@ class TestEscaping:
         assert safe_href("https://maps.google.com/?q=test") == "https://maps.google.com/?q=test"
 
 
+class TestGeolocationScript:
+    def test_build_geolocation_js_returns_plain_object(self):
+        from app import build_geolocation_js
+
+        js = build_geolocation_js()
+        assert "resolve(pos.coords)" not in js
+        assert "latitude: pos.coords.latitude" in js
+        assert "longitude: pos.coords.longitude" in js
+
+
 class TestBuildPopupHtml:
     def test_build_popup_basic(self):
         from ui.popups import build_popup_html
@@ -137,36 +148,60 @@ class TestBuildPopupHtml:
         assert "onclick=" not in html
 
 
-class TestCardRendering:
-    def test_render_toilet_card_blocks_dangerous_link(self, monkeypatch):
-        from ui import components
+class TestQueryParamState:
+    def test_resolve_ui_state_from_query_params(self):
+        from app import get_translated_filters
+        from ui.i18n import get_language_strings
 
-        captured = {}
+        _, translated_to_internal = get_translated_filters("日本語")
+        t = get_language_strings("English")
 
-        def fake_markdown(html, unsafe_allow_html=False):
-            captured["html"] = html
-            captured["unsafe"] = unsafe_allow_html
-
-        monkeypatch.setattr(components.st, "markdown", fake_markdown)
-
-        components.render_toilet_card(
+        state = resolve_ui_state_from_query_params(
             {
-                "title": "テストトイレ",
-                "category": "公園",
-                "toilet_score": 85.0,
-                "confidence": 0.8,
-                "is_public_toilet": False,
-                "address": "東京都渋谷区",
-                "rating": 4.5,
-                "review_count": 100,
-                "link": 'javascript:alert(1)" onclick="alert(2)',
-            }
+                "pref": "東京都",
+                "filter": "公共トイレ",
+                "search": "駅",
+                "gps": "1",
+                "sort": "near",
+                "page": "3",
+            },
+            ["全て", "東京都"],
+            translated_to_internal,
+            t,
         )
 
-        assert captured["unsafe"] is True
-        assert "javascript:" not in captured["html"]
-        assert "onclick=" not in captured["html"]
+        assert state["pref_select"] == "東京都"
+        assert state["filter_select"] == "公共トイレ"
+        assert state["search_input"] == "駅"
+        assert state["gps_enabled"] is True
+        assert state["sort_select"] == t["sort_near"]
+        assert state["page"] == 3
 
+    def test_build_query_params_from_state(self):
+        from ui.i18n import get_language_strings
+
+        t = get_language_strings("English")
+
+        params = build_query_params_from_state(
+            "English",
+            "東京都",
+            "公共トイレ",
+            "駅",
+            t["sort_near"],
+            True,
+            3,
+            t,
+        )
+
+        assert params == {
+            "lang": "en",
+            "pref": "東京都",
+            "filter": "公共トイレ",
+            "search": "駅",
+            "sort": "near",
+            "gps": "1",
+            "page": "3",
+        }
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

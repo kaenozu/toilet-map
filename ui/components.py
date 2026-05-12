@@ -3,25 +3,37 @@ ui/components.py
 Streamlit UI components for toilet map
 """
 import streamlit as st
-from app_config import get_score_style, esc, safe_href
+from app_config import esc, get_score_style, safe_href
 from .types import ToiletDict
+
+
+def build_data_freshness_text(meta: dict, t: dict) -> str:
+    """生成日時と SQLite 同期日時を短い1行で返す。"""
+    generated_at = meta.get("last_updated") or "N/A"
+    synced_at = meta.get("db_synced_at") or "N/A"
+    return f"{t['freshness']} | {t['source_updated']} {generated_at} / {t['db_synced']} {synced_at}"
 
 
 def build_result_context_text(
     list_items: int,
-    total_items: int,
     map_items: int,
     filter_elapsed_ms: float | None = None,
     map_elapsed_ms: float | None = None,
+    t: dict | None = None,
 ) -> str:
     """一覧件数と地図件数、簡易計測結果を短い文で返す。"""
-    parts = [f"一覧 {list_items}件"]
-    parts.append(f"地図 {map_items}件")
+    labels = t or {}
+    list_label = labels.get("result_context_list", "一覧")
+    map_label = labels.get("result_context_map", "地図")
+    filter_label = labels.get("result_context_filter", "絞り込み")
+    count_suffix = labels.get("result_context_count_suffix", "件")
+    parts = [f"{list_label} {list_items}{count_suffix}"]
+    parts.append(f"{map_label} {map_items}{count_suffix}")
     timings = []
     if filter_elapsed_ms is not None:
-        timings.append(f"絞り込み {filter_elapsed_ms:.0f}ms")
+        timings.append(f"{filter_label} {filter_elapsed_ms:.0f}ms")
     if map_elapsed_ms is not None:
-        timings.append(f"地図 {map_elapsed_ms:.0f}ms")
+        timings.append(f"{map_label} {map_elapsed_ms:.0f}ms")
     if timings:
         parts.append(" / ".join(timings))
     return " | ".join(parts)
@@ -42,18 +54,25 @@ def render_score_legend():
     )
 
 
-def render_toilet_card(toilet: ToiletDict, rank: int = None):
+def render_toilet_card(toilet: ToiletDict, rank: int | None = None):
     """ランキングリストのトイレカード（1行）"""
     t = toilet
-    color, emoji, label = get_score_style(t["toilet_score"])
+    color, emoji, _ = get_score_style(t["toilet_score"])
     confidence_pct = int(t["confidence"] * 100)
 
-    public_tag = ' <span style="background:#e3f2fd;color:#1565c0;padding:1px 6px;border-radius:3px;font-size:10px;">公共</span>' if t.get("is_public_toilet") else ""
+    public_tag = (
+        ' <span style="background:#e3f2fd;color:#1565c0;padding:1px 6px;border-radius:3px;font-size:10px;">公共</span>'
+        if t.get("is_public_toilet")
+        else ""
+    )
 
     link_href = safe_href(t.get("link"))
-    link_start = f'<a href="{link_href}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit;">' if link_href else ""
+    link_start = (
+        f'<a href="{link_href}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit;">'
+        if link_href
+        else ""
+    )
     link_end = "</a>" if link_href else ""
-
     rank_html = f'<span style="color:#999;font-weight:600;min-width:24px;">#{rank}</span>' if rank else ""
 
     st.markdown(
@@ -85,3 +104,5 @@ def render_toilet_card(toilet: ToiletDict, rank: int = None):
         """,
         unsafe_allow_html=True,
     )
+
+

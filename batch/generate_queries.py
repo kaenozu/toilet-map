@@ -56,9 +56,21 @@ def load_prefectures() -> dict:
         return json.load(f)
 
 
+def _dedupe_queries(queries: list[str]) -> list[str]:
+    unique_queries: list[str] = []
+    seen = set()
+    for query in queries:
+        if query in seen:
+            continue
+        seen.add(query)
+        unique_queries.append(query)
+    return unique_queries
+
+
 def build_queries(locations: list[str], templates: list[str] | None = None) -> list[str]:
     templates = templates or CITY_QUERY_TEMPLATES
-    return [tmpl.format(city=location, place=location) for location in locations for tmpl in templates]
+    queries = [tmpl.format(city=location, place=location) for location in locations for tmpl in templates]
+    return _dedupe_queries(queries)
 
 
 def write_batches(
@@ -68,6 +80,7 @@ def write_batches(
     prefecture: str = "",
     start_index: int = 1,
 ) -> int:
+    queries = _dedupe_queries(queries)
     os.makedirs(output_dir, exist_ok=True)
     file_count = 0
     for i in range(0, len(queries), BATCH_SIZE):

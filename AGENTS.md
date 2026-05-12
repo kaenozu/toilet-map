@@ -27,8 +27,10 @@ pytest tests/ -v
 cd batch && kanto_phase1.bat
 
 # データ処理
-cd batch && python process_data.py raw_data.json ../data/toilets.json --full
-python process_data.py raw_data.json ../data/toilets.json --incremental
+cd batch && python process_data.py raw_data.json ../data/toilets.json.gz --full
+python process_data.py raw_data.json ../data/toilets.json.gz --incremental
+python to_sqlite.py ../data/toilets.json.gz --incremental
+python sync_db.py ../data/toilets.json.gz
 ```
 
 ## 設計方針
@@ -37,7 +39,7 @@ python process_data.py raw_data.json ../data/toilets.json --incremental
 - `app_config.py`: 定数定義のみ（スコア範囲、フィルタ定義、都道府県中心座標）
 - `ui/`: UI 表示専用（styles.py, components.py, popups.py）
 - `batch/`: スクレイピング・データ処理パイプライン
-- `data/toilets.json`: 処理済みデータ（コミット対象）
+- `data/toilets.json.gz`: 処理済みデータ（コミット対象）
 
 ## スコアリング
 

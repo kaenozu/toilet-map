@@ -4,6 +4,7 @@ ui/stats.py
 app.py から分離
 """
 import streamlit as st
+from app_config import SCORE_DISTRIBUTION_RANGES
 
 
 def calc_avg_score(toilets: list) -> float:
@@ -18,16 +19,16 @@ def render_score_distribution(toilets: list):
     if not scored:
         return
     total = len(scored)
-    ranges = [
-        (80, 101, "✨ 80-100", "#27ae60"),
-        (65, 80, "😊 65-79", "#2ecc71"),
-        (50, 65, "😐 50-64", "#f1c40f"),
-        (35, 50, "😨 35-49", "#f39c12"),
-        (0, 35, "💩 0-34", "#e74c3c"),
-    ]
+    counts = [0] * len(SCORE_DISTRIBUTION_RANGES)
+    for t in scored:
+        s = t["toilet_score"]
+        for i, (lo, hi, _, _) in enumerate(SCORE_DISTRIBUTION_RANGES):
+            if lo <= s < hi:
+                counts[i] += 1
+                break
+
     bars_html = "<div style='margin-top:12px;'>"
-    for lo, hi, label, color in ranges:
-        count = sum(1 for t in scored if lo <= t["toilet_score"] < hi)
+    for count, (_, _, label, color) in zip(counts, SCORE_DISTRIBUTION_RANGES):
         pct = count / total * 100 if total > 0 else 0
         bars_html += (
             f"<div style='display:flex;align-items:center;margin:4px 0;font-size:13px;'>"
@@ -43,7 +44,7 @@ def render_score_distribution(toilets: list):
 
 
 def render_stats(meta: dict, toilets: list, t: dict):
-    with st.expander(t["stats"]):
+    with st.expander(f"{t['stats']}（{t.get('stats_all', '全体')}）"):
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric(t["total"], meta.get("total", 0))

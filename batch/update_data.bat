@@ -18,9 +18,20 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Step 2: Verify
+REM Step 2: Sync JSON to SQLite
 echo.
-echo [2/3] Verifying data...
+echo [2/3] Syncing JSON to SQLite...
+python "%SCRIPT_DIR%sync_db.py"
+if errorlevel 1 (
+    echo.
+    echo [ERROR] SQLite sync failed.
+    pause
+    exit /b 1
+)
+
+REM Step 3: Verify synced data
+echo.
+echo [3/3] Verifying synced data...
 python "%SCRIPT_DIR%verify_data.py"
 if errorlevel 1 (
     echo.
@@ -29,7 +40,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Step 3: Done
+REM Final step: Done
 echo.
 echo [3/3] All done!
 echo Updated files:

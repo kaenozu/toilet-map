@@ -2,9 +2,12 @@
 ui/i18n.py
 Simple translation system for Japanese / English
 """
+DEFAULT_LANGUAGE = "日本語"
+
 LANGUAGES = {
     "日本語": {
         "title": "🚽 トイレきれい度マップ",
+        "language_label": "🌐 言語",
         "prefecture": "都道府県",
         "filter": "フィルタ",
         "search_label": "検索",
@@ -16,7 +19,6 @@ LANGUAGES = {
         "prev": "◀ 前へ",
         "next": "次へ ▶",
         "page": "ページ",
-        "download": "📥 CSVダウンロード",
         "gps": "📍 現在地を使用する (GPS)",
         "stats": "📊 統計",
         "total": "総数",
@@ -25,16 +27,30 @@ LANGUAGES = {
         "avg_score": "平均スコア",
         "distribution": "📊 スコア分布",
         "location_acquired": "現在地を取得しました",
+        "gps_error_hint": "ブラウザの位置情報設定を確認してください。",
+        "freshness": "データ鮮度",
+        "source_updated": "生成",
+        "db_synced": "DB同期",
+        "stats_all": "全体",
+        "no_results": "現在のフィルタにトイレが見つかりません。条件を変えてください。",
         "filter_all": "すべて",
         "filter_public": "公共トイレ",
+        "filter_multi": "多目的トイレ",
+        "filter_diaper": "おむつ替え",
+        "filter_wheelchair": "車椅子対応",
         "filter_cafe": "カフェ・飲食",
         "filter_convenience": "コンビニ・店舗",
         "filter_hotel": "ホテル・旅館",
         "filter_roadstation": "道の駅",
         "filter_sapa": "SA・PA",
+        "result_context_list": "一覧",
+        "result_context_map": "地図",
+        "result_context_filter": "絞り込み",
+        "result_context_count_suffix": "件",
     },
     "English": {
         "title": "🚽 Toilet Cleanliness Map",
+        "language_label": "🌐 Language",
         "prefecture": "Prefecture",
         "filter": "Filter",
         "search_label": "Search",
@@ -46,7 +62,6 @@ LANGUAGES = {
         "prev": "◀ Prev",
         "next": "Next ▶",
         "page": "Page",
-        "download": "📥 Download CSV",
         "gps": "📍 Use current location (GPS)",
         "stats": "📊 Statistics",
         "total": "Total",
@@ -55,12 +70,36 @@ LANGUAGES = {
         "avg_score": "Avg score",
         "distribution": "📊 Score Distribution",
         "location_acquired": "Location acquired",
+        "gps_error_hint": "Please check your browser location permission settings.",
+        "freshness": "Freshness",
+        "source_updated": "Generated",
+        "db_synced": "DB synced",
+        "stats_all": "All",
+        "no_results": "No toilets matched the current filters. Try changing the conditions.",
         "filter_all": "All",
         "filter_public": "Public toilets",
+        "filter_multi": "Multi-purpose toilet",
+        "filter_diaper": "Diaper changing",
+        "filter_wheelchair": "Wheelchair accessible",
         "filter_cafe": "Cafes & dining",
         "filter_convenience": "Convenience stores",
         "filter_hotel": "Hotels & inns",
         "filter_roadstation": "Road stations",
         "filter_sapa": "SA / PA",
+        "result_context_list": "List",
+        "result_context_map": "Map",
+        "result_context_filter": "Filter",
+        "result_context_count_suffix": " items",
     },
 }
+
+LANGUAGE_CODE_TO_LABEL = {
+    "ja": "日本語",
+    "en": "English",
+}
+LANGUAGE_OPTIONS = tuple(LANGUAGES.keys())
+APP_TITLE = LANGUAGES[DEFAULT_LANGUAGE]["title"]
+
+
+def get_language_strings(lang: str) -> dict[str, str]:
+    return LANGUAGES.get(lang, LANGUAGES[DEFAULT_LANGUAGE])

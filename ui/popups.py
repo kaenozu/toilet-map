@@ -109,16 +109,23 @@ def build_popup_html(t: ToiletDict) -> str:
             + rev_html
         )
 
-    addr = esc(t.get("address", ""))
+    def clean(s):
+        if not s: return ""
+        return esc(str(s)).replace("'", "\\'").replace("\n", " ").replace("\r", " ")
+
+    title_esc = clean(t['title'])
+    addr_esc = clean(t.get('address', ''))
+    cat_esc = clean(t.get('category', ''))
 
     return f"""
     <div style="font-family:'Segoe UI','Hiragino Sans','Noto Sans JP',sans-serif;padding:4px;
         max-width:100%;overflow-wrap:break-word;word-break:break-word;
         max-height:45vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
       <div style="font-size:14px;font-weight:700;margin-bottom:2px;line-height:1.3;">
-        {badge}{esc(t['title'])}
+        {badge}{title_esc}
       </div>
-      <div style="font-size:10px;color:#888;margin-bottom:4px;">{esc(t['category'])}</div>
+      <div style="font-size:10px;color:#888;margin-bottom:4px;">{cat_esc}</div>
+
 
       <div style="text-align:center;margin:4px 0;">
         <span style="font-size:24px;font-weight:800;color:{color};">{emoji} {t['toilet_score']:.0f}点</span>
@@ -132,7 +139,7 @@ def build_popup_html(t: ToiletDict) -> str:
         <div style="height:100%;width:{confidence_pct}%;background:{color};border-radius:2px;"></div>
       </div>
 
-      <div style="font-size:10px;color:#555;margin-bottom:1px;">📍 {addr}</div>
+      <div style="font-size:10px;color:#555;margin-bottom:1px;">📍 {addr_esc}</div>
       <div style="font-size:10px;color:#555;">⭐{t.get('rating', '-')} ({t.get('review_count', 0)}件) {phone_html}</div>
     {confidence_note_html}
       {kw_html}

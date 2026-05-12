@@ -6,289 +6,71 @@ Google Maps Scraper出力(JSONL)のデータ処理スクリプト
 """
 import json
 import gzip
-import re
+import os
 import sys
-from collections import Counter
 from datetime import datetime
-from typing import Optional, TypedDict
-from utils import load_jsonl, save_json, logger
-from scoring_config import (
-    SCORE_CLAMP_MIN,
-    SCORE_CLAMP_MAX,
+from typing import Optional
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import scoring
+from scoring import (
+    PlaceDict,
+    ToiletScoreInfo,
+    ToiletResultDict,
+    _extract_coordinates,
+    _normalize_identity_text,
+    compute_toilet_score,
+    is_toilet_place,
     DISPLAY_SCORE_OFFSET,
     DISPLAY_SCORE_MULTIPLIER,
-    CONFIDENCE_REVIEW_FACTOR,
-    CONFIDENCE_MIN,
-    RATING_THRESHOLD_HIGH,
-    RATING_THRESHOLD_LOW,
-    POSITIVE_BOOST_HIGH,
-    NEGATIVE_DAMPEN_HIGH,
-    POSITIVE_DAMPEN_LOW,
-    NEGATIVE_BOOST_LOW,
-    NEGATION_WINDOW,
-    NEGATION_WORDS,
-    POSITIVE_KEYWORDS,
-    NEGATIVE_KEYWORDS,
-    SENTENCE_SPLIT_RE,
-    TOILET_MENTION_RE,
-    AREA_NAME_RE,
-    PREFECTURES,
-    TOILET_CATEGORIES,
 )
+from scoring_config import AREA_NAME_RE
+from utils import load_jsonl, save_json, logger, extract_prefecture
 
 
-class PlaceDict(TypedDict, total=False):
-    """スクレイプされた地点データの型"""
-    title: str
-    category: str
-    address: str
-    latitude: float
-    longitude: float
-    phone: str
-    review_rating: float
-    review_count: int
-    link: str
-    user_reviews: list[dict]
-    user_reviews_extended: list[dict]
+def _build_toilet_result(place: PlaceDict, info: ToiletScoreInfo, lat: float, lng: float) -> Optional[ToiletResultDict]:
+    """スコア計算結果から表示用辞書を構築。救済対象外で情報もない場合は None を返す。"""
+    is_public = is_toilet_place(place)
+    
+    # トイレ関連の口コミが0件で、かつカテゴリー的にもトイレ（または公共・コンビニ等）ではない場合は除外
+    if info["toilet_review_count"] == 0 and not is_public:
+        # カテゴリーがトイレスポット（公園、駅、コンビニ等）であれば救済
+        cat = (place.get("category") or "").lower()
+        title = (place.get("title") or "").lower()
+        potentials = [
+            "公園", "駅", "道の駅", "サービスエリア", "パーキングエリア",
+            "カフェ", "喫茶", "レストラン", "食堂", "ダイニング", "コーヒー", "パン", "ケーキ",
+            "コンビニ", "スーパー", "ドラッグ", "ストア", "マート", "商店",
+            "ホテル", "旅館", "民宿", "ビジネスホテル",
+            "役場", "市役所", "図書館",
+        ]
+        if not any(p in cat or p in title for p in potentials):
+            return None
 
-
-class ToiletReviewDict(TypedDict):
-    """トイレビューの情報"""
-    text: str
-    rating: float | str | None
-    when: str | None
-    name: str | None
-    score: float
-    matched_keywords: list[str]
-    toilet_context: str
-
-
-class ToiletScoreInfo(TypedDict):
-    """スコア計算結果"""
-    score: float
-    confidence: float
-    toilet_review_count: int
-    toilet_reviews: list[ToiletReviewDict]
-    top_keywords: list[tuple[str, int]]
-
-
-class ToiletResultDict(TypedDict):
-    """処理済みトイレデータ"""
-    title: str
-    category: str
-    address: str
-    lat: float
-    lng: float
-    phone: str
-    rating: float
-    review_count: int
-    link: str
-    is_public_toilet: bool
-    toilet_score: float
-    confidence: float
-    toilet_review_count: int
-    top_keywords: list[tuple[str, int]]
-    sample_reviews: list[ToiletReviewDict]
-    prefecture: str
-
-
-def mentions_toilet(text: str) -> bool:
-    """テキストにトイレ固有の言及（トイレ、お手洗い、restroom等）が含まれるか判定。
-
-    本関数が False を返すレビューは、トイレとは無関係とみなし、
-    compute_toilet_score() でスコア計算対象から除外される。
-    """
-    return bool(TOILET_MENTION_RE.search(text))
-
-
-def _get_longitude(place: PlaceDict) -> float:
-    lon = place.get("longitude")
-    if lon is None:
-        lon = place.get("longtitude")
-    return float(lon or 0)
-
-
-def extract_toilet_contexts(text: str) -> list[str]:
-    """トイレが言及された文とその前後の文を抽出（2文分散ウィンドウ）"""
-    sentences = [s.strip() for s in SENTENCE_SPLIT_RE.split(text) if s.strip()]
-    toilet_indices = set()
-    for i, sent in enumerate(sentences):
-        if mentions_toilet(sent):
-            for j in range(max(0, i - 1), min(len(sentences), i + 2)):
-                toilet_indices.add(j)
-    return [sentences[i] for i in sorted(toilet_indices)] if toilet_indices else []
-
-
-def _apply_keyword_scoring(target_text: str) -> tuple[float, list[str]]:
-    """POSITIVE/NEGATIVE キーワード辞書に基づくスコアとマッチリストを返す"""
-    score = 0.0
-    matched = []
-    for kw, val in POSITIVE_KEYWORDS.items():
-        cnt = target_text.count(kw)
-        if cnt > 0:
-            score += val * cnt
-            matched.append(f"+{kw}")
-    for kw, val in NEGATIVE_KEYWORDS.items():
-        cnt = target_text.count(kw)
-        if cnt > 0:
-            score += val * cnt
-            matched.append(f"-{kw}")
-    return score, matched
-
-
-def _apply_negation_correction(target_text: str, score: float, matched: list[str]) -> tuple[float, list[str]]:
-    """否定語がキーワードの近く（NEGATION_WINDOW 文字以内）にあればスコアを打消し"""
-    matched = list(matched)
-    for neg_word in NEGATION_WORDS:
-        if neg_word not in target_text:
-            continue
-        neg_positions = [m.start() for m in re.finditer(re.escape(neg_word), target_text)]
-        for kw, val in POSITIVE_KEYWORDS.items():
-            if kw not in target_text:
-                continue
-            kw_positions = [m.start() for m in re.finditer(re.escape(kw), target_text)]
-            cancelled = False
-            for kp in kw_positions:
-                for np in neg_positions:
-                    if abs(kp - np) < NEGATION_WINDOW:
-                        score -= val
-                        tag = f"+{kw}"
-                        if tag in matched:
-                            matched.remove(tag)
-                        cancelled = True
-                        break
-                if cancelled:
-                    break
-    return score, matched
-
-
-def score_toilet_from_review(text: str) -> tuple[float, list[str]]:
-    """
-    レビュー1件分の文字列からトイレスコアとマッチキーワードを計算。
-
-    戻り値:
-      - score: スコア（SCORE_CLAMP_MIN〜SCORE_CLAMP_MAX でクランプ）
-      - matched: マッチしたキーワードリスト（+/- 接頭辞付き）
-    注意:
-      - 本関数は「トイレに関連するレビュー文」を想定。mentions_toilet() チェックは呼び出し元（compute_toilet_score）で行う。
-      - トイレ文脈が抽出できない場合、全文を対象にスコアリングする。
-    """
-    contexts = extract_toilet_contexts(text) or [text]
-    target_text = "。".join(contexts)
-    score, matched = _apply_keyword_scoring(target_text)
-    score, matched = _apply_negation_correction(target_text, score, matched)
-    return max(SCORE_CLAMP_MIN, min(SCORE_CLAMP_MAX, score)), matched
-
-
-def extract_prefecture(address: str) -> str:
-    if not address:
-        return ""
-    for pref in PREFECTURES:
-        if pref in address:
-            return pref
-    return ""
-
-
-def _adjust_by_rating(score: float, matched: list[str], rating: float) -> tuple[float, list[str]]:
-    if rating >= RATING_THRESHOLD_HIGH:
-        if score < 0:
-            score *= NEGATIVE_DAMPEN_HIGH
-            matched = [m for m in matched if not m.startswith("-")] + \
-                       [f"~{m[1:]}" for m in matched if m.startswith("-")]
-        elif score > 0:
-            score *= POSITIVE_BOOST_HIGH
-    elif rating <= RATING_THRESHOLD_LOW:
-        if score > 0:
-            score *= POSITIVE_DAMPEN_LOW
-            matched = [m for m in matched if not m.startswith("+")] + \
-                       [f"~{m[1:]}" for m in matched if m.startswith("+")]
-        elif score < 0:
-            score *= NEGATIVE_BOOST_LOW
-    return score, matched
-
-
-def compute_toilet_score(place: PlaceDict) -> ToiletScoreInfo:
-    """
-    プレイス（店舗）のレビューからトイレスコアを計算。
-
-    処理:
-      1. user_reviews / user_reviews_extended をマージ
-      2. mentions_toilet() でトイレ関連レビューを選択
-      3. score_toilet_from_review() で個別スコア計算
-      4. レビュー評価（Rating）による補正
-      5. 最終スコア = レビュー平均スコア × 0.7 + 店舗評価 × 0.3
-      6. 信頼度 = min(1.0, トイレビュー数 / CONFIDENCE_MAX_REVIEWS)
-
-    戻り値:
-      score: -5.0〜+5.0 の範囲でクランプ
-      confidence: 0.0〜1.0
-      toilet_review_count: トイレ関連レビュー数
-      toilet_reviews: スコア付きレビューリスト（最大20件）
-      top_keywords: 出現頻度上位5キーワード
-    """
-    reviews = (place.get("user_reviews") or []) + (place.get("user_reviews_extended") or [])
-    toilet_reviews = []
-    total_score = 0.0
-    all_highlights = []
-    seen_descs = set()
-
-    for r in reviews:
-        desc = r.get("Description", "")
-        if not desc or not desc.strip() or not mentions_toilet(desc):
-            continue
-        desc_key = desc.strip()[:100]
-        if desc_key in seen_descs:
-            continue
-        seen_descs.add(desc_key)
-
-        s, matched = score_toilet_from_review(desc)
-        rating = float(r.get("Rating") or 0)
-        s, matched = _adjust_by_rating(s, matched, rating)
-        s = max(SCORE_CLAMP_MIN, min(SCORE_CLAMP_MAX, s))
-
-        toilet_reviews.append({
-            "text": desc,
-            "rating": r.get("Rating"),
-            "when": r.get("When"),
-            "name": r.get("Name"),
-            "score": round(s, 2),
-            "matched_keywords": matched,
-            "toilet_context": "。".join(extract_toilet_contexts(desc)),
-        })
-        total_score += s
-        all_highlights.extend(matched)
-
-    if toilet_reviews:
-        avg_score = total_score / len(toilet_reviews)
-        place_rating = float(place.get("review_rating") or 0)
-        final_score = avg_score * 0.7 + (place_rating - 3.0) * 0.3
-        # 信頼度 = トイレビュー数 / 5 (最大1.0)
-        confidence = min(1.0, len(toilet_reviews) / CONFIDENCE_REVIEW_FACTOR)
-    else:
-        place_rating = float(place.get("review_rating") or 0)
-        if place_rating > 0:
-            final_score = (place_rating - 3.0) * 0.5
-            confidence = CONFIDENCE_MIN
-        else:
-            final_score = 0.0
-            confidence = 0.0
-
-    final_score = max(SCORE_CLAMP_MIN, min(SCORE_CLAMP_MAX, final_score))
-    highlight_counts = Counter(all_highlights)
-
+    display_score = (info["score"] + DISPLAY_SCORE_OFFSET) * DISPLAY_SCORE_MULTIPLIER
+    
+    # スコアがない地点（口コミなし救済地点）のデフォルト値を調整
+    if info["confidence"] == 0:
+        display_score = 50.0  # デフォルト「普通」
+    
     return {
-        "score": round(final_score, 2),
-        "confidence": round(confidence, 2),
-        "toilet_review_count": len(toilet_reviews),
-        "toilet_reviews": toilet_reviews[:20],
-        "top_keywords": highlight_counts.most_common(5),
+        "title": place.get("title", ""),
+        "category": place.get("category", ""),
+        "address": place.get("address", ""),
+        "lat": lat,
+        "lng": lng,
+        "phone": place.get("phone", ""),
+        "rating": float(place.get("review_rating") or 0),
+        "review_count": int(place.get("review_count") or 0),
+        "link": place.get("link", ""),
+        "is_public_toilet": is_public,
+        "toilet_score": round(display_score, 1),
+        "confidence": info["confidence"],
+        "toilet_review_count": info["toilet_review_count"],
+        "top_keywords": info["top_keywords"],
+        "sample_reviews": info["toilet_reviews"][:5],
+        "prefecture": extract_prefecture(place.get("address", "")),
     }
-
-
-def is_toilet_place(place: PlaceDict) -> bool:
-    cat = (place.get("category") or "").lower()
-    title = (place.get("title") or "").lower()
-    return any(tc.lower() in cat or tc.lower() in title for tc in TOILET_CATEGORIES)
 
 
 def process_place(place: PlaceDict) -> Optional[ToiletResultDict]:
@@ -306,47 +88,37 @@ def process_place(place: PlaceDict) -> Optional[ToiletResultDict]:
     戻り値:
       ToiletResultDict 形式の辞書、または None
     """
-    lat = place.get("latitude")
-    lon = place.get("longitude")
-    if lon is None:
-        lon = place.get("longtitude")
-    if not lat or not lon:
+    lat, lon = _extract_coordinates(place)
+    if lat is None or lon is None:
         return None
     title = place.get("title", "")
     if not title:
         return None
 
     info = compute_toilet_score(place)
-    display_score = (info["score"] + DISPLAY_SCORE_OFFSET) * DISPLAY_SCORE_MULTIPLIER
-
-    return {
-        "title": title,
-        "category": place.get("category", ""),
-        "address": place.get("address", ""),
-        "lat": float(lat),
-        "lng": float(lon),
-        "phone": place.get("phone", ""),
-        "rating": float(place.get("review_rating") or 0),
-        "review_count": int(place.get("review_count") or 0),
-        "link": place.get("link", ""),
-        "is_public_toilet": is_toilet_place(place),
-        "toilet_score": round(display_score, 1),
-        "confidence": info["confidence"],
-        "toilet_review_count": info["toilet_review_count"],
-        "top_keywords": info["top_keywords"],
-        "sample_reviews": info["toilet_reviews"][:5],
-        "prefecture": extract_prefecture(place.get("address", "")),
-    }
+    return _build_toilet_result(place, info, lat, lon)
 
 
 def make_place_key(place: PlaceDict) -> str:
-    lat = float(place.get("latitude") or 0)
-    lng = _get_longitude(place)
-    return f"{place.get('title', '')}@{lat:.4f},{lng:.4f}"
+    place_id = str(place.get("place_id") or "").strip()
+    if place_id:
+        return f"place_id:{place_id}"
+
+    data_id = str(place.get("data_id") or "").strip()
+    if data_id:
+        return f"data_id:{data_id}"
+
+    lat, lng = _extract_coordinates(place)
+    if lat is not None and lng is not None:
+        return f"coords:{lat:.6f},{lng:.6f}"
+
+    title = _normalize_identity_text(place.get("title"))
+    address = _normalize_identity_text(place.get("address"))
+    return f"title_address:{title}|{address}"
 
 
 def make_result_key(result: ToiletResultDict) -> str:
-    return f"{result['title']}@{result['lat']:.4f},{result['lng']:.4f}"
+    return f"coords:{float(result['lat']):.6f},{float(result['lng']):.6f}"
 
 
 def load_existing(path: str) -> dict:
@@ -362,7 +134,8 @@ def load_existing(path: str) -> dict:
                 return json.load(f)
         except FileNotFoundError:
             continue
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            logger.warning(f"Failed to parse existing toilet data: {candidate} ({exc})")
             return {"metadata": None, "toilets": []}
     return {"metadata": None, "toilets": []}
 
@@ -407,7 +180,7 @@ def build_metadata(results: list[ToiletResultDict]) -> dict:
                 area_name = m.group(1)
 
     zoom = calc_dynamic_zoom(results)
-    now = datetime.now().strftime("%Y-%m-%d")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     return {
         "total": len(results),
