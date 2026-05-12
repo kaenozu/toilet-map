@@ -14,7 +14,6 @@ from typing import Optional
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CACHE_FILE = os.path.join(SCRIPT_DIR, "city_bounds_cache.json")
 
-# 簡易ロガー
 logger = logging.getLogger(__name__)
 if not logger.handlers:
     handler = logging.StreamHandler()

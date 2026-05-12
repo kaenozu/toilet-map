@@ -52,23 +52,19 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None):
             else:
                 t["sample_reviews"] = json.loads(sample_reviews_json)
 
-        # 都道府県別の統計を pandas groupby で計算
-        pdf = pd.DataFrame(toilets)
-        if pdf.empty or "prefecture" not in pdf.columns:
-            prefecture_stats = {}
-        else:
-            valid = pdf[pdf["prefecture"].notna() & (pdf["prefecture"] != "")]
-            if valid.empty:
-                prefecture_stats = {}
-            else:
-                grouped = valid.groupby("prefecture").agg(
-                    count=("lat", "size"),
-                    center_lat=("lat", "mean"),
-                    center_lng=("lng", "mean"),
-                )
-                prefecture_stats = grouped.to_dict("index")
+        # 都道府県別の統計（中心座標など）を動的に計算
+        pref_stats = {}
+        for t in toilets:
+            pref = t.get("prefecture")
+            if not pref:
+                continue
+            if pref not in pref_stats:
+                pref_stats[pref] = {"count": 0, "lats": [], "lngs": []}
+            pref_stats[pref]["count"] += 1
+            pref_stats[pref]["lats"].append(t["lat"])
+            pref_stats[pref]["lngs"].append(t["lng"])
 
-        return {"metadata": metadata, "toilets": toilets, "pref_stats": prefecture_stats}
+        return {"metadata": metadata, "toilets": toilets, "pref_stats": pref_stats}
     except Exception as e:
         st.error(f"データベース読み込みエラー: {e}")
         return {"metadata": ERROR_METADATA, "toilets": [], "pref_stats": {}}

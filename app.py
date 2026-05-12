@@ -7,6 +7,8 @@ from time import perf_counter
 
 import streamlit as st
 from streamlit_folium import st_folium
+from streamlit_js_eval import streamlit_js_eval
+from app_config import FILTER_CONFIG
 from ui.styles import MOBILE_CSS
 from ui.components import build_data_freshness_text, build_result_context_text, render_score_legend, render_toilet_card
 from ui.data_loader import load_toilet_data, toilets_to_dataframe, get_prefectures, get_data_cache_token

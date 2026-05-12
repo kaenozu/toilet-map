@@ -8,9 +8,12 @@ JSON データを SQLite データベースに変換し、検索と読み込み�
   - data/toilets.db (出力 DB)
 """
 import sqlite3
+import json
+import gzip
+import math
 import os
 import sys
-import math
+from utils import logger
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_JSON_PATH = os.path.join(SCRIPT_DIR, "..", "data", "toilets.json.gz")
