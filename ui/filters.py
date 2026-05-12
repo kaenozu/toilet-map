@@ -16,8 +16,8 @@ def haversine_distance(lat1: float, lon1: float, lat2: float | pd.Series, lon2: 
     if isinstance(lat2, pd.Series):
         lat1_rad = np.radians(lat1)
         lon1_rad = np.radians(lon1)
-        lat2_rad = np.radians(lat2.values)
-        lon2_rad = np.radians(lon2.values)
+        lat2_rad = np.radians(lat2)
+        lon2_rad = np.radians(lon2)
 
         dlat = lat2_rad - lat1_rad
         dlon = lon2_rad - lon1_rad
@@ -45,7 +45,7 @@ def _apply_equipment_filter(df: pd.DataFrame, pattern: str) -> pd.DataFrame:
     }
     col = column_map.get(pattern)
     if col and col in df.columns:
-        return df[df[col] == True]
+        return df[df[col]]
     return df
 
 

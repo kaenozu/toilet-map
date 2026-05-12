@@ -3,7 +3,6 @@ tests/test_pagination.py
 ui/pagination.py のユニットテスト
 """
 import pytest
-import pandas as pd
 from ui.pagination import (
     calc_pagination, PER_PAGE,
 )

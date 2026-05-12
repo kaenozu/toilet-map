@@ -2,7 +2,6 @@
 tests/test_filters.py
 ui/filters.py のユニットテスト
 """
-import numpy as np
 import pytest
 import pandas as pd
 from ui.filters import filter_toilets, search_toilets, haversine_distance, filter_by_viewport, get_underserved_areas_in_viewport
@@ -114,12 +113,13 @@ class TestHaversineDistance:
         assert 390 < d < 420
 
     def test_series_input(self):
-        lat2 = pd.Series([35.70, 34.69])
-        lng2 = pd.Series([139.70, 135.50])
+        lat2 = pd.Series([35.70, 34.69], index=["tokyo", "osaka"])
+        lng2 = pd.Series([139.70, 135.50], index=["tokyo", "osaka"])
         result = haversine_distance(35.68, 139.69, lat2, lng2)
-        assert isinstance(result, (np.ndarray, pd.Series))
+        assert isinstance(result, pd.Series)
+        assert list(result.index) == ["tokyo", "osaka"]
         assert len(result) == 2
-        assert result[0] < 5.0
+        assert result["tokyo"] < 5.0
 
 
 class TestViewportFilters:

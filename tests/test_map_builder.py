@@ -3,7 +3,6 @@ tests/test_map_builder.py
 ui/map_builder.py の回帰テスト
 """
 
-import pytest
 
 from ui.map_builder import _calc_fit_bounds, build_map
 

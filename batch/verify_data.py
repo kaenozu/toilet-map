@@ -7,7 +7,6 @@ Phase 1 スクレイピング後のデータ品質を検証
 import json
 import os
 import sqlite3
-import gzip
 from collections import Counter
 from typing import Iterable
 

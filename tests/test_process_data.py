@@ -37,6 +37,16 @@ class TestKeywordScoring:
         score, matched = pd_module._apply_scoring_and_negation(text)
         assert score < 0
 
+    def test_empty_keyword_lists_do_not_match_empty_strings(self, monkeypatch):
+        monkeypatch.setattr(pd_module, "POSITIVE_KEYWORDS", {})
+        monkeypatch.setattr(pd_module, "NEGATIVE_KEYWORDS", {})
+        monkeypatch.setattr(pd_module, "NEGATION_WORDS", [])
+
+        score, matched = pd_module._apply_scoring_and_negation("トイレが清潔です")
+
+        assert score == 0
+        assert matched == []
+
 
 class TestNegationCorrection:
     def test_negation_reduces(self):

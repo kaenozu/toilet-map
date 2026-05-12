@@ -126,13 +126,16 @@ def _apply_scoring_and_negation(target_text: str) -> tuple[float, list[str]]:
     score = 0.0
     matched_tags = []
 
+    def _compile_keywords(words: list[str]) -> re.Pattern:
+        return re.compile("|".join(re.escape(word) for word in words)) if words else re.compile(r"\b\B")
+
     # キーワードを長い順にソートした正規表現を作成
     pos_sorted = sorted(POSITIVE_KEYWORDS.keys(), key=len, reverse=True)
     neg_sorted = sorted(NEGATIVE_KEYWORDS.keys(), key=len, reverse=True)
-    
-    pos_pattern = re.compile('|'.join(re.escape(k) for k in pos_sorted))
-    neg_pattern = re.compile('|'.join(re.escape(k) for k in neg_sorted))
-    negation_pattern = re.compile('|'.join(re.escape(w) for w in NEGATION_WORDS))
+
+    pos_pattern = _compile_keywords(pos_sorted)
+    neg_pattern = _compile_keywords(neg_sorted)
+    negation_pattern = _compile_keywords(NEGATION_WORDS)
 
     # 否定語の全位置を事前に取得
     neg_word_positions = [m.start() for m in negation_pattern.finditer(target_text)]
@@ -316,7 +319,7 @@ def _extract_coordinates(place: PlaceDict) -> tuple[Optional[float], Optional[fl
 def _build_toilet_result(place: PlaceDict, info: ToiletScoreInfo, lat: float, lng: float) -> Optional[ToiletResultDict]:
     """スコア計算結果から表示用辞書を構築。救済対象外で情報もない場合は None を返す。"""
     is_public = is_toilet_place(place)
-    
+
     # トイレ関連の口コミが0件で、かつカテゴリー的にもトイレ（または公共・コンビニ等）ではない場合は除外
     if info["toilet_review_count"] == 0 and not is_public:
         # カテゴリーがトイレスポット（公園、駅、コンビニ等）であれば救済
@@ -333,11 +336,11 @@ def _build_toilet_result(place: PlaceDict, info: ToiletScoreInfo, lat: float, ln
             return None
 
     display_score = (info["score"] + DISPLAY_SCORE_OFFSET) * DISPLAY_SCORE_MULTIPLIER
-    
+
     # スコアがない地点（口コミなし救済地点）のデフォルト値を調整
     if info["confidence"] == 0:
         display_score = 50.0  # デフォルト「普通」
-    
+
     return {
         "title": place.get("title", ""),
         "category": place.get("category", ""),

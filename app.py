@@ -3,12 +3,14 @@ toilet-map/app.py
 Streamlit版トイレきれい度マップ
 """
 
+from time import perf_counter
+
 import streamlit as st
-import streamlit.components.v1 as components
+from streamlit_folium import st_folium
 from streamlit_js_eval import streamlit_js_eval
 from app_config import FILTER_CONFIG
 from ui.styles import MOBILE_CSS
-from ui.components import build_data_freshness_text, render_score_legend
+from ui.components import build_data_freshness_text, build_result_context_text, render_score_legend, render_toilet_card
 from ui.data_loader import load_toilet_data, toilets_to_dataframe, get_prefectures, get_data_cache_token
 from ui.filters import filter_toilets, search_toilets
 from ui.stats import render_stats
@@ -116,6 +118,7 @@ def main():
     sort_order = st.radio(t["sort_label"], [t["sort_clean"], t["sort_near"]], horizontal=True)
 
     user_lat, user_lng = user_location if user_location else (None, None)
+    filter_started_at = perf_counter()
     filtered = filter_toilets(df, internal_filter, selected_pref, user_lat, user_lng)
     filtered = search_toilets(filtered, search_query)
 
@@ -123,25 +126,41 @@ def main():
         filtered = filtered.sort_values("distance", ascending=True)
     else:
         filtered = filtered.sort_values("toilet_score", ascending=False)
+    filter_elapsed_ms = (perf_counter() - filter_started_at) * 1000
 
     map_lat, map_lng, map_zoom = calc_map_center(selected_pref, meta, prefecture_stats)
     total_items = len(filtered)
 
     map_items = filtered.to_dict("records")
+    display_items = filtered
 
     st.markdown(f"**{total_items}{t['showing']}**")
     render_score_legend()
 
+    map_started_at = perf_counter()
     m = build_map(map_items, map_lat, map_lng, map_zoom)
+    map_elapsed_ms = (perf_counter() - map_started_at) * 1000
 
-    components.html(m.get_root().render(), height=500, scrolling=False)
-    display_items = filtered
+    st.caption(
+        build_result_context_text(
+            len(display_items),
+            len(map_items),
+            filter_elapsed_ms,
+            map_elapsed_ms,
+            t,
+        )
+    )
+    st_folium(m, height=500, returned_objects=[], use_container_width=True)
 
     # ===== 統計を地図の下に表示 =====
     render_stats(meta, map_items, t)
 
     if len(display_items) == 0:
         st.info(t["no_results"])
+    else:
+        st.divider()
+        for i, (_, row) in enumerate(display_items.iterrows()):
+            render_toilet_card(row.to_dict(), rank=i + 1)
 
 
 if __name__ == "__main__":
