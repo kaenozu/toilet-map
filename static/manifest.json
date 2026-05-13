@@ -1,0 +1,10 @@
+{
+  "name": "トイレきれい度マップ",
+  "short_name": "トイレマップ",
+  "description": "Google Mapsの口コミからトイレのきれい度を自動判定",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a73e8",
+  "icons": []
+}

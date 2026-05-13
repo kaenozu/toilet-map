@@ -140,7 +140,11 @@ def build_map(
     valid_toilets = _collect_valid_toilets(toilets)
 
     cluster = MarkerCluster(
-        options={"maxClusterRadius": calc_cluster_radius(len(valid_toilets)), "spiderfyOnMaxZoom": True},
+        options={
+            "maxClusterRadius": calc_cluster_radius(len(valid_toilets)),
+            "spiderfyOnMaxZoom": True,
+            "disableClusteringAtZoom": 15,
+        },
         name="トイレ",
     ).add_to(m)
 

@@ -101,14 +101,16 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
 
     links_html = _build_links_html(t)
 
+    aria_label = f"{esc(t['title'])} - {t['toilet_score']:.0f}点"
     return f"""
-    <div class="toilet-card" style="display:flex;align-items:center;gap:10px;padding:8px 12px;
+    <div class="toilet-card" role="listitem" aria-label="{aria_label}"
+        style="display:flex;align-items:center;gap:10px;padding:8px 12px;
         background:#ffffff;color:#222222;border-radius:8px;margin-bottom:4px;
         border:1px solid #e0e0e0;min-height:60px;
         -webkit-tap-highlight-color:transparent;">
         {rank_html}
         <div style="min-width:50px;text-align:center;">
-            <div style="font-size:24px;font-weight:800;color:{color};line-height:1;">{emoji}</div>
+            <div aria-hidden="true" style="font-size:24px;font-weight:800;color:{color};line-height:1;">{emoji}</div>
             <div style="font-size:14px;font-weight:700;color:{color};">{t['toilet_score']:.0f}</div>
         </div>
         <div style="flex:1;min-width:0;color:#222222;">

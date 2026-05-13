@@ -12,6 +12,7 @@ from ui.components import build_data_freshness_text, build_result_context_text, 
 from ui.data_loader import load_toilet_data, toilets_to_dataframe, get_prefectures, get_data_cache_token
 from ui.filters import filter_toilets, search_toilets
 from ui.stats import render_stats
+from ui.data_quality import render_data_quality
 from ui.map_builder import build_map, calc_map_center
 from ui.i18n import APP_TITLE, DEFAULT_LANGUAGE, get_language_strings
 from ui.pagination import init_page_state, reset_page, calc_pagination, render_pagination
@@ -35,6 +36,26 @@ def main():
             display: none !important;
         }
         </style>
+        <link rel="manifest" href="/static/manifest.json">
+        <meta name="theme-color" content="#1a73e8">
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        """
+        <script>
+        document.addEventListener('keydown', function(e) {
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+          if (e.key === 'g' && !e.ctrlKey && !e.metaKey) {
+            var gps = document.querySelector('input[aria-label*="GPS" i]');
+            if (gps) { gps.click(); e.preventDefault(); }
+          }
+          if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+            var search = document.querySelector('input[aria-label*="検索" i]');
+            if (search) { search.focus(); e.preventDefault(); }
+          }
+        });
+        </script>
         """,
         unsafe_allow_html=True,
     )
@@ -111,6 +132,7 @@ def main():
     st_folium(m, height=500, returned_objects=[], use_container_width=True)
 
     render_stats(meta, map_items, t)
+    render_data_quality(meta, toilets, t)
 
     if total_items > 0:
         render_pagination(total_items, page, total_pages, t)
@@ -119,8 +141,10 @@ def main():
         st.info(t["no_results"])
     else:
         st.divider()
+        st.markdown('<div role="list">', unsafe_allow_html=True)
         for i, (_, row) in enumerate(display_items.iterrows()):
             render_toilet_card(row.to_dict(), rank=i + 1, meta=meta)
+        st.markdown('</div>', unsafe_allow_html=True)
 
     write_query_params(
         build_query_params_from_state(
