@@ -13,6 +13,9 @@ import tempfile
 from contextlib import contextmanager
 from typing import Any
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from scoring_config import PREFECTURES
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -30,6 +33,7 @@ try:
     import fcntl
 except ImportError:  # pragma: no cover - Windows fallback only
     fcntl = None
+
 
 def load_jsonl(path: str) -> list[dict[str, Any]]:
     """Load JSONL file into a list of dictionaries."""
@@ -180,10 +184,6 @@ def file_lock(path: str, timeout: float = 600.0, poll_interval: float = 0.5):
                 msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
             elif fcntl is not None:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from scoring_config import PREFECTURES
 
 
 def _build_prefecture_aliases() -> dict[str, str]:

@@ -42,11 +42,14 @@ class TestKeywordScoring:
         assert score < 0
 
     def test_empty_keyword_lists_do_not_match_empty_strings(self, monkeypatch):
-        monkeypatch.setattr(pd_module, "POSITIVE_KEYWORDS", {})
-        monkeypatch.setattr(pd_module, "NEGATIVE_KEYWORDS", {})
-        monkeypatch.setattr(pd_module, "NEGATION_WORDS", [])
+        monkeypatch.setattr(scoring, "POSITIVE_KEYWORDS", {})
+        monkeypatch.setattr(scoring, "NEGATIVE_KEYWORDS", {})
+        monkeypatch.setattr(scoring, "NEGATION_WORDS", [])
+        monkeypatch.setattr(scoring, "_POS_PATTERN", type("", (), {"finditer": lambda _, t: []})())
+        monkeypatch.setattr(scoring, "_NEG_PATTERN", type("", (), {"finditer": lambda _, t: []})())
+        monkeypatch.setattr(scoring, "_NEGATION_PATTERN", type("", (), {"finditer": lambda _, t: []})())
 
-        score, matched = pd_module._apply_scoring_and_negation("トイレが清潔です")
+        score, matched = scoring._apply_scoring_and_negation("トイレが清潔です")
 
         assert score == 0
         assert matched == []

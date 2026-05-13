@@ -12,7 +12,6 @@ from datetime import datetime
 from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import scoring
 from scoring import (
     PlaceDict,
     ToiletScoreInfo,
@@ -21,17 +20,15 @@ from scoring import (
     _normalize_identity_text,
     compute_toilet_score,
     is_toilet_place,
-    DISPLAY_SCORE_OFFSET,
-    DISPLAY_SCORE_MULTIPLIER,
 )
-from scoring_config import AREA_NAME_RE
+from scoring_config import AREA_NAME_RE, DISPLAY_SCORE_OFFSET, DISPLAY_SCORE_MULTIPLIER
 from utils import load_jsonl, save_json, logger, extract_prefecture
 
 
 def _build_toilet_result(place: PlaceDict, info: ToiletScoreInfo, lat: float, lng: float) -> Optional[ToiletResultDict]:
     """スコア計算結果から表示用辞書を構築。救済対象外で情報もない場合は None を返す。"""
     is_public = is_toilet_place(place)
-    
+
     # トイレ関連の口コミが0件で、かつカテゴリー的にもトイレ（または公共・コンビニ等）ではない場合は除外
     if info["toilet_review_count"] == 0 and not is_public:
         # カテゴリーがトイレスポット（公園、駅、コンビニ等）であれば救済
@@ -48,11 +45,11 @@ def _build_toilet_result(place: PlaceDict, info: ToiletScoreInfo, lat: float, ln
             return None
 
     display_score = (info["score"] + DISPLAY_SCORE_OFFSET) * DISPLAY_SCORE_MULTIPLIER
-    
+
     # スコアがない地点（口コミなし救済地点）のデフォルト値を調整
     if info["confidence"] == 0:
         display_score = 50.0  # デフォルト「普通」
-    
+
     return {
         "title": place.get("title", ""),
         "category": place.get("category", ""),

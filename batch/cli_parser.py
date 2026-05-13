@@ -5,7 +5,6 @@ scrape_runner.py の CLI 引数解析とクエリファイルからの都市・�
 import sys
 import os
 import re
-from typing import Optional
 from utils import logger
 
 FILTER_CITY = os.environ.get("CITY", "")

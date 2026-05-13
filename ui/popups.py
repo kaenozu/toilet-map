@@ -110,7 +110,8 @@ def build_popup_html(t: ToiletDict) -> str:
         )
 
     def clean(s):
-        if not s: return ""
+        if not s:
+            return ""
         return esc(str(s)).replace("'", "\\'").replace("\n", " ").replace("\r", " ")
 
     title_esc = clean(t['title'])

@@ -6,6 +6,7 @@ import math
 import numpy as np
 import pandas as pd
 from typing import Optional
+from app_config import THRESHOLD
 from app_config import FILTER_CONFIG, PUBLIC_FILTER_VALUE
 
 EARTH_RADIUS_KM = 6371.0
@@ -101,9 +102,6 @@ def filter_by_viewport(df: pd.DataFrame, bounds: dict) -> pd.DataFrame:
         (df["lng"] >= sw_lng) & (df["lng"] <= ne_lng)
     )
     return df[mask]
-
-
-from app_config import THRESHOLD  # gap_analyzer.find_gaps のデフォルトしきい値と統一
 
 
 def _extract_bounds_coordinates(bounds: dict) -> tuple[float, float, float, float] | None:

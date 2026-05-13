@@ -9,12 +9,11 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from utils import file_lock
+from scoring_config import PREFECTURES
+from generate_queries import main as generate_queries_main
 
 SCRIPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 QUERY_LOCK_PATH = os.path.join(SCRIPT_DIR, ".queries.lock")
-
-from scoring_config import PREFECTURES
-from generate_queries import main as generate_queries_main
 
 
 def collect_query_files(prefecture: str) -> list[Path]:

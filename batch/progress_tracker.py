@@ -4,7 +4,7 @@ batch/progress_tracker.py
 進捗ファイルの読み書き、ステータス公開、パーツファイルマージ
 """
 import os
-from utils import logger, update_expansion_status
+from utils import update_expansion_status
 
 PROGRESS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.environ.get("PROGRESS_FILE", ".progress"))
 

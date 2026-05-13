@@ -23,7 +23,7 @@ from progress_tracker import (
     PROGRESS_FILE as DEFAULT_PROGRESS_FILE,
 )
 from cli_parser import parse_args, detect_city_from_queries
-from pipeline import run_postprocess_pipeline, SYNC_LOCK_PATH
+from pipeline import run_postprocess_pipeline
 
 # ============================================================
 # 設定

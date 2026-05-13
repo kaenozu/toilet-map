@@ -2,14 +2,10 @@
 tests/test_batch_verification.py
 データ検証・品質ゲート関連の回帰テスト（test_batch_regressions.py から分割）
 """
-import json
 import sqlite3
-
-import pytest
 
 import db_utils
 import gap_analyzer
-import auto_expand
 import verify_data
 import sync_db
 

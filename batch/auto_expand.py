@@ -9,15 +9,13 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from pathlib import Path
-
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from utils import logger
 from db_utils import load_json
 from gap_analyzer import find_gaps, get_stats
 from expansion_query import (
-    CITY_QUERY_BUDGET_TEMPLATES,
-    PREFECTURE_QUERY_BUDGET_TEMPLATES,
+    CITY_QUERY_BUDGET_TEMPLATES,  # noqa: F401
+    PREFECTURE_QUERY_BUDGET_TEMPLATES,  # noqa: F401
     query_limits_for_count,
     set_active_context,
     _slugify,

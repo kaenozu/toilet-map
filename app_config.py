@@ -3,6 +3,7 @@ app_config.py
 Shared configuration constants for toilet map app
 """
 import html
+import os
 from urllib.parse import urlparse
 
 DATA_PATH = "data/toilets.json.gz"
@@ -144,8 +145,6 @@ PREFECTURE_CENTERS = {
     "鹿児島県": (31.5601, 130.5580),
     "沖縄県": (26.2124, 127.6809),
 }
-
-import os
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 POPUP_FIX_PATH = os.path.join(_SCRIPT_DIR, "static", "popup_fix.js")

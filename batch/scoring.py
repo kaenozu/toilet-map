@@ -13,8 +13,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from scoring_config import (
     SCORE_CLAMP_MIN,
     SCORE_CLAMP_MAX,
-    DISPLAY_SCORE_OFFSET,
-    DISPLAY_SCORE_MULTIPLIER,
     CONFIDENCE_REVIEW_FACTOR,
     CONFIDENCE_MIN,
     RATING_THRESHOLD_HIGH,
@@ -31,7 +29,7 @@ from scoring_config import (
     TOILET_MENTION_RE,
     TOILET_CATEGORIES,
 )
-from utils import extract_prefecture, logger
+from utils import logger as _unused_logger  # noqa: F401
 
 
 class PlaceDict(TypedDict, total=False):

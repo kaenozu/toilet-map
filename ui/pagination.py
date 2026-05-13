@@ -3,7 +3,7 @@ ui/pagination.py
 ページネーション状態管理
 app.py から分離
 """
-
+import streamlit as st
 
 PER_PAGE = 20
 

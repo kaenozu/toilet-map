@@ -3,7 +3,7 @@ ui/query_params.py
 URL query parameter handling for Streamlit app.
 """
 import streamlit as st
-from ui.i18n import LANGUAGE_CODE_TO_LABEL, LANGUAGE_OPTIONS
+from ui.i18n import LANGUAGE_CODE_TO_LABEL
 
 
 def normalize_query_params(raw_params: dict) -> dict[str, str]:
