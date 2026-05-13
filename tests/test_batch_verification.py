@@ -537,3 +537,75 @@ class TestFindGapsEdgeCases:
         gaps = find_gaps(stats, threshold=5, include_catalog=True)
         prefectures_in_gaps = {g["city"] for g in gaps}
         assert "新宿区" in prefectures_in_gaps
+
+
+class TestGetExpectedPrefecturesEdgeCases:
+    def test_skips_non_directory_entries(self, tmp_path, monkeypatch):
+        queries_d = tmp_path / "queries.d"
+        queries_d.mkdir()
+        tokyo = queries_d / "東京都"
+        tokyo.mkdir()
+        (tokyo / "batch_001.txt").write_text("q1\n", encoding="utf-8")
+        (queries_d / "file.txt").write_text("not a dir", encoding="utf-8")
+        monkeypatch.setattr(verify_data, "QUERIES_D", str(queries_d))
+        result = verify_data.get_expected_prefectures()
+        assert result == ["東京都"]
+
+
+class TestMainKantoMode:
+    def test_kanto_label_when_no_queries_dir(self, monkeypatch, capsys):
+        monkeypatch.setattr(verify_data, "QUERIES_D", "/nonexistent")
+        data = {"metadata": {"total": 1, "scored": 1, "public_toilets": 0,
+                             "last_updated": "2026-01-01"},
+                "toilets": [{"title": "A", "address": "東京都", "prefecture": "東京都",
+                             "toilet_score": 80.0, "confidence": 0.8,
+                             "is_public_toilet": True, "lat": 35.0, "lng": 139.0}]}
+        monkeypatch.setattr(verify_data, "load_data", lambda: data)
+        monkeypatch.setattr(verify_data, "collect_sqlite_metrics", lambda path: None)
+        result = verify_data.main()
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "Kanto Phase 1" in captured.out
+
+    def test_with_sqlite_metrics_and_duplicates_and_warnings(self, monkeypatch, capsys):
+        data = {"metadata": {"total": 3, "scored": 2, "public_toilets": 1,
+                             "last_updated": "2026-05-13", "prefecture_counts": {"東京都": 3}},
+                "toilets": [
+                    {"title": "A", "address": "東京都", "prefecture": "東京都",
+                     "toilet_score": 80.0, "confidence": 0.8,
+                     "is_public_toilet": True, "lat": 35.0, "lng": 139.0,
+                     "link": "https://maps.google.com/a"},
+                    {"title": "B", "address": "東京都", "prefecture": "東京都",
+                     "toilet_score": 75.0, "confidence": 0.5,
+                     "is_public_toilet": False, "lat": 35.0, "lng": 139.0,
+                     "link": "https://maps.google.com/b"},
+                    {"title": "C", "address": "", "prefecture": "", "toilet_score": None,
+                     "is_public_toilet": False, "lat": 36.0, "lng": 140.0,
+                     "link": "https://maps.google.com/c"},
+                ]}
+        monkeypatch.setattr(verify_data, "load_data", lambda: data)
+        monkeypatch.setattr(verify_data, "get_expected_prefectures", lambda: ["東京都"])
+        monkeypatch.setattr(verify_data, "count_queries_for_pref", lambda pref: 10)
+
+        def fake_collect_quality(t):
+            return {"total": 3, "missing_score": 1, "missing_prefecture": 1,
+                    "missing_address": 1, "duplicates": [
+                        {"key": ("place_id", "dup"), "link": ""},
+                    ], "prefecture_counts": {"東京都": 3}}
+
+        def fake_sqlite_metrics(path):
+            return {"total": 3, "scored": 2, "public_toilets": 1,
+                    "metadata": {"last_updated": "2026-05-13", "db_synced_at": "2026-05-13"},
+                    "prefecture_counts": {"東京都": 3}}
+
+        monkeypatch.setattr(verify_data, "collect_quality_metrics", fake_collect_quality)
+        monkeypatch.setattr(verify_data, "collect_sqlite_metrics", fake_sqlite_metrics)
+        monkeypatch.setattr(verify_data, "compare_sqlite_metrics",
+                            lambda meta, sqlite: (["sqlite error"], ["sqlite warning"]))
+
+        result = verify_data.main()
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "sqlite error" in captured.out
+        assert "sqlite warning" in captured.out
+        assert "duplicate" in captured.out.lower()
