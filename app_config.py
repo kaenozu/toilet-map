@@ -3,6 +3,8 @@ app_config.py
 Shared configuration constants for toilet map app
 """
 import html
+import os
+from urllib.parse import urlparse
 
 DATA_PATH = "data/toilets.json.gz"
 DB_PATH = "data/toilets.db"
@@ -21,14 +23,48 @@ SCORE_RANGES = [
     (0, "#e74c3c", "💩", "要注意"),
 ]
 
+SCORE_DISTRIBUTION_RANGES = [
+    (80, 101, "✨ 80-100", "#27ae60"),
+    (65, 80, "😊 65-79", "#2ecc71"),
+    (50, 65, "😐 50-64", "#f1c40f"),
+    (35, 50, "😨 35-49", "#f39c12"),
+    (0, 35, "💩 0-34", "#e74c3c"),
+]
+
 FILTER_CONFIG = {
     "すべて": None,
-    "公共トイレ": "__public__",
+    "公共トイレ": "__public__",  # 特殊値: is_public_toilet == True でフィルタ
+    "多目的トイレ": "__keyword__multi",  # top_keywords に含まれるかでフィルタ
+    "おむつ替え": "__keyword__diaper",
+    "車椅子対応": "__keyword__wheelchair",
     "カフェ・飲食": "カフェ|喫茶|レストラン|食堂|ダイニング|コーヒー|パン|ケーキ",
     "コンビニ・店舗": "コンビニ|スーパー|ドラッグ|ストア|マート|商店",
     "ホテル・旅館": "ホテル|旅馆|民宿|ビジネスホテル",
     "道の駅": "道の駅",
     "SA・PA": "サービスエリア|パーキングエリア",
+}
+
+# app.py で使うフィルタ表示名 → i18n キーの対応
+FILTER_I18N_KEYS = {
+    "すべて": "filter_all",
+    "公共トイレ": "filter_public",
+    "多目的トイレ": "filter_multi",
+    "おむつ替え": "filter_diaper",
+    "車椅子対応": "filter_wheelchair",
+    "カフェ・飲食": "filter_cafe",
+    "コンビニ・店舗": "filter_convenience",
+    "ホテル・旅館": "filter_hotel",
+    "道の駅": "filter_roadstation",
+    "SA・PA": "filter_sapa",
+}
+
+PUBLIC_FILTER_VALUE = "__public__"
+
+# top_keywords から抽出する設備フィルタのキーワード定義
+EQUIPMENT_KEYWORDS = {
+    "multi": {"多目的トイレ", "多目的", "多機能"},
+    "diaper": {"おむつ", "オムツ", "おむつ替え", "おむつ交換"},
+    "wheelchair": {"車椅子", "車いす", "バリアフリー"},
 }
 
 PUBLIC_MARKER_RADIUS = 14
@@ -39,10 +75,30 @@ TILE_OPTIONS = {
     "モノクロ（Cartodb）": "CartoDB positron",
 }
 
+# ギャップ検出しきい値（gap_analyzer.find_gaps と統一）
+THRESHOLD = 10
+
+# UI表示上限
+MAX_SAMPLE_REVIEWS = 2  # ポップアップ内の最大レビュー数
+REVIEW_TEXT_MAX_LENGTH = 120  # レビュー文の最大表示文字数
+MAX_KEYWORD_TAGS = 5  # ポップアップ内の最大キーワードタグ数
+
 
 def esc(text):
     """HTMLエスケープ"""
     return html.escape(str(text or ""), quote=True) if text else ""
+
+
+def safe_href(url):
+    """安全な外部リンクだけを href に使える文字列に変換する"""
+    if not url:
+        return ""
+    parsed = urlparse(str(url).strip())
+    if parsed.scheme not in {"http", "https"}:
+        return ""
+    if not parsed.netloc:
+        return ""
+    return html.escape(parsed.geturl(), quote=True)
 
 
 def get_score_style(score: float) -> tuple[str, str, str]:
@@ -53,6 +109,7 @@ def get_score_style(score: float) -> tuple[str, str, str]:
     return SCORE_RANGES[-1][1:]
 
 
+# 各都道府県の代表座標（Google Maps に基づく簡易中心点）
 PREFECTURE_CENTERS = {
     "北海道": (43.0642, 141.3469),
     "青森県": (40.8226, 140.6379),
@@ -103,42 +160,16 @@ PREFECTURE_CENTERS = {
     "沖縄県": (26.2124, 127.6809),
 }
 
-POPUP_FIX_JS = """
-<script>
-(function(){
-  function fixPopups(){
-    var mapEl = document.getElementById('map');
-    if(!mapEl) { setTimeout(fixPopups, 500); return; }
-    var lmap = null;
-    for(var k in window){
-      try{ if(window[k] && window[k].getContainer && window[k].getContainer()===mapEl){ lmap=window[k]; break; } }catch(e){}
-    }
-    if(!lmap){ setTimeout(fixPopups, 500); return; }
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+POPUP_FIX_PATH = os.path.join(_SCRIPT_DIR, "static", "popup_fix.js")
 
-    lmap.on('popupopen', function(e){
-      setTimeout(function(){
-        var popup = e.popup._container;
-        if(!popup) return;
-        var mapRect = lmap.getContainer().getBoundingClientRect();
-        var popRect = popup.getBoundingClientRect();
-        if(popRect.left < mapRect.left + 8){
-          popup.style.left = (mapRect.left + 8 - popRect.left + parseFloat(popup.style.left||0)) + 'px';
-        }
-        if(popRect.right > mapRect.right - 8){
-          popup.style.left = (parseFloat(popup.style.left||0) - (popRect.right - mapRect.right + 8)) + 'px';
-        }
-        if(popRect.top < mapRect.top + 8){
-          var dy = mapRect.top + 8 - popRect.top;
-          lmap.panBy([0, -dy], {animate: true, duration: 0.2});
-        }
-        if(popRect.bottom > mapRect.bottom - 8){
-          var dy = popRect.bottom - mapRect.bottom + 8;
-          lmap.panBy([0, dy], {animate: true, duration: 0.2});
-        }
-      }, 50);
-    });
-  }
-  fixPopups();
-})();
-</script>
-"""
+
+def _load_popup_fix_js() -> str:
+    try:
+        with open(POPUP_FIX_PATH, "r", encoding="utf-8") as f:
+            return "<script>\n" + f.read() + "\n</script>"
+    except FileNotFoundError:
+        return ""
+
+
+POPUP_FIX_JS = _load_popup_fix_js()

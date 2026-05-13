@@ -89,6 +89,16 @@ class TestBuildPopupHtml:
         html = build_popup_html(toilet)
         assert "公共トイレ" not in html
 
+    def test_low_confidence_shows_reference_note(self):
+        toilet = {
+            "title": "信頼度確認トイレ", "category": "公園", "toilet_score": 58.0,
+            "toilet_review_count": 1, "confidence": 0.2, "is_public_toilet": False,
+            "address": "東京都", "rating": 4.0, "review_count": 3,
+            "sample_reviews": [], "top_keywords": [],
+        }
+        html = build_popup_html(toilet)
+        assert "参考値" in html
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

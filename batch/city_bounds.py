@@ -58,8 +58,8 @@ def get_city_bounds(city: str, prefecture: str = "") -> Optional[dict]:
             results = json.loads(resp.read().decode("utf-8"))
     except Exception as e:
         logger.warning(f"Failed to fetch bounds for {key}: {e}")
-    finally:
-        time.sleep(1.1)  # Nominatim rate limit: 1 req/sec
+
+    time.sleep(1.1)  # Nominatim rate limit: 1 req/sec
 
     if not results:
         logger.warning(f"No results for: {query}")
@@ -98,11 +98,13 @@ def filter_raw_data(input_path: str, output_path: str, city_name: str, bounds: O
             except json.JSONDecodeError:
                 continue
 
-            address_match = city_name in entry.get("address", "")
+            address_match = bool(city_name) and city_name in entry.get("address", "")
             coord_match = False
             if bounds:
                 lat = entry.get("latitude")
-                lng = entry.get("longtitude") or entry.get("longitude")
+                lng = entry.get("longitude")
+                if lng is None:
+                    lng = entry.get("longtitude")
                 if lat and lng:
                     coord_match = is_in_bounds(float(lat), float(lng), bounds)
 

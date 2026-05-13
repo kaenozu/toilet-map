@@ -1,36 +1,82 @@
 """
-verify_data.py
+batch/verify_data.py
 Phase 1 スクレイピング後のデータ品質を検証
 実行: python verify_data.py
-関連: data/toilets.json, batch/queries.d/
+関連: data/toilets.json.gz, batch/queries.d/, quality_metrics.py
 """
 import json
 import os
-from collections import Counter
+import gzip
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "toilets.json")
+from quality_metrics import (
+    collect_quality_metrics,
+    collect_sqlite_metrics,
+    compare_sqlite_metrics,
+    evaluate_quality_gate,
+    _format_duplicate_key,
+)
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(SCRIPT_DIR, "..", "data")
+DATA_PATHS = [
+    os.path.join(DATA_DIR, "toilets.json.gz"),
+    os.path.join(DATA_DIR, "toilets.json"),
+]
+DB_PATH = os.path.join(DATA_DIR, "toilets.db")
 QUERIES_D = os.path.join(os.path.dirname(__file__), "queries.d")
 
 KANTO_PREFECTURES = ["埼玉県", "東京都", "千葉県", "神奈川県", "茨城県", "栃木県", "群馬県"]
 
 
 def load_data():
-    with open(DATA_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+    for path in DATA_PATHS:
+        if os.path.exists(path):
+            if path.endswith(".gz"):
+                with gzip.open(path, "rt", encoding="utf-8") as f:
+                    return json.load(f)
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    raise FileNotFoundError(DATA_PATHS[0])
+
+
+def get_expected_prefectures() -> list[str]:
+    if not os.path.isdir(QUERIES_D):
+        return KANTO_PREFECTURES
+    prefectures = []
+    for entry in sorted(os.listdir(QUERIES_D)):
+        pref_dir = os.path.join(QUERIES_D, entry)
+        if not os.path.isdir(pref_dir):
+            continue
+        if any(name.startswith("batch_") and name.endswith(".txt") for name in os.listdir(pref_dir)):
+            prefectures.append(entry)
+    return prefectures or KANTO_PREFECTURES
 
 
 def count_queries_for_pref(pref: str) -> int:
-    """queries.d/<pref>/batch_001.txt のクエリ数をカウント"""
-    path = os.path.join(QUERIES_D, pref, "batch_001.txt")
-    if not os.path.exists(path):
+    pref_dir = os.path.join(QUERIES_D, pref)
+    if not os.path.isdir(pref_dir):
         return 0
-    with open(path, "r", encoding="utf-8") as f:
-        return sum(1 for line in f if line.strip() and not line.startswith("#"))
+    total = 0
+    for name in sorted(os.listdir(pref_dir)):
+        if not (name.startswith("batch_") and name.endswith(".txt")):
+            continue
+        path = os.path.join(pref_dir, name)
+        with open(path, "r", encoding="utf-8") as f:
+            total += sum(1 for line in f if (stripped := line.strip()) and not stripped.startswith("#"))
+    return total
 
 
 def main():
+    expected_prefectures = get_expected_prefectures()
+    if expected_prefectures == KANTO_PREFECTURES:
+        label = "Kanto Phase 1"
+    elif len(expected_prefectures) == 1:
+        label = expected_prefectures[0]
+    else:
+        label = f"{len(expected_prefectures)} prefectures"
+
     print("=" * 60)
-    print("  Data Verification - Kanto Phase 1")
+    print(f"  Data Verification - {label}")
     print("=" * 60)
     print()
 
@@ -38,55 +84,60 @@ def main():
     toilets = data["toilets"]
     meta = data.get("metadata", {})
 
-    # 基本統計
+    metrics = collect_quality_metrics(toilets)
+    sqlite_metrics = collect_sqlite_metrics(DB_PATH)
+    errors, warnings = evaluate_quality_gate(metrics, expected_prefectures)
+
+    if sqlite_metrics:
+        compare_meta = dict(meta)
+        compare_meta.setdefault("prefecture_counts", metrics["prefecture_counts"])
+        sqlite_errors, sqlite_warnings = compare_sqlite_metrics(compare_meta, sqlite_metrics)
+        errors.extend(sqlite_errors)
+        warnings.extend(sqlite_warnings)
+
     print("[SUMMARY]")
-    print(f"  Total toilets    : {len(toilets)}")
+    print(f"  Total toilets    : {metrics['total']}")
     print(f"  With reviews     : {meta.get('scored', 'N/A')}")
     print(f"  Public toilets   : {meta.get('public_toilets', 'N/A')}")
     print(f"  Last updated     : {meta.get('last_updated', 'N/A')}")
     print()
 
-    # 都道府県別
-    pref_counts = Counter(t.get("prefecture", "不明") for t in toilets)
+    pref_counts = metrics["prefecture_counts"]
     print("[PREFECTURE DISTRIBUTION]")
-    for pref in KANTO_PREFECTURES:
+    for pref in expected_prefectures:
         cnt = pref_counts.get(pref, 0)
         expected = count_queries_for_pref(pref)
         status = "OK" if cnt > 0 else "WARN"
-        print(f"  {status} {pref}: {cnt} toilets (expected ~{expected} queries × ~12 results)")
+        print(f"  {status} {pref}: {cnt} toilets (expected ~{expected} queries x ~12 results)")
     others = {p: c for p, c in pref_counts.items() if p not in KANTO_PREFECTURES}
     if others:
         print(f"  Others: {others}")
     print()
 
-    # データ completeness
-    missing_score = sum(1 for t in toilets if t.get("toilet_score") is None)
-    missing_city = sum(1 for t in toilets if not t.get("city"))
-    missing_addr = sum(1 for t in toilets if not t.get("address"))
     print("[COMPLETENESS]")
-    print(f"  Missing score     : {missing_score}/{len(toilets)}")
-    print(f"  Missing city      : {missing_city}/{len(toilets)}")
-    print(f"  Missing address   : {missing_addr}/{len(toilets)}")
+    print(f"  Missing score     : {metrics['missing_score']}/{metrics['total']}")
+    print(f"  Missing prefecture: {metrics['missing_prefecture']}/{metrics['total']}")
+    print(f"  Missing address   : {metrics['missing_address']}/{metrics['total']}")
     print()
 
-    # 重複チェック（同じ title+address）
-    seen = {}
-    duplicates = []
-    for t in toilets:
-        key = (t.get("title", ""), t.get("address", ""))
-        if key in seen:
-            duplicates.append((key, t["link"]))
-        else:
-            seen[key] = t["link"]
+    if sqlite_metrics:
+        print("[SQLITE]")
+        print(f"  Total toilets    : {sqlite_metrics['total']}")
+        print(f"  With reviews     : {sqlite_metrics['scored']}")
+        print(f"  Public toilets   : {sqlite_metrics['public_toilets']}")
+        print(f"  Last updated     : {sqlite_metrics['metadata'].get('last_updated', 'N/A')}")
+        print(f"  DB synced at     : {sqlite_metrics['metadata'].get('db_synced_at', 'N/A')}")
+        print()
+
+    duplicates = metrics["duplicates"]
     if duplicates:
         print(f"[DUPLICATES] {len(duplicates)} duplicate records found:")
-        for (title, addr), link in duplicates[:5]:
-            print(f"  - {title} / {addr[:30]}...")
+        for duplicate in duplicates[:5]:
+            print(f"  - {_format_duplicate_key(duplicate['key'])}")
     else:
         print("[DUPLICATES] None found")
     print()
 
-    # スコア分布
     scores = [t["toilet_score"] for t in toilets if t.get("toilet_score") is not None]
     if scores:
         print("[SCORE DISTRIBUTION]")
@@ -95,10 +146,24 @@ def main():
             print(f"  {s}.0 - {s+1:.1f}: {pct:.1f}%")
     print()
 
+    if warnings:
+        print("[WARNINGS]")
+        for warning in warnings:
+            print(f"  - {warning}")
+        print()
+
+    if errors:
+        print("[ERRORS]")
+        for error in errors:
+            print(f"  - {error}")
+        print()
+
     print("=" * 60)
     print("  Verification complete")
     print("=" * 60)
 
+    return 1 if errors else 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

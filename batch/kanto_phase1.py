@@ -73,6 +73,7 @@ def run_scrape(pref: str, city: str, queries_rel: str, dry_run: bool = False) ->
     env = os.environ.copy()
     env["QUERIES"] = queries_abs
     env["PROGRESS_FILE"] = progress_file
+    env["SYNC_EVERY_SUCCESS"] = os.environ.get("SYNC_EVERY_SUCCESS", "10")
 
     cmd = [
         sys.executable,
@@ -166,7 +167,7 @@ def main():
         logger.info("Cleaned up phase progress file.")
 
     logger.info("\nNext steps:")
-    logger.info("  1. Verify data: python -c \"import json; d=json.load(open('data/toilets.json')); print('Total:', d['metadata']['total'])\"")
+    logger.info("  1. Verify data: python -c \"import gzip, json; d=json.load(gzip.open('data/toilets.json.gz', 'rt', encoding='utf-8')); print('Total:', d['metadata']['total'])\"")
     logger.info("  2. Run app: streamlit run app.py")
 
 

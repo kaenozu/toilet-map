@@ -10,8 +10,8 @@ SCORE_CLAMP_MAX = 5.0
 DISPLAY_SCORE_OFFSET = 5
 DISPLAY_SCORE_MULTIPLIER = 10
 
-CONFIDENCE_MAX_REVIEWS = 5.0
-CONFIDENCE_LOW = 0.1
+CONFIDENCE_REVIEW_FACTOR = 5.0  # レビュー数で信頼度を正規化する際の係数（5レビューで1.0）
+CONFIDENCE_MIN = 0.1  # 信頼度下限（レビューなしの場合）
 
 RATING_THRESHOLD_HIGH = 4
 RATING_THRESHOLD_LOW = 2
@@ -24,8 +24,7 @@ NEGATION_WINDOW = 30
 
 NEGATION_WORDS = [
     "ない", "なし", "なく", "ません", "無い",
-    "残念", "ひどい", "酷い", "最悪", "問題", "不満",
-    "がっかり", "だらけ", "されてない", "されていない",
+    "されてない", "されていない",
 ]
 
 POSITIVE_KEYWORDS = {
