@@ -6,12 +6,26 @@ StreamlitのサイドバーUIを描画する
 関連ファイル: app.py, ui/i18n.py, ui/query_params.py, ui/data_loader.py
 """
 
+from typing import NamedTuple
+
 import streamlit as st
 from streamlit_js_eval import streamlit_js_eval
 from app_config import FILTER_CONFIG, FILTER_I18N_KEYS
 from ui.i18n import LANGUAGES, LANGUAGE_OPTIONS, get_language_strings
 from ui.query_params import resolve_ui_state_from_query_params
 from ui.submission_form import render_submission_form
+
+
+class SidebarResult(NamedTuple):
+    t: dict
+    lang: str
+    selected_pref: str
+    filter_type: str
+    search_query: str
+    sort_order: str
+    user_location: tuple | None
+    gps_enabled: bool
+    translated_to_internal: dict
 
 
 def get_translated_filters(lang: str) -> tuple[dict, dict]:
@@ -42,10 +56,8 @@ def build_geolocation_js() -> str:
 def render_sidebar(
     t: dict,
     prefectures: list[str],
-    translated_filters: dict,
-    translated_to_internal: dict,
     query_params: dict,
-) -> tuple[dict, str, str, str, str, str, tuple | None, bool]:
+) -> SidebarResult:
     with st.sidebar:
         lang = st.selectbox(t["language_label"], LANGUAGE_OPTIONS, key="lang_select")
         t = get_language_strings(lang)
@@ -114,13 +126,14 @@ def render_sidebar(
         st.divider()
         render_submission_form(t)
 
-    return (
-        t,
-        lang,
-        selected_pref,
-        filter_type,
-        search_query,
-        sort_order,
-        user_location,
-        gps_enabled,
+    return SidebarResult(
+        t=t,
+        lang=lang,
+        selected_pref=selected_pref,
+        filter_type=filter_type,
+        search_query=search_query,
+        sort_order=sort_order,
+        user_location=user_location,
+        gps_enabled=gps_enabled,
+        translated_to_internal=translated_to_internal,
     )

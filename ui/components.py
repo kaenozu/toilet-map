@@ -76,11 +76,13 @@ def _build_links_html(t: ToiletDict) -> str:
     return "".join(parts)
 
 
-def build_toilet_card_html(toilet: ToiletDict, meta: dict | None = None) -> str:
+def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: dict | None = None) -> str:
     """トイレカードのHTMLを返す"""
     t = toilet
     color, emoji, _ = get_score_style(t["toilet_score"])
     confidence_pct = int(t["confidence"] * 100)
+
+    rank_html = f'<span style="color:#999;font-weight:600;min-width:24px;">#{rank}</span>' if rank else ""
 
     freshness_badge = ""
     if meta and meta.get("updated_at"):
@@ -104,6 +106,7 @@ def build_toilet_card_html(toilet: ToiletDict, meta: dict | None = None) -> str:
         background:#ffffff;color:#222222;border-radius:8px;margin-bottom:4px;
         border:1px solid #e0e0e0;min-height:60px;
         -webkit-tap-highlight-color:transparent;">
+        {rank_html}
         <div style="min-width:50px;text-align:center;">
             <div style="font-size:24px;font-weight:800;color:{color};line-height:1;">{emoji}</div>
             <div style="font-size:14px;font-weight:700;color:{color};">{t['toilet_score']:.0f}</div>
@@ -127,6 +130,6 @@ def build_toilet_card_html(toilet: ToiletDict, meta: dict | None = None) -> str:
     """.strip()
 
 
-def render_toilet_card(toilet: ToiletDict, meta: dict | None = None):
+def render_toilet_card(toilet: ToiletDict, rank: int | None = None, meta: dict | None = None):
     """ランキングリストのトイレカード（1行）"""
-    st.markdown(build_toilet_card_html(toilet, meta), unsafe_allow_html=True)
+    st.markdown(build_toilet_card_html(toilet, rank, meta), unsafe_allow_html=True)

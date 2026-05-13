@@ -14,15 +14,15 @@ from collections import Counter
 from functools import lru_cache
 from typing import Any
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.abspath(os.path.join(_SCRIPT_DIR, ".."))
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
-from utils import extract_prefecture
-from utils import logger
+for p in (_SCRIPT_DIR, _PROJECT_ROOT):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
-from app_config import THRESHOLD
+from utils import extract_prefecture, logger  # noqa: E402
+
+from app_config import THRESHOLD  # noqa: E402
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))

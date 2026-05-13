@@ -19,7 +19,7 @@ from ui.query_params import (
     read_query_params, write_query_params, apply_language_query_param,
     build_query_params_from_state,
 )
-from ui.sidebar import render_sidebar, get_translated_filters
+from ui.sidebar import render_sidebar
 
 
 def main():
@@ -45,7 +45,6 @@ def main():
 
     current_lang = st.session_state.get("lang_select", DEFAULT_LANGUAGE)
     t = get_language_strings(current_lang)
-    translated_filters, translated_to_internal = get_translated_filters(current_lang)
 
     data = load_toilet_data(get_data_cache_token())
     meta = data["metadata"]
@@ -55,10 +54,16 @@ def main():
     df = toilets_to_dataframe(toilets)
     prefectures = get_prefectures(df)
 
-    t, lang, selected_pref, filter_type, search_query, sort_order, user_location, gps_enabled = render_sidebar(
-        t, prefectures, translated_filters, translated_to_internal, query_params
-    )
-    translated_filters, translated_to_internal = get_translated_filters(lang)
+    sidebar_result = render_sidebar(t, prefectures, query_params)
+    t = sidebar_result.t
+    lang = sidebar_result.lang
+    selected_pref = sidebar_result.selected_pref
+    filter_type = sidebar_result.filter_type
+    search_query = sidebar_result.search_query
+    sort_order = sidebar_result.sort_order
+    user_location = sidebar_result.user_location
+    gps_enabled = sidebar_result.gps_enabled
+    translated_to_internal = sidebar_result.translated_to_internal
 
     internal_filter = translated_to_internal[filter_type]
     user_lat, user_lng = user_location if user_location else (None, None)
@@ -114,8 +119,8 @@ def main():
         st.info(t["no_results"])
     else:
         st.divider()
-        for _, row in display_items.iterrows():
-            render_toilet_card(row.to_dict(), meta)
+        for i, (_, row) in enumerate(display_items.iterrows()):
+            render_toilet_card(row.to_dict(), rank=i + 1, meta=meta)
 
     write_query_params(
         build_query_params_from_state(
