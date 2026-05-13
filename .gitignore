@@ -37,12 +37,19 @@ ui/start.bat
 
 # Scraper data
 batch/data/
+batch/*_raw.json
+batch/*_processed.json.gz
+batch/merged_toilets.json
 data/.toilet_sync.lock
 data/*.bak
 static/expansion_status.json
 
 # IDE
 .idea/
+
+# Coverage & dev artifacts
+.coverage
+Modelfile
 
 # Python
 __pycache__/
