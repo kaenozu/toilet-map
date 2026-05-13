@@ -1,7 +1,7 @@
 """
 batch/auto_expand.py
 不足エリア向けの自動拡張スクリプト
-本モジュールは test_batch_regressions.py からインポートされる。
+本モジュールは test_batch_scrape_pipeline.py からインポートされる。
 """
 
 from __future__ import annotations

@@ -8,7 +8,7 @@ from time import perf_counter
 import streamlit as st
 from streamlit_folium import st_folium
 from streamlit_js_eval import streamlit_js_eval
-from app_config import FILTER_CONFIG
+from app_config import FILTER_CONFIG, FILTER_I18N_KEYS
 from ui.styles import MOBILE_CSS
 from ui.components import build_data_freshness_text, build_result_context_text, render_score_legend, render_toilet_card
 from ui.data_loader import load_toilet_data, toilets_to_dataframe, get_prefectures, get_data_cache_token
@@ -16,25 +16,17 @@ from ui.filters import filter_toilets, search_toilets
 from ui.stats import render_stats
 from ui.map_builder import build_map, calc_map_center
 from ui.i18n import APP_TITLE, DEFAULT_LANGUAGE, LANGUAGES, LANGUAGE_OPTIONS, get_language_strings
-
-FILTER_LABEL_MAP = {
-    "すべて": "filter_all",
-    "公共トイレ": "filter_public",
-    "多目的トイレ": "filter_multi",
-    "おむつ替え": "filter_diaper",
-    "車椅子対応": "filter_wheelchair",
-    "カフェ・飲食": "filter_cafe",
-    "コンビニ・店舗": "filter_convenience",
-    "ホテル・旅館": "filter_hotel",
-    "道の駅": "filter_roadstation",
-    "SA・PA": "filter_sapa",
-}
+from ui.pagination import init_page_state, reset_page, calc_pagination, render_pagination
+from ui.query_params import (
+    read_query_params, write_query_params, apply_language_query_param,
+    resolve_ui_state_from_query_params, build_query_params_from_state,
+)
 
 def get_translated_filters(lang: str) -> tuple[dict, dict]:
     t = LANGUAGES[lang]
     display_to_value = {}
     display_to_internal = {}
-    for ja_key, i18n_key in FILTER_LABEL_MAP.items():
+    for ja_key, i18n_key in FILTER_I18N_KEYS.items():
         display_to_value[t[i18n_key]] = FILTER_CONFIG[ja_key]
         display_to_internal[t[i18n_key]] = ja_key
     return display_to_value, display_to_internal
@@ -69,6 +61,9 @@ def main():
         unsafe_allow_html=True,
     )
     st.markdown(MOBILE_CSS, unsafe_allow_html=True)
+
+    query_params = read_query_params()
+    apply_language_query_param(query_params)
 
     current_lang = st.session_state.get("lang_select", DEFAULT_LANGUAGE)
     t = get_language_strings(current_lang)
@@ -106,6 +101,10 @@ def main():
     df = toilets_to_dataframe(toilets)
     prefectures = get_prefectures(df)
 
+    ui_state = resolve_ui_state_from_query_params(query_params, prefectures, translated_to_internal, t)
+    for key, value in ui_state.items():
+        st.session_state[key] = value
+
     col_pref, col_filter, col_search = st.columns([1, 1, 2])
     with col_pref:
         selected_pref = st.selectbox(t["prefecture"], prefectures, key="pref_select")
@@ -115,7 +114,7 @@ def main():
         search_query = st.text_input(t["search_label"], "", placeholder=t["search_placeholder"], key="search_input")
 
     internal_filter = translated_to_internal[filter_type]
-    sort_order = st.radio(t["sort_label"], [t["sort_clean"], t["sort_near"]], horizontal=True)
+    sort_order = st.radio(t["sort_label"], [t["sort_clean"], t["sort_near"]], horizontal=True, key="sort_select")
 
     user_lat, user_lng = user_location if user_location else (None, None)
     filter_started_at = perf_counter()
@@ -132,7 +131,13 @@ def main():
     total_items = len(filtered)
 
     map_items = filtered.to_dict("records")
-    display_items = filtered
+
+    init_page_state()
+    page_filter_key = f"{selected_pref}|{internal_filter}|{search_query}"
+    reset_page(page_filter_key)
+    page = st.session_state.get("page", 1)
+    total_pages, start_idx, end_idx, page = calc_pagination(total_items, page)
+    display_items = filtered.iloc[start_idx:end_idx] if total_items > 0 else filtered
 
     st.markdown(f"**{total_items}{t['showing']}**")
     render_score_legend()
@@ -155,12 +160,24 @@ def main():
     # ===== 統計を地図の下に表示 =====
     render_stats(meta, map_items, t)
 
+    # ===== ページネーション =====
+    if total_items > 0:
+        render_pagination(total_items, page, total_pages, t)
+
     if len(display_items) == 0:
         st.info(t["no_results"])
     else:
         st.divider()
         for i, (_, row) in enumerate(display_items.iterrows()):
-            render_toilet_card(row.to_dict(), rank=i + 1)
+            render_toilet_card(row.to_dict(), rank=start_idx + i + 1)
+
+    # ===== URL クエリパラメータに現在の状態を保存 =====
+    write_query_params(
+        build_query_params_from_state(
+            lang, selected_pref, internal_filter, search_query,
+            sort_order, gps_enabled, page, t,
+        )
+    )
 
 
 if __name__ == "__main__":

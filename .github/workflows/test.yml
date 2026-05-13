@@ -65,6 +65,12 @@ jobs:
       - name: Build Streamlit app
         run: |
           streamlit run app.py &
-          sleep 5
-          curl -s http://localhost:8501 | grep -q "Streamlit" && echo "Streamlit app started successfully" || exit 1
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:8501 | grep -q "Streamlit"; then
+              echo "Streamlit app started successfully"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Streamlit app failed to start within 60 seconds" && exit 1
         shell: bash

@@ -10,13 +10,12 @@ PER_PAGE = 20
 
 def init_page_state() -> None:
     st.session_state.setdefault("page", 1)
-    st.session_state.setdefault("page_filter_key", "")
 
 
 def reset_page(filter_key: str) -> None:
-    if st.session_state.get("page_filter_key") != filter_key:
+    if "page_filter_key" in st.session_state and st.session_state.page_filter_key != filter_key:
         st.session_state.page = 1
-        st.session_state.page_filter_key = filter_key
+    st.session_state.page_filter_key = filter_key
 
 
 def calc_pagination(total: int, page: int) -> tuple[int, int, int, int]:

@@ -148,6 +148,62 @@ class TestBuildPopupHtml:
         assert "onclick=" not in html
 
 
+class TestNormalizeQueryParams:
+    def test_single_values_passed_through(self):
+        from ui.query_params import normalize_query_params
+        result = normalize_query_params({"lang": ["ja"], "pref": ["東京都"]})
+        assert result == {"lang": "ja", "pref": "東京都"}
+
+    def test_empty_list_becomes_empty_string(self):
+        from ui.query_params import normalize_query_params
+        result = normalize_query_params({"lang": []})
+        assert result == {"lang": ""}
+
+    def test_none_value_becomes_empty_string(self):
+        from ui.query_params import normalize_query_params
+        result = normalize_query_params({"lang": None})
+        assert result == {"lang": ""}
+
+    def test_string_value_passed_through(self):
+        from ui.query_params import normalize_query_params
+        result = normalize_query_params({"lang": "ja"})
+        assert result == {"lang": "ja"}
+
+    def test_empty_dict(self):
+        from ui.query_params import normalize_query_params
+        assert normalize_query_params({}) == {}
+
+
+class TestApplyLanguageQueryParam:
+    def test_sets_lang_select_for_ja(self, monkeypatch):
+        from ui.query_params import apply_language_query_param
+        session_state = {}
+        monkeypatch.setattr("streamlit.session_state", session_state)
+        apply_language_query_param({"lang": "ja"})
+        assert session_state.get("lang_select") == "日本語"
+
+    def test_sets_lang_select_for_en(self, monkeypatch):
+        from ui.query_params import apply_language_query_param
+        session_state = {}
+        monkeypatch.setattr("streamlit.session_state", session_state)
+        apply_language_query_param({"lang": "en"})
+        assert session_state.get("lang_select") == "English"
+
+    def test_ignores_unknown_lang(self, monkeypatch):
+        from ui.query_params import apply_language_query_param
+        session_state = {}
+        monkeypatch.setattr("streamlit.session_state", session_state)
+        apply_language_query_param({"lang": "fr"})
+        assert "lang_select" not in session_state
+
+    def test_ignores_missing_lang(self, monkeypatch):
+        from ui.query_params import apply_language_query_param
+        session_state = {}
+        monkeypatch.setattr("streamlit.session_state", session_state)
+        apply_language_query_param({})
+        assert "lang_select" not in session_state
+
+
 class TestQueryParamState:
     def test_resolve_ui_state_from_query_params(self):
         from app import get_translated_filters

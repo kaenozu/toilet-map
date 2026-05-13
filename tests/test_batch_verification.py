@@ -10,6 +10,50 @@ import verify_data
 import sync_db
 
 
+class TestQualityMetricsUtilities:
+    def test_rate_returns_zero_for_zero_total(self):
+        from quality_metrics import _rate
+        assert _rate(5, 0) == 0.0
+
+    def test_rate_calculates_correctly(self):
+        from quality_metrics import _rate
+        assert _rate(3, 10) == 0.3
+
+    def test_rate_zero_count(self):
+        from quality_metrics import _rate
+        assert _rate(0, 10) == 0.0
+
+    def test_normalize_count_map_converts_int_values(self):
+        from quality_metrics import _normalize_count_map
+        result = _normalize_count_map({"a": 5, "b": 3})
+        assert result == {"a": 5, "b": 3}
+
+    def test_normalize_count_map_skips_non_int(self):
+        from quality_metrics import _normalize_count_map
+        result = _normalize_count_map({"a": "invalid", "b": 3})
+        assert result == {"b": 3}
+
+    def test_normalize_count_map_handles_counter(self):
+        from quality_metrics import _normalize_count_map
+        from collections import Counter
+        result = _normalize_count_map(Counter({"a": 5, "b": 3}))
+        assert result == {"a": 5, "b": 3}
+
+    def test_normalize_count_map_empty(self):
+        from quality_metrics import _normalize_count_map
+        assert _normalize_count_map({}) == {}
+
+    def test_normalize_count_map_none_value_skipped(self):
+        from quality_metrics import _normalize_count_map
+        result = _normalize_count_map({"a": None, "b": 3})
+        assert result == {"b": 3}
+
+    def test_normalize_count_map_float_value_converted(self):
+        from quality_metrics import _normalize_count_map
+        result = _normalize_count_map({"a": 5.7, "b": 3})
+        assert result == {"a": 5, "b": 3}
+
+
 class TestVerificationAlignment:
     def test_sqlite_metric_mismatch_becomes_error(self):
         meta = {"total": 10, "scored": 8, "public_toilets": 3}

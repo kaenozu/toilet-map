@@ -1,27 +1,9 @@
 """
 tests/test_ui_components.py
-ui/components.py のユニットテスト
+ui/components.py のユニットテスト（app_config テストは test_app_config.py に集約）
 """
 import pytest
-from app_config import get_score_style, esc
 from ui.components import build_data_freshness_text, build_result_context_text, render_score_legend
-
-
-class TestGetScoreStyle:
-    def test_high_score(self):
-        color, emoji, label = get_score_style(90)
-        assert emoji == "✨"
-        assert label == "とてもきれい"
-
-    def test_low_score(self):
-        color, emoji, label = get_score_style(10)
-        assert emoji == "💩"
-
-    def test_esc_none(self):
-        assert esc(None) == ""
-
-    def test_esc_html(self):
-        assert esc("<b>test</b>") == "&lt;b&gt;test&lt;/b&gt;"
 
 
 class TestBuildResultContextText:
@@ -41,7 +23,6 @@ class TestBuildResultContextText:
     def test_partial_timings(self):
         text = build_result_context_text(20, 20, filter_elapsed_ms=30.0)
         assert "絞り込み 30ms" in text
-        # map_elapsed_ms未指定なので、地図のtimingは表示されない
         assert "地図 0ms" not in text
         assert "地図 100ms" not in text
 

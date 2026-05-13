@@ -44,6 +44,20 @@ FILTER_CONFIG = {
     "SA・PA": "サービスエリア|パーキングエリア",
 }
 
+# app.py で使うフィルタ表示名 → i18n キーの対応
+FILTER_I18N_KEYS = {
+    "すべて": "filter_all",
+    "公共トイレ": "filter_public",
+    "多目的トイレ": "filter_multi",
+    "おむつ替え": "filter_diaper",
+    "車椅子対応": "filter_wheelchair",
+    "カフェ・飲食": "filter_cafe",
+    "コンビニ・店舗": "filter_convenience",
+    "ホテル・旅館": "filter_hotel",
+    "道の駅": "filter_roadstation",
+    "SA・PA": "filter_sapa",
+}
+
 PUBLIC_FILTER_VALUE = "__public__"
 
 # top_keywords から抽出する設備フィルタのキーワード定義

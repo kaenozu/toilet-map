@@ -1,7 +1,7 @@
 """
 batch/gap_analyzer.py
 統計分析・ギャップ検出
-本モジュールは test_batch_regressions.py からインポートされる。
+本モジュールは test_batch_verification.py からインポートされる。
 """
 
 from __future__ import annotations

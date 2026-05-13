@@ -4,8 +4,64 @@ ui/pagination.py のユニットテスト
 """
 import pytest
 from ui.pagination import (
-    calc_pagination, PER_PAGE,
+    calc_pagination, init_page_state, reset_page, PER_PAGE,
 )
+
+
+class FakeSessionState:
+    """reset_page / init_page_state のテスト用に dict + attribute アクセスを模倣"""
+    def __init__(self, initial: dict | None = None):
+        self._data = dict(initial or {})
+    def setdefault(self, key, value):
+        return self._data.setdefault(key, value)
+    def get(self, key, default=None):
+        return self._data.get(key, default)
+    def __contains__(self, key):
+        return key in self._data
+    def __getattr__(self, key):
+        if key.startswith("_"):
+            return super().__getattribute__(key)
+        if key in self._data:
+            return self._data[key]
+        raise AttributeError(key)
+    def __setattr__(self, key, value):
+        if key.startswith("_"):
+            super().__setattr__(key, value)
+        else:
+            self._data[key] = value
+
+
+class TestPageStateManagement:
+    def test_init_page_state_sets_default_page(self, monkeypatch):
+        fake = FakeSessionState()
+        monkeypatch.setattr("streamlit.session_state", fake)
+        init_page_state()
+        assert fake.get("page") == 1
+
+    def test_init_page_state_does_not_overwrite_page(self, monkeypatch):
+        fake = FakeSessionState({"page": 5})
+        monkeypatch.setattr("streamlit.session_state", fake)
+        init_page_state()
+        assert fake.get("page") == 5
+
+    def test_reset_page_keeps_page_on_same_filter_key(self, monkeypatch):
+        fake = FakeSessionState({"page": 3, "page_filter_key": "東京|None|"})
+        monkeypatch.setattr("streamlit.session_state", fake)
+        reset_page("東京|None|")
+        assert fake.get("page") == 3
+
+    def test_reset_page_resets_on_filter_key_change(self, monkeypatch):
+        fake = FakeSessionState({"page": 3, "page_filter_key": "大阪|None|"})
+        monkeypatch.setattr("streamlit.session_state", fake)
+        reset_page("東京|None|")
+        assert fake.get("page") == 1
+        assert fake.get("page_filter_key") == "東京|None|"
+
+    def test_reset_page_does_not_reset_on_first_call(self, monkeypatch):
+        fake = FakeSessionState()
+        monkeypatch.setattr("streamlit.session_state", fake)
+        reset_page("東京|None|")
+        assert fake.get("page", "not set") == "not set"
 
 
 class TestCalcPagination:

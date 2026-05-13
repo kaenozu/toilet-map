@@ -1,7 +1,7 @@
 """
 batch/expansion_query.py
 自動拡張におけるクエリファイルの管理・マージ・分類
-auto_expand.py から分離
+auto_expand.py から分離。本モジュールは test_batch_scrape_pipeline.py からインポートされる。
 """
 import os
 import tempfile

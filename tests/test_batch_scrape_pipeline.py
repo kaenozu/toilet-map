@@ -3,6 +3,8 @@ tests/test_batch_scrape_pipeline.py
 スクレイピングパイプライン関連の回帰テスト（test_batch_regressions.py から分割）
 """
 import json
+from pathlib import Path
+
 import pytest
 
 import process_data as pd_module
@@ -217,6 +219,179 @@ class TestKantoPhase1:
         kanto_phase1.run_scrape("東京都", "千代田区", "queries.txt")
 
         assert captured["SYNC_EVERY_SUCCESS"] == "10"
+
+
+class TestCliParser:
+    def test_parse_args_defaults(self, monkeypatch):
+        import cli_parser
+        monkeypatch.setattr(cli_parser.sys, "argv", ["scrape_runner.py"])
+        result = cli_parser.parse_args()
+        assert result["city"] == ""
+        assert result["prefecture"] == ""
+        assert result["dry_run"] is False
+        assert result["max_queries"] is None
+        assert result["progress_file"] is None
+
+    def test_parse_args_city_and_prefecture(self, monkeypatch):
+        import cli_parser
+        monkeypatch.setattr(cli_parser.sys, "argv", ["scrape_runner.py", "--city", "渋谷区", "--prefecture", "東京都"])
+        result = cli_parser.parse_args()
+        assert result["city"] == "渋谷区"
+        assert result["prefecture"] == "東京都"
+
+    def test_parse_args_dry_run(self, monkeypatch):
+        import cli_parser
+        monkeypatch.setattr(cli_parser.sys, "argv", ["scrape_runner.py", "--dry-run"])
+        result = cli_parser.parse_args()
+        assert result["dry_run"] is True
+
+    def test_parse_args_max_queries(self, monkeypatch):
+        import cli_parser
+        monkeypatch.setattr(cli_parser.sys, "argv", ["scrape_runner.py", "--max-queries", "10"])
+        result = cli_parser.parse_args()
+        assert result["max_queries"] == 10
+
+    def test_parse_args_progress_file(self, monkeypatch):
+        import cli_parser
+        monkeypatch.setattr(cli_parser.sys, "argv", ["scrape_runner.py", "--progress-file", "progress.log"])
+        result = cli_parser.parse_args()
+        assert result["progress_file"] == "progress.log"
+
+    def test_parse_args_invalid_max_queries_returns_none(self, monkeypatch):
+        import cli_parser
+        monkeypatch.setattr(cli_parser.sys, "argv", ["scrape_runner.py", "--max-queries", "not_a_number"])
+        result = cli_parser.parse_args()
+        assert result["max_queries"] is None
+
+    def test_detect_city_from_queries_reads_header(self, tmp_path):
+        import cli_parser
+        query_file = tmp_path / "queries.txt"
+        query_file.write_text("# city: 千代田区\n# prefecture: 東京都\nq1\nq2\n", encoding="utf-8")
+        city, pref = cli_parser.detect_city_from_queries(str(query_file))
+        assert city == "千代田区"
+        assert pref == "東京都"
+
+    def test_detect_city_from_queries_falls_back_to_most_common(self, tmp_path):
+        import cli_parser
+        query_file = tmp_path / "queries.txt"
+        query_file.write_text("q1 in 渋谷区\nq2 in 渋谷区\nq3 in 新宿区\n", encoding="utf-8")
+        city, pref = cli_parser.detect_city_from_queries(str(query_file))
+        assert city == "渋谷区"
+        assert pref == ""
+
+    def test_detect_city_from_queries_handles_missing_file(self, tmp_path):
+        import cli_parser
+        city, pref = cli_parser.detect_city_from_queries(str(tmp_path / "nonexistent.txt"))
+        assert city == ""
+        assert pref == ""
+
+
+class TestExpansionQueryModule:
+    def test_read_query_header_parses_city_and_pref(self, tmp_path):
+        import expansion_query as eq
+        path = tmp_path / "batch_001.txt"
+        path.write_text("# city: 渋谷区\n# prefecture: 東京都\nq1\n", encoding="utf-8")
+        city, pref = eq._read_query_header(path)
+        assert city == "渋谷区"
+        assert pref == "東京都"
+
+    def test_read_query_header_returns_empty_for_no_header(self, tmp_path):
+        import expansion_query as eq
+        path = tmp_path / "batch_001.txt"
+        path.write_text("q1\nq2\n", encoding="utf-8")
+        city, pref = eq._read_query_header(path)
+        assert city == ""
+        assert pref == ""
+
+    def test_read_query_header_handles_missing_file(self, tmp_path):
+        import expansion_query as eq
+        path = tmp_path / "nonexistent.txt"
+        result = eq._read_query_header(path)
+        assert result == ("", "")
+
+    def test_classify_query_file_identifies_city(self, tmp_path):
+        import expansion_query as eq
+        eq._ACTIVE_TARGET_CITY = "渋谷区"
+        eq._ACTIVE_TARGET_PREF = "東京都"
+        path = tmp_path / "batch_target.txt"
+        path.write_text("# city: 渋谷区\n# prefecture: 東京都\nq1\n", encoding="utf-8")
+        bucket = eq._classify_query_file(path)
+        assert bucket == "city"
+        eq._ACTIVE_TARGET_CITY = ""
+        eq._ACTIVE_TARGET_PREF = ""
+
+    def test_classify_query_file_identifies_pref(self, tmp_path):
+        import expansion_query as eq
+        eq._ACTIVE_TARGET_CITY = "渋谷区"
+        eq._ACTIVE_TARGET_PREF = "東京都"
+        path = tmp_path / "batch_pref.txt"
+        path.write_text("# prefecture: 東京都\nq1\nq2\n", encoding="utf-8")
+        bucket = eq._classify_query_file(path)
+        assert bucket == "pref"
+        eq._ACTIVE_TARGET_CITY = ""
+        eq._ACTIVE_TARGET_PREF = ""
+
+    def test_merge_query_files_combines_city_and_pref(self, tmp_path):
+        import expansion_query as eq
+        eq._ACTIVE_TARGET_CITY = "渋谷区"
+        eq._ACTIVE_TARGET_PREF = "東京都"
+        eq._ACTIVE_CITY_BUDGET = 2
+        eq._ACTIVE_PREF_BUDGET = 2
+
+        city_file = tmp_path / "city.txt"
+        city_file.write_text("# city: 渋谷区\ncity_q1\ncity_q2\ncity_q3\n", encoding="utf-8")
+        pref_file = tmp_path / "pref.txt"
+        pref_file.write_text("# prefecture: 東京都\npref_q1\npref_q2\n", encoding="utf-8")
+
+        result = eq.merge_query_files([str(city_file), str(pref_file)])
+        assert result
+        content = Path(result).read_text(encoding="utf-8")
+        assert "city_q1" in content
+        assert "city_q2" in content
+        assert "city_q3" not in content  # budget exceeded
+        assert "pref_q1" in content
+        assert "pref_q2" in content
+        Path(result).unlink()
+        eq._ACTIVE_TARGET_CITY = ""
+        eq._ACTIVE_TARGET_PREF = ""
+        eq._ACTIVE_CITY_BUDGET = 0
+        eq._ACTIVE_PREF_BUDGET = 0
+
+    def test_merge_query_files_deduplicates(self, tmp_path):
+        import expansion_query as eq
+        eq._ACTIVE_TARGET_CITY = "渋谷区"
+        eq._ACTIVE_TARGET_PREF = "東京都"
+        eq._ACTIVE_CITY_BUDGET = 10
+        eq._ACTIVE_PREF_BUDGET = 10
+
+        city_file = tmp_path / "city.txt"
+        city_file.write_text("# city: 渋谷区\ndup_q1\ndup_q2\n", encoding="utf-8")
+        pref_file = tmp_path / "pref.txt"
+        pref_file.write_text("# prefecture: 東京都\ndup_q1\ndup_q2\n", encoding="utf-8")
+
+        result = eq.merge_query_files([str(city_file), str(pref_file)])
+        content = Path(result).read_text(encoding="utf-8")
+        assert content.count("dup_q1") == 1
+        assert content.count("dup_q2") == 1
+        Path(result).unlink()
+        eq._ACTIVE_TARGET_CITY = ""
+        eq._ACTIVE_TARGET_PREF = ""
+        eq._ACTIVE_CITY_BUDGET = 0
+        eq._ACTIVE_PREF_BUDGET = 0
+
+    def test_merge_query_files_returns_empty_for_no_input(self):
+        import expansion_query as eq
+        eq._ACTIVE_TARGET_CITY = "渋谷区"
+        eq._ACTIVE_TARGET_PREF = "東京都"
+        # Force no active budget so no queries are matched
+        eq._ACTIVE_CITY_BUDGET = 0
+        eq._ACTIVE_PREF_BUDGET = 0
+        result = eq.merge_query_files([])
+        assert result == ""
+        eq._ACTIVE_TARGET_CITY = ""
+        eq._ACTIVE_TARGET_PREF = ""
+        eq._ACTIVE_CITY_BUDGET = 0
+        eq._ACTIVE_PREF_BUDGET = 0
 
 
 class TestQueryGeneration:
