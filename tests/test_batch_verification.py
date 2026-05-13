@@ -335,3 +335,60 @@ class TestCountQueriesForPref:
     def test_returns_zero_for_missing_pref(self, tmp_path, monkeypatch):
         monkeypatch.setattr(verify_data, "QUERIES_D", str(tmp_path / "queries.d"))
         assert verify_data.count_queries_for_pref("存在しない県") == 0
+
+
+class TestVerifyDataMain:
+    def test_returns_zero_on_success(self, monkeypatch):
+        data = {"metadata": {"total": 1, "scored": 1, "public_toilets": 0, "last_updated": "2026-01-01"},
+                "toilets": [{"title": "A", "address": "東京都", "prefecture": "東京都",
+                             "toilet_score": 80.0, "confidence": 0.8,
+                             "is_public_toilet": True, "lat": 35.0, "lng": 139.0}]}
+        monkeypatch.setattr(verify_data, "load_data", lambda: data)
+        monkeypatch.setattr(verify_data, "get_expected_prefectures", lambda: ["東京都"])
+        monkeypatch.setattr(verify_data, "collect_sqlite_metrics", lambda path: None)
+
+        monkeypatch.setattr(verify_data, "_format_duplicate_key", lambda k: str(k))
+
+        result = verify_data.main()
+        assert result == 0
+
+    def test_returns_one_on_errors(self, monkeypatch):
+        data = {"metadata": {"total": 0, "scored": 0, "public_toilets": 0, "last_updated": ""},
+                "toilets": []}
+        monkeypatch.setattr(verify_data, "load_data", lambda: data)
+        monkeypatch.setattr(verify_data, "get_expected_prefectures", lambda: ["東京都"])
+
+        monkeypatch.setattr(verify_data, "collect_quality_metrics",
+                            lambda toilets: {"total": 0, "missing_score": 0, "missing_prefecture": 0,
+                                             "missing_address": 0, "duplicates": [],
+                                             "prefecture_counts": {}})
+        monkeypatch.setattr(verify_data, "evaluate_quality_gate",
+                            lambda metrics, expected: (["Error: missing prefecture"], []))
+        monkeypatch.setattr(verify_data, "collect_sqlite_metrics", lambda path: None)
+
+        result = verify_data.main()
+        assert result == 1
+
+    def test_prints_summary(self, monkeypatch, capsys):
+        data = {"metadata": {"total": 2, "scored": 2, "public_toilets": 1,
+                             "last_updated": "2026-05-13 12:00:00"},
+                "toilets": [{"title": "A", "address": "東京都", "prefecture": "東京都",
+                             "toilet_score": 80.0, "confidence": 0.8,
+                             "is_public_toilet": True, "lat": 35.0, "lng": 139.0,
+                             "link": "https://maps.google.com/a"},
+                            {"title": "B", "address": "神奈川県", "prefecture": "神奈川県",
+                             "toilet_score": 60.0, "confidence": 0.5,
+                             "is_public_toilet": False, "lat": 35.1, "lng": 139.1,
+                             "link": "https://maps.google.com/b"}]}
+        monkeypatch.setattr(verify_data, "load_data", lambda: data)
+        monkeypatch.setattr(verify_data, "get_expected_prefectures", lambda: ["東京都", "神奈川県"])
+        monkeypatch.setattr(verify_data, "count_queries_for_pref", lambda pref: 10)
+        monkeypatch.setattr(verify_data, "collect_sqlite_metrics", lambda path: None)
+
+        verify_data.main()
+        captured = capsys.readouterr()
+        assert "Total toilets    : 2" in captured.out
+        assert "With reviews     : 2" in captured.out
+        assert "Public toilets   : 1" in captured.out
+        assert "東京都" in captured.out
+        assert "神奈川県" in captured.out

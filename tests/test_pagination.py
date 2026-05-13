@@ -147,5 +147,164 @@ class TestCalcPagination:
         assert end == 100
 
 
+class FakeColumn:
+    """st.columns() が返すモックカラム（with文対応）"""
+    def __init__(self):
+        self.markdown_calls = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
+
+    def markdown(self, text, **kwargs):
+        self.markdown_calls.append((text, kwargs))
+
+
+class TestRenderPagination:
+    def test_skips_when_total_is_zero(self, monkeypatch):
+        from ui.pagination import render_pagination
+        caption_calls = []
+        monkeypatch.setattr("streamlit.caption", lambda *a, **kw: caption_calls.append(a))
+        render_pagination(0, 1, 1, {})
+        assert caption_calls == []
+
+    def test_shows_single_page_caption(self, monkeypatch):
+        from ui.pagination import render_pagination
+        caption_calls = []
+        monkeypatch.setattr("streamlit.caption", lambda *a, **kw: caption_calls.append(a))
+        render_pagination(10, 1, 1, {"page": "Page"})
+        assert caption_calls == [("Page 1/1",)]
+
+    def test_renders_columns_and_buttons_on_multi_page(self, monkeypatch):
+        from ui.pagination import render_pagination
+        columns = [FakeColumn(), FakeColumn(), FakeColumn()]
+        monkeypatch.setattr("streamlit.columns", lambda *a, **kw: columns)
+        monkeypatch.setattr("streamlit.session_state", FakeSessionState({"page": 2}))
+
+        button_calls = []
+
+        def fake_button(label, **kwargs):
+            button_calls.append((label, kwargs))
+            return False
+
+        monkeypatch.setattr("streamlit.button", fake_button)
+        monkeypatch.setattr("streamlit.rerun", lambda: None)
+
+        render_pagination(50, 2, 3, {"page": "Page", "prev": "<", "next": ">"})
+
+        labels = [c[0] for c in button_calls]
+        assert "<" in labels
+        assert ">" in labels
+
+    def test_prev_disabled_on_first_page(self, monkeypatch):
+        from ui.pagination import render_pagination
+        columns = [FakeColumn(), FakeColumn(), FakeColumn()]
+        monkeypatch.setattr("streamlit.columns", lambda *a, **kw: columns)
+        monkeypatch.setattr("streamlit.session_state", FakeSessionState({"page": 1}))
+
+        button_disabled = {}
+
+        def fake_button(label, **kwargs):
+            button_disabled[label] = kwargs.get("disabled", False)
+            return False
+
+        monkeypatch.setattr("streamlit.button", fake_button)
+        monkeypatch.setattr("streamlit.rerun", lambda: None)
+
+        render_pagination(50, 1, 3, {"page": "Page", "prev": "<", "next": ">"})
+
+        assert button_disabled["<"] is True
+        assert button_disabled[">"] is False
+
+    def test_next_disabled_on_last_page(self, monkeypatch):
+        from ui.pagination import render_pagination
+        columns = [FakeColumn(), FakeColumn(), FakeColumn()]
+        monkeypatch.setattr("streamlit.columns", lambda *a, **kw: columns)
+        monkeypatch.setattr("streamlit.session_state", FakeSessionState({"page": 3}))
+
+        button_disabled = {}
+
+        def fake_button(label, **kwargs):
+            button_disabled[label] = kwargs.get("disabled", False)
+            return False
+
+        monkeypatch.setattr("streamlit.button", fake_button)
+        monkeypatch.setattr("streamlit.rerun", lambda: None)
+
+        render_pagination(50, 3, 3, {"page": "Page", "prev": "<", "next": ">"})
+
+        assert button_disabled["<"] is False
+        assert button_disabled[">"] is True
+
+    def test_prev_click_sets_page_and_reruns(self, monkeypatch):
+        from ui.pagination import render_pagination
+        fake_session = FakeSessionState({"page": 3})
+        columns = [FakeColumn(), FakeColumn(), FakeColumn()]
+        monkeypatch.setattr("streamlit.columns", lambda *a, **kw: columns)
+
+        button_return = {"pagination_prev": True, "pagination_next": False}
+
+        def fake_button(label, **kwargs):
+            key = kwargs.get("key")
+            return button_return.get(key, False)
+
+        monkeypatch.setattr("streamlit.button", fake_button)
+        monkeypatch.setattr("streamlit.session_state", fake_session)
+        rerun_calls = []
+        monkeypatch.setattr("streamlit.rerun", lambda: rerun_calls.append(1))
+
+        render_pagination(50, 3, 3, {"page": "Page", "prev": "<", "next": ">"})
+
+        assert fake_session.page == 2
+        assert len(rerun_calls) == 1
+
+    def test_next_click_sets_page_and_reruns(self, monkeypatch):
+        from ui.pagination import render_pagination
+        fake_session = FakeSessionState({"page": 1})
+        columns = [FakeColumn(), FakeColumn(), FakeColumn()]
+        monkeypatch.setattr("streamlit.columns", lambda *a, **kw: columns)
+
+        button_return = {"pagination_prev": False, "pagination_next": True}
+
+        def fake_button(label, **kwargs):
+            key = kwargs.get("key")
+            return button_return.get(key, False)
+
+        monkeypatch.setattr("streamlit.button", fake_button)
+        monkeypatch.setattr("streamlit.session_state", fake_session)
+        rerun_calls = []
+        monkeypatch.setattr("streamlit.rerun", lambda: rerun_calls.append(1))
+
+        render_pagination(50, 1, 3, {"page": "Page", "prev": "<", "next": ">"})
+
+        assert fake_session.page == 2
+        assert len(rerun_calls) == 1
+
+    def test_info_col_shows_page_info(self, monkeypatch):
+        from ui.pagination import render_pagination
+        columns = [FakeColumn(), FakeColumn(), FakeColumn()]
+        monkeypatch.setattr("streamlit.columns", lambda *a, **kw: columns)
+        monkeypatch.setattr("streamlit.session_state", FakeSessionState({"page": 2}))
+
+        markdown_calls = []
+
+        def fake_button(label, **kwargs):
+            return False
+
+        def fake_markdown(text, **kwargs):
+            markdown_calls.append(text)
+
+        monkeypatch.setattr("streamlit.button", fake_button)
+        monkeypatch.setattr("streamlit.markdown", fake_markdown)
+        monkeypatch.setattr("streamlit.rerun", lambda: None)
+
+        render_pagination(50, 2, 5, {"page": "Page", "prev": "<", "next": ">"})
+
+        assert len(markdown_calls) == 1
+        assert "Page 2/5" in markdown_calls[0]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

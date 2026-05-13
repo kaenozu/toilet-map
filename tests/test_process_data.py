@@ -371,3 +371,105 @@ class TestBuildMetadata:
         ]
         meta = pd_module.build_metadata(results)
         assert meta["area_name"] == "検索エリア"
+
+
+class FakeResult:
+    """process_place のモック戻り値"""
+    def __init__(self, title, score, lat=35.0, lng=139.0):
+        self.title = title
+        self.toilet_score = score
+        self.lat = lat
+        self.lng = lng
+        self.confidence = 0.8 if score > 0 else 0.0
+        self.is_public_toilet = True
+
+
+class TestProcessFile:
+    def test_full_mode(self, monkeypatch):
+        places = [{"title": "A", "latitude": 35.0, "longitude": 139.0}]
+
+        def fake_process(p):
+            return {"title": "A", "toilet_score": 80.0, "confidence": 0.8,
+                    "is_public_toilet": True, "lat": 35.0, "lng": 139.0,
+                    "address": "", "prefecture": ""}
+
+        monkeypatch.setattr(pd_module, "load_jsonl", lambda path: places)
+        monkeypatch.setattr(pd_module, "process_place", fake_process)
+
+        saved = {}
+        monkeypatch.setattr(pd_module, "save_json", lambda path, data, **kw: saved.update(data))
+
+        pd_module.process_file("in.json", "out.json", "--full")
+
+        assert saved["metadata"]["total"] == 1
+        assert len(saved["toilets"]) == 1
+
+    def test_incremental_mode_merges(self, monkeypatch):
+        places = [{"title": "B", "latitude": 35.1, "longitude": 139.1}]
+        existing = {"metadata": {"total": 1}, "toilets": [
+            {"title": "A", "toilet_score": 70.0, "confidence": 0.5,
+             "is_public_toilet": False, "lat": 35.0, "lng": 139.0,
+             "address": "", "prefecture": ""},
+        ]}
+
+        def fake_process(p):
+            return {"title": "B", "toilet_score": 80.0, "confidence": 0.8,
+                    "is_public_toilet": True, "lat": 35.1, "lng": 139.1,
+                    "address": "", "prefecture": ""}
+
+        monkeypatch.setattr(pd_module, "load_jsonl", lambda path: places)
+        monkeypatch.setattr(pd_module, "process_place", fake_process)
+        monkeypatch.setattr(pd_module, "load_existing", lambda path: existing)
+
+        saved = {}
+        monkeypatch.setattr(pd_module, "save_json", lambda path, data, **kw: saved.update(data))
+
+        pd_module.process_file("in.json", "out.json", "--incremental")
+
+        assert saved["metadata"]["total"] == 2
+
+    def test_empty_places(self, monkeypatch):
+        monkeypatch.setattr(pd_module, "load_jsonl", lambda path: [])
+        saved = {}
+        monkeypatch.setattr(pd_module, "save_json", lambda path, data, **kw: saved.update(data))
+
+        pd_module.process_file("in.json", "out.json")
+
+        assert saved["metadata"]["total"] == 0
+
+    def test_process_file_with_logger_messages(self, monkeypatch):
+        places = [{"title": "X", "latitude": 35.0, "longitude": 139.0}]
+        monkeypatch.setattr(pd_module, "load_jsonl", lambda path: places)
+        monkeypatch.setattr(pd_module, "process_place",
+                            lambda p: {"title": "X", "toilet_score": 90.0, "confidence": 0.9,
+                                       "is_public_toilet": True, "lat": 35.0, "lng": 139.0,
+                                       "address": "", "prefecture": ""})
+        saved = {}
+        monkeypatch.setattr(pd_module, "save_json", lambda path, data, **kw: saved.update(data))
+
+        pd_module.process_file("in.json", "out.json")
+
+        assert saved["toilets"][0]["toilet_score"] == 90.0
+
+
+class TestProcessDataMain:
+    def test_exits_on_too_few_args(self, monkeypatch):
+        monkeypatch.setattr("sys.argv", ["process_data.py"])
+        with pytest.raises(SystemExit):
+            pd_module.main()
+
+    def test_calls_process_file_with_default_mode(self, monkeypatch):
+        monkeypatch.setattr("sys.argv", ["process_data.py", "input.json", "output.json"])
+        calls = []
+        monkeypatch.setattr(pd_module, "process_file",
+                            lambda i, o, m="--full": calls.append((i, o, m)))
+        pd_module.main()
+        assert calls == [("input.json", "output.json", "--full")]
+
+    def test_calls_process_file_with_incremental(self, monkeypatch):
+        monkeypatch.setattr("sys.argv", ["process_data.py", "input.json", "output.json", "--incremental"])
+        calls = []
+        monkeypatch.setattr(pd_module, "process_file",
+                            lambda i, o, m="--full": calls.append((i, o, m)))
+        pd_module.main()
+        assert calls == [("input.json", "output.json", "--incremental")]
