@@ -258,7 +258,7 @@ def run_batch():
         logger.info("")
     else:
         if os.path.exists(RAW_OUTPUT):
-            shutil.copy2(RAW_OUTPUT, RAW_OUTPUT + ".bak")
+            shutil.copy(RAW_OUTPUT, RAW_OUTPUT + ".bak")
             logger.info("Previous data backed up.")
         if os.path.exists(RAW_DIR):
             shutil.rmtree(RAW_DIR)

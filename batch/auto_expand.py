@@ -17,7 +17,7 @@ from expansion_query import (
     CITY_QUERY_BUDGET_TEMPLATES,  # noqa: F401
     PREFECTURE_QUERY_BUDGET_TEMPLATES,  # noqa: F401
     query_limits_for_count,
-    set_active_context,
+    active_context,
     _slugify,
     ensure_query_files,
     find_batch_files,
@@ -129,60 +129,55 @@ def run_auto_expansion(max_areas: int = 5, target_pref: str = "", target_city: s
         logger.info("No expansion targets found.")
         return
 
-    prev_context = set_active_context("", "", 0, 0)
-
-    try:
-        logger.info(f"Selected {len(targets)} area(s) for auto expansion.")
-        for target in targets[:max_areas]:
+    logger.info(f"Selected {len(targets)} area(s) for auto expansion.")
+    for target in targets[:max_areas]:
             prefecture = str(target.get("prefecture") or "")
             city = str(target.get("city") or "")
             count = int(target.get("count", 0) or 0)
             city_budget, pref_budget = query_limits_for_count(count)
 
-            set_active_context(prefecture, city, city_budget, pref_budget)
+            with active_context(prefecture, city, city_budget, pref_budget):
 
-            logger.info(
-                f"[EXPAND] {prefecture} {city} (count={count}, city_budget={city_budget}, pref_budget={pref_budget})"
-            )
+                logger.info(
+                    f"[EXPAND] {prefecture} {city} (count={count}, city_budget={city_budget}, pref_budget={pref_budget})"
+                )
 
-            ensure_query_files(prefecture)
-            batch_files = find_batch_files(prefecture)
-            merged_query_file = merge_query_files(batch_files)
-            if not merged_query_file:
-                logger.warning(f"[{prefecture}] No query files were merged.")
-                continue
+                ensure_query_files(prefecture)
+                batch_files = find_batch_files(prefecture)
+                merged_query_file = merge_query_files(batch_files)
+                if not merged_query_file:
+                    logger.warning(f"[{prefecture}] No query files were merged.")
+                    continue
 
-            area_slug = _slugify(f"{prefecture}_{city or 'pref'}")
-            raw_dir = os.path.join(SCRIPT_DIR, f"raw_parts_{area_slug}")
-            raw_output = os.path.join(SCRIPT_DIR, f"raw_data_{area_slug}.json")
-            progress_file = os.path.join(SCRIPT_DIR, f".progress_auto_{area_slug}")
+                area_slug = _slugify(f"{prefecture}_{city or 'pref'}")
+                raw_dir = os.path.join(SCRIPT_DIR, f"raw_parts_{area_slug}")
+                raw_output = os.path.join(SCRIPT_DIR, f"raw_data_{area_slug}.json")
+                progress_file = os.path.join(SCRIPT_DIR, f".progress_auto_{area_slug}")
 
-            env = os.environ.copy()
-            env["QUERIES"] = merged_query_file
-            env["RAW_DIR"] = raw_dir
-            env["RAW_OUTPUT"] = raw_output
-            env["PROGRESS_FILE"] = progress_file
-            env["SYNC_EVERY_SUCCESS"] = "1"
+                env = os.environ.copy()
+                env["QUERIES"] = merged_query_file
+                env["RAW_DIR"] = raw_dir
+                env["RAW_OUTPUT"] = raw_output
+                env["PROGRESS_FILE"] = progress_file
+                env["SYNC_EVERY_SUCCESS"] = "1"
 
-            cmd = [
-                sys.executable,
-                os.path.join(SCRIPT_DIR, "scrape_runner.py"),
-                "--prefecture",
-                prefecture,
-            ]
-            if city:
-                cmd.extend(["--city", city])
+                cmd = [
+                    sys.executable,
+                    os.path.join(SCRIPT_DIR, "scrape_runner.py"),
+                    "--prefecture",
+                    prefecture,
+                ]
+                if city:
+                    cmd.extend(["--city", city])
 
-            try:
-                result = subprocess.run(cmd, env=env, cwd=SCRIPT_DIR)
-            except FileNotFoundError:
-                logger.error("Python executable or Docker runtime not found for auto expansion.")
-                break
+                try:
+                    result = subprocess.run(cmd, env=env, cwd=SCRIPT_DIR)
+                except FileNotFoundError:
+                    logger.error("Python executable or Docker runtime not found for auto expansion.")
+                    break
 
-            if result.returncode != 0:
-                logger.error(f"[{prefecture}] auto expansion failed with exit code {result.returncode}")
-    finally:
-        set_active_context(*prev_context)
+                if result.returncode != 0:
+                    logger.error(f"[{prefecture}] auto expansion failed with exit code {result.returncode}")
 
 
 def main() -> None:

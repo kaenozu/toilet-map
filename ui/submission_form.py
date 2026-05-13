@@ -30,9 +30,14 @@ def _cat_labels(t: dict) -> dict[str, str]:
     }
 
 
+MAX_SUBMISSIONS_SIZE = 5 * 1024 * 1024  # 5MB でローテート
+
+
 def save_submission(data: dict) -> None:
     os.makedirs(os.path.dirname(SUBMISSIONS_PATH), exist_ok=True)
     data["submitted_at"] = time.time()
+    if os.path.exists(SUBMISSIONS_PATH) and os.path.getsize(SUBMISSIONS_PATH) > MAX_SUBMISSIONS_SIZE:
+        os.rename(SUBMISSIONS_PATH, SUBMISSIONS_PATH + ".old")
     with open(SUBMISSIONS_PATH, "a", encoding="utf-8") as f:
         f.write(json.dumps(data, ensure_ascii=False) + "\n")
 
