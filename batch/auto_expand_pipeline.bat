@@ -28,6 +28,10 @@ if errorlevel 1 (
     echo Continuing with post-processing...
 )
 
+REM Step 2.5: Merge user submissions into canonical JSON
+echo [2.5/5] Merging user submissions...
+python "%SCRIPT_DIR%merge_submissions.py"
+
 REM Step 3: Merge raw data files (if any were produced)
 echo.
 echo [3/5] Processing raw data (incremental merge)...

@@ -76,6 +76,7 @@ def render_sidebar(
 
         user_location = None
         gps_enabled = st.checkbox(t["gps"], key="gps_enabled")
+        st.caption(t.get("gps_hint", "位置情報の取得にはブラウザの許可が必要です"))
         if not gps_enabled:
             st.session_state.pop("_user_location", None)
             st.session_state.pop("_gps_error", None)

@@ -3,6 +3,7 @@ ui/filters.py
 フィルタリング・検索ロジック
 """
 import math
+import re
 import numpy as np
 import pandas as pd
 from typing import Optional
@@ -76,15 +77,35 @@ def filter_toilets(
 
 
 def search_toilets(df: pd.DataFrame, query: Optional[str]) -> pd.DataFrame:
-    """名前・住所・カテゴリで部分一致検索"""
+    """名前・住所・カテゴリで検索（部分単語一致, スコア範囲対応）"""
     if not query:
         return df
-    mask = (
-        df["title"].str.contains(query, case=False, na=False)
-        | df["address"].str.contains(query, case=False, na=False)
-        | df["category"].str.contains(query, case=False, na=False)
-    )
-    return df[mask]
+    q = query.strip()
+    if not q:
+        return df
+
+    score_range_match = re.match(r"^(\d{1,3})[\-~](\d{1,3})$", q)
+    if score_range_match:
+        lo = int(score_range_match.group(1))
+        hi = int(score_range_match.group(2))
+        return df[(df["toilet_score"] >= lo) & (df["toilet_score"] <= hi)]
+
+    words = [w for w in re.split(r"[\s,、]+", q) if w]
+    if not words:
+        return df
+
+    masks = [
+        (
+            df["title"].str.contains(w, case=False, na=False)
+            | df["address"].str.contains(w, case=False, na=False)
+            | df["category"].str.contains(w, case=False, na=False)
+        )
+        for w in words
+    ]
+    combined = masks[0]
+    for m in masks[1:]:
+        combined = combined | m
+    return df[combined]
 
 
 def filter_by_viewport(df: pd.DataFrame, bounds: dict) -> pd.DataFrame:
