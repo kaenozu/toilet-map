@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from utils import logger
 from db_utils import load_json
 from gap_analyzer import find_gaps, get_stats

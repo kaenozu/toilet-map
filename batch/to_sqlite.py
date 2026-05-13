@@ -14,7 +14,6 @@ import math
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_JSON_PATH = os.path.join(SCRIPT_DIR, "..", "data", "toilets.json.gz")
-sys.path.insert(0, SCRIPT_DIR)
 
 from db_utils import (  # noqa: E402
     DB_PATH, ensure_schema,

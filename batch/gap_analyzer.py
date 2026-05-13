@@ -9,16 +9,9 @@ from __future__ import annotations
 import json
 import os
 import re
-import sys
 from collections import Counter
 from functools import lru_cache
 from typing import Any
-
-_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-_PROJECT_ROOT = os.path.abspath(os.path.join(_SCRIPT_DIR, ".."))
-for p in (_SCRIPT_DIR, _PROJECT_ROOT):
-    if p not in sys.path:
-        sys.path.insert(0, p)
 
 from utils import extract_prefecture, logger  # noqa: E402
 

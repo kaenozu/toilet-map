@@ -1,5 +1,6 @@
 """
 tests/test_map_builder.py
+from app_config_prefectures import PREFECTURE_CENTERS
 ui/map_builder.py の回帰テスト
 """
 

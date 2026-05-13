@@ -6,12 +6,10 @@ Google Maps Scraper出力(JSONL)のデータ処理スクリプト
 """
 import json
 import gzip
-import os
 import sys
 from datetime import datetime
 from typing import Optional
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from scoring import (
     PlaceDict,
     ToiletScoreInfo,

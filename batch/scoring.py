@@ -3,13 +3,10 @@ batch/scoring.py
 スコアリングロジック（process_data.py から抽出）
 レビューからのトイレスコア計算・信頼度算出・キーワード抽出
 """
-import os
 import re
-import sys
 from collections import Counter
 from typing import Optional, TypedDict
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from scoring_config import (
     SCORE_CLAMP_MIN,
     SCORE_CLAMP_MAX,

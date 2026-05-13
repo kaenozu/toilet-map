@@ -5,8 +5,9 @@ app_config.py のユニットテスト
 import pytest
 from app_config import (
     get_score_style, esc, SCORE_RANGES, FILTER_CONFIG,
-    PREFECTURE_CENTERS, TILE_OPTIONS, ERROR_METADATA,
+    TILE_OPTIONS, ERROR_METADATA,
 )
+from app_config_prefectures import PREFECTURE_CENTERS
 
 
 class TestGetScoreStyle:

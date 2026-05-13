@@ -11,9 +11,9 @@ from app_config import (
     PUBLIC_MARKER_RADIUS,
     NORMAL_MARKER_RADIUS,
     POPUP_FIX_JS,
-    PREFECTURE_CENTERS,
     get_score_style,
 )
+from app_config_prefectures import PREFECTURE_CENTERS
 from .popups import build_popup_html
 from .types import ToiletDict
 
