@@ -473,3 +473,58 @@ class TestProcessDataMain:
                             lambda i, o, m="--full": calls.append((i, o, m)))
         pd_module.main()
         assert calls == [("input.json", "output.json", "--incremental")]
+
+
+class TestGetLongitude:
+    def test_returns_longitude_when_present(self):
+        assert scoring._get_longitude({"longitude": 139.69}) == 139.69
+
+    def test_falls_back_to_longtitude(self):
+        assert scoring._get_longitude({"longtitude": 139.69}) == 139.69
+
+    def test_returns_zero_when_both_missing(self):
+        assert scoring._get_longitude({}) == 0.0
+
+
+class TestAdjustByRatingEdgeCases:
+    def test_high_rating_negative_score_dampens(self):
+        score, matched = scoring._adjust_by_rating(-2.0, ["-汚い"], 5.0)
+        assert score > -2.0
+        assert "~汚い" in matched
+
+    def test_low_rating_positive_score_dampens(self):
+        score, matched = scoring._adjust_by_rating(2.0, ["+清潔"], 1.0)
+        assert score < 2.0
+        assert "~清潔" in matched
+
+
+class TestCollectToiletReviews:
+    def test_duplicate_review_hash_skipped(self):
+        review = {"Description": "トイレがきれい", "Rating": 5}
+        place = {
+            "title": "test",
+            "review_rating": 4.0,
+            "user_reviews": [review, dict(review)],
+            "user_reviews_extended": [],
+        }
+        result, highlights = scoring._collect_toilet_reviews(place)
+        assert len(result) == 1
+
+
+class TestCalculateFinalScore:
+    def test_no_reviews_and_no_rating(self):
+        score, confidence = scoring._calculate_final_score([], 0.0, 0.0)
+        assert score == 0.0
+        assert confidence == 0.0
+
+
+class TestExtractCoordinates:
+    def test_longitude_zero_falls_back_to_longtitude(self):
+        place = {"latitude": 35.0, "longitude": 0, "longtitude": 139.69}
+        lat, lon = scoring._extract_coordinates(place)
+        assert lon == 139.69
+
+    def test_no_fallback_when_lat_none(self):
+        place = {"longitude": 0, "longtitude": 139.69}
+        lat, lon = scoring._extract_coordinates(place)
+        assert lat is None

@@ -316,5 +316,24 @@ class TestWriteQueryParams:
         write_query_params({"page": "3"})  # should not raise
 
 
+class TestResolveUiStateFromQueryParams:
+    def test_invalid_page_returns_zero(self):
+        from app import get_translated_filters
+        from ui.i18n import get_language_strings
+        from ui.query_params import resolve_ui_state_from_query_params
+
+        _, translated_to_internal = get_translated_filters("日本語")
+        t = get_language_strings("日本語")
+
+        state = resolve_ui_state_from_query_params(
+            {"pref": "東京都", "page": "invalid"},
+            ["全て", "東京都"],
+            translated_to_internal,
+            t,
+        )
+
+        assert "page" not in state
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -392,3 +392,148 @@ class TestVerifyDataMain:
         assert "Public toilets   : 1" in captured.out
         assert "東京都" in captured.out
         assert "神奈川県" in captured.out
+
+
+class TestFormatDuplicateKey:
+    def test_empty_key(self):
+        from quality_metrics import _format_duplicate_key
+        assert _format_duplicate_key(()) == ""
+
+    def test_place_id(self):
+        from quality_metrics import _format_duplicate_key
+        result = _format_duplicate_key(("place_id", "ChIJ"))
+        assert result == "place_id=ChIJ"
+
+    def test_data_id(self):
+        from quality_metrics import _format_duplicate_key
+        result = _format_duplicate_key(("data_id", "0x123"))
+        assert result == "data_id=0x123"
+
+    def test_coordinates(self):
+        from quality_metrics import _format_duplicate_key
+        result = _format_duplicate_key(("coordinates", "35.0", "139.0"))
+        assert result == "coordinates=35.0,139.0"
+
+    def test_title_address(self):
+        from quality_metrics import _format_duplicate_key
+        result = _format_duplicate_key(("title_address", "Test", "東京都渋谷区"))
+        assert "Test" in result
+        assert "東京都" in result
+
+    def test_fallback(self):
+        from quality_metrics import _format_duplicate_key
+        result = _format_duplicate_key(("unknown", "a", "b"))
+        assert "a" in result
+
+
+class TestCompareSqliteMetricsDetailed:
+    def test_all_three_mismatches(self):
+        from quality_metrics import compare_sqlite_metrics
+        meta = {"total": 10, "scored": 8, "public_toilets": 3}
+        sqlite_metrics = {"total": 9, "scored": 7, "public_toilets": 2, "metadata": {}}
+        errors, warnings = compare_sqlite_metrics(meta, sqlite_metrics)
+        assert len(errors) == 3
+
+    def test_metadata_mismatch_generates_warnings(self):
+        from quality_metrics import compare_sqlite_metrics
+        meta = {"total": 5, "scored": 5, "public_toilets": 1,
+                "last_updated": "2026-01-01", "prefecture_counts": {}}
+        sqlite_metrics = {"total": 5, "scored": 5, "public_toilets": 1,
+                          "metadata": {"last_updated": "2025-01-01", "db_synced_at": "2026-01-01"},
+                          "prefecture_counts": {}}
+        errors, warnings = compare_sqlite_metrics(meta, sqlite_metrics)
+        assert any("last_updated mismatch" in w for w in warnings)
+
+    def test_missing_db_synced_at_warning(self):
+        from quality_metrics import compare_sqlite_metrics
+        meta = {"total": 5, "scored": 5, "public_toilets": 1,
+                "last_updated": "2026-01-01", "prefecture_counts": {}}
+        sqlite_metrics = {"total": 5, "scored": 5, "public_toilets": 1,
+                          "metadata": {}, "prefecture_counts": {}}
+        errors, warnings = compare_sqlite_metrics(meta, sqlite_metrics)
+        assert any("db_synced_at missing" in w for w in warnings)
+
+    def test_unexpected_prefecture_in_sqlite(self):
+        from quality_metrics import compare_sqlite_metrics
+        meta = {"total": 5, "scored": 5, "public_toilets": 1,
+                "prefecture_counts": {"東京都": 5}}
+        sqlite_metrics = {"total": 5, "scored": 5, "public_toilets": 1,
+                          "metadata": {"db_synced_at": "now"},
+                          "prefecture_counts": {"東京都": 5, "大阪府": 0}}
+        errors, warnings = compare_sqlite_metrics(meta, sqlite_metrics)
+        assert any("unexpected prefecture" in e for e in errors)
+
+    def test_missing_prefecture_in_sqlite(self):
+        from quality_metrics import compare_sqlite_metrics
+        meta = {"total": 5, "scored": 5, "public_toilets": 1,
+                "prefecture_counts": {"東京都": 5, "大阪府": 3}}
+        sqlite_metrics = {"total": 5, "scored": 5, "public_toilets": 1,
+                          "metadata": {"db_synced_at": "now"},
+                          "prefecture_counts": {"東京都": 5}}
+        errors, warnings = compare_sqlite_metrics(meta, sqlite_metrics)
+        assert any("missing prefecture" in e for e in errors)
+
+
+class TestCollectSqliteMetricsEdgeCases:
+    def test_nonexistent_path(self):
+        from quality_metrics import collect_sqlite_metrics
+        assert collect_sqlite_metrics("/nonexistent/path.db") is None
+
+    def test_operational_error_returns_none(self, tmp_path):
+        from quality_metrics import collect_sqlite_metrics
+        path = tmp_path / "empty.db"
+        path.write_text("not a database", encoding="utf-8")
+        result = collect_sqlite_metrics(str(path))
+        assert result is None
+
+
+class TestGapAnalyzerLoadPrefectureCatalog:
+    def test_file_not_exists(self, monkeypatch):
+        from gap_analyzer import _load_prefecture_catalog
+        _load_prefecture_catalog.cache_clear()
+        monkeypatch.setattr("gap_analyzer.PREFECTURE_CITIES_PATH", "/nonexistent/path.json")
+        assert _load_prefecture_catalog() == {}
+
+    def test_invalid_json(self, tmp_path, monkeypatch):
+        from gap_analyzer import _load_prefecture_catalog
+        _load_prefecture_catalog.cache_clear()
+        path = tmp_path / "cities.json"
+        path.write_text("not json", encoding="utf-8")
+        monkeypatch.setattr("gap_analyzer.PREFECTURE_CITIES_PATH", str(path))
+        assert _load_prefecture_catalog() == {}
+
+
+class TestExtractCityEdgeCases:
+    def test_empty_address(self):
+        from gap_analyzer import _extract_city
+        assert _extract_city("") == ""
+        assert _extract_city(None) == ""
+
+    def test_catalog_fallback_when_no_regex_match(self, monkeypatch):
+        from gap_analyzer import _extract_city
+        catalog = {"東京都": ["千代田区", "新宿区"]}
+        monkeypatch.setattr("gap_analyzer._load_prefecture_catalog", lambda: catalog)
+        result = _extract_city("東京都港", "東京都")
+        assert result == ""
+
+
+class TestGetStatsEdgeCases:
+    def test_invalid_score_logs_warning(self, caplog):
+        from gap_analyzer import get_stats
+        toilets = [
+            {"address": "東京都千代田区", "prefecture": "東京都", "toilet_score": "invalid"},
+        ]
+        stats = get_stats(toilets)
+        assert stats["scored"] == 0
+        assert stats["total"] == 1
+
+
+class TestFindGapsEdgeCases:
+    def test_include_catalog_expands_empty_cities(self, monkeypatch):
+        from gap_analyzer import find_gaps
+        monkeypatch.setattr("gap_analyzer._load_prefecture_catalog",
+                            lambda: {"東京都": ["千代田区", "新宿区"]})
+        stats = {"total": 0, "prefecture_city_counts": {"東京都": {"千代田区": 0}}}
+        gaps = find_gaps(stats, threshold=5, include_catalog=True)
+        prefectures_in_gaps = {g["city"] for g in gaps}
+        assert "新宿区" in prefectures_in_gaps

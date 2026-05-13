@@ -94,7 +94,7 @@ def collect_sqlite_metrics(db_path: str) -> dict | None:
             "prefecture_counts": {str(prefecture or ""): int(count) for prefecture, count in prefecture_rows},
             "metadata": dict(metadata_rows),
         }
-    except sqlite3.OperationalError:
+    except (sqlite3.OperationalError, sqlite3.DatabaseError):
         return None
     finally:
         conn.close()

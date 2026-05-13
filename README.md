@@ -58,22 +58,44 @@ streamlit run app.py
 toilet-map/
 ├── app.py                  # Streamlitメインアプリ
 ├── app_config.py           # 定数定義
+├── static/                 # 静的アセット
+│   ├── mobile.css         # モバイル最適化CSS
+│   └── popup_fix.js       # Leafletポップアップ位置修正
 ├── ui/                    # UIコンポーネント
 │   ├── components.py      # 凡例などの共通表示
 │   ├── data_loader.py     # データ読み込み
 │   ├── filters.py         # フィルタリング・検索
+│   ├── i18n.py           # 多言語対応
 │   ├── map_builder.py     # Folium地図構築
-│   ├── popups.py         # ポップアップHTML生成
-│   ├── stats.py          # 統計表示
 │   ├── pagination.py      # ページネーション
-│   └── i18n.py          # 多言語対応
+│   ├── popups.py         # ポップアップHTML生成
+│   ├── query_params.py   # URLクエリパラメータ操作
+│   ├── stats.py          # 統計表示
+│   ├── styles.py         # モバイルCSS読み込み
+│   └── types.py          # TypedDict型定義
 ├── batch/                 # バッチ処理
-│   ├── process_data.py    # スクレイピングデータ処理
-│   ├── scrape_runner.py  # スクレイピング実行エンジン
-│   ├── to_sqlite.py      # JSON→SQLite変換
-│   ├── sync_db.py        # JSON→SQLite同期ラッパー
-│   ├── update_data.bat    # 一括更新バッチ
+│   ├── auto_expand.py    # データ不足エリア自動拡張
+│   ├── city_bounds.py    # Nominatim市区町村境界
+│   ├── cli_parser.py     # CLI引数解析
+│   ├── db_utils.py       # SQLite共通ユーティリティ
+│   ├── docker_exec.py    # Dockerスクレイパー実行
+│   ├── expansion_query.py # 拡張クエリ管理
+│   ├── gap_analyzer.py   # 統計的ギャップ検出
 │   ├── generate_queries.py # クエリ自動生成
+│   ├── kanto_phase1.py   # 関東Phase1スクレイパー
+│   ├── merge_to_db.py    # JSON→SQLiteマージ
+│   ├── nationwide_runner.py # 47都道府県スクレイパー
+│   ├── pipeline.py       # スクレイプ後処理パイプライン
+│   ├── process_data.py   # スクレイピングデータ処理
+│   ├── progress_tracker.py # 進行状況追跡
+│   ├── quality_metrics.py # データ品質メトリクス
+│   ├── scrape_runner.py  # スクレイピング実行エンジン
+│   ├── scoring.py        # スコアリングロジック
+│   ├── scoring_config.py # スコアリング設定定数
+│   ├── sync_db.py        # JSON→SQLite同期ラッパー
+│   ├── to_sqlite.py      # JSON→SQLite変換
+│   ├── update_data.bat   # 一括更新バッチ
+│   ├── utils.py          # 共通ユーティリティ
 │   └── verify_data.py    # データ品質検証
 ├── data/                  # データファイル
 │   ├── toilets.json.gz   # 処理済みデータ（コミット対象）
@@ -111,7 +133,7 @@ python batch/verify_data.py
 
 ## テスト実行
 ```bash
-# 全テスト実行（361 tests）
+# 全テスト実行（438 tests）
 pytest tests/ -v
 
 # カバレッジ計測
@@ -120,8 +142,9 @@ pytest tests/ --cov=. --cov-report=term-missing
 
 ## プロジェクト設定
 - `pyproject.toml` で pytest / coverage / ruff を一元管理
-- coverage `fail_under = 50`（現在 **83%**）
-- テスト 18 ファイル、361 テスト、全パス
+- coverage `fail_under = 50`（現在 **88%**）
+- テスト 21 ファイル、438 テスト、全パス
+- lint: ruff 0 errors
 
 ## 注意事項
 - `data/toilets.json.gz` と `data/toilets.db` はコミット対象です

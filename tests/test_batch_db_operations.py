@@ -325,3 +325,151 @@ class TestIncrementalLoad:
 
         assert loaded["metadata"]["area_name"] == "テスト"
         assert loaded["toilets"][0]["title"] == "A"
+
+
+class TestCoerceFloat:
+    def test_non_finite_raises(self):
+        with pytest.raises(ValueError, match="invalid lat"):
+            to_sqlite._coerce_float(float("inf"), "lat", 0)
+
+    def test_valid(self):
+        assert to_sqlite._coerce_float(35.68, "lat", 0) == 35.68
+
+
+class TestCoerceInt:
+    def test_bool_raises(self):
+        with pytest.raises(ValueError, match="invalid review_count"):
+            to_sqlite._coerce_int(True, "review_count", 0)
+
+    def test_none_raises(self):
+        with pytest.raises(ValueError, match="invalid review_count"):
+            to_sqlite._coerce_int(None, "review_count", 0)
+
+    def test_valid(self):
+        assert to_sqlite._coerce_int(42, "review_count", 0) == 42
+
+
+class TestValidateToiletRecord:
+    def test_non_dict_raises(self):
+        with pytest.raises(ValueError, match="must be an object"):
+            to_sqlite._validate_toilet_record("not a dict", 0)
+
+    def test_missing_fields_raises(self):
+        with pytest.raises(ValueError, match="missing required fields"):
+            to_sqlite._validate_toilet_record({}, 0)
+
+    def test_confidence_out_of_range_raises(self):
+        with pytest.raises(ValueError, match="invalid confidence"):
+            to_sqlite._validate_toilet_record({
+                "title": "A", "category": "公園", "address": "東京",
+                "lat": 35.0, "lng": 139.0, "rating": 3.0, "review_count": 1,
+                "is_public_toilet": False, "toilet_score": 50.0, "confidence": 1.5,
+                "toilet_review_count": 0, "prefecture": "東京都",
+                "sample_reviews": [], "top_keywords": [],
+            }, 0)
+
+    def test_score_out_of_range_raises(self):
+        with pytest.raises(ValueError, match="invalid toilet_score"):
+            to_sqlite._validate_toilet_record({
+                "title": "A", "category": "公園", "address": "東京",
+                "lat": 35.0, "lng": 139.0, "rating": 3.0, "review_count": 1,
+                "is_public_toilet": False, "toilet_score": 150.0, "confidence": 0.5,
+                "toilet_review_count": 0, "prefecture": "東京都",
+                "sample_reviews": [], "top_keywords": [],
+            }, 0)
+
+    def test_negative_count_raises(self):
+        with pytest.raises(ValueError, match="invalid count fields"):
+            to_sqlite._validate_toilet_record({
+                "title": "A", "category": "公園", "address": "東京",
+                "lat": 35.0, "lng": 139.0, "rating": 3.0, "review_count": -1,
+                "is_public_toilet": False, "toilet_score": 50.0, "confidence": 0.5,
+                "toilet_review_count": 0, "prefecture": "東京都",
+                "sample_reviews": [], "top_keywords": [],
+            }, 0)
+
+    def test_invalid_sample_reviews_raises(self):
+        with pytest.raises(ValueError, match="invalid sample_reviews"):
+            to_sqlite._validate_toilet_record({
+                "title": "A", "category": "公園", "address": "東京",
+                "lat": 35.0, "lng": 139.0, "rating": 3.0, "review_count": 1,
+                "is_public_toilet": False, "toilet_score": 50.0, "confidence": 0.5,
+                "toilet_review_count": 0, "prefecture": "東京都",
+                "sample_reviews": "not a list", "top_keywords": [],
+            }, 0)
+
+    def test_invalid_top_keywords_raises(self):
+        with pytest.raises(ValueError, match="invalid top_keywords"):
+            to_sqlite._validate_toilet_record({
+                "title": "A", "category": "公園", "address": "東京",
+                "lat": 35.0, "lng": 139.0, "rating": 3.0, "review_count": 1,
+                "is_public_toilet": False, "toilet_score": 50.0, "confidence": 0.5,
+                "toilet_review_count": 0, "prefecture": "東京都",
+                "sample_reviews": [], "top_keywords": "not a list",
+            }, 0)
+
+    def test_valid_record_passes(self):
+        result = to_sqlite._validate_toilet_record({
+            "title": "A", "category": "公園", "address": "東京",
+            "lat": 35.0, "lng": 139.0, "rating": 3.0, "review_count": 1,
+            "is_public_toilet": False, "toilet_score": 50.0, "confidence": 0.5,
+            "toilet_review_count": 0, "prefecture": "東京都",
+            "sample_reviews": [], "top_keywords": [],
+        }, 0)
+        assert result["title"] == "A"
+
+
+class TestJsonToSqliteBackup:
+    def test_non_incremental_backs_up_existing_db(self, tmp_path, monkeypatch):
+        db_path = tmp_path / "toilets.db"
+        json_path = tmp_path / "toilets.json"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("CREATE TABLE IF NOT EXISTS toilets (id INTEGER)")
+        conn.close()
+        payload = {"metadata": {}, "toilets": []}
+        json_path.write_text(json.dumps(payload), encoding="utf-8")
+
+        monkeypatch.setattr(to_sqlite, "DB_PATH", str(db_path))
+        to_sqlite.json_to_sqlite(str(json_path), incremental=False)
+
+        assert (tmp_path / "toilets.db.bak").exists()
+
+
+class TestDbUtilsGetSchema:
+    def test_returns_list_of_strings(self):
+        schema = db_utils.get_schema_sql()
+        assert len(schema) == 4
+        assert all(isinstance(s, str) for s in schema)
+
+
+class TestFixNullPrefectures:
+    def test_fixes_from_address(self, tmp_path):
+        conn = sqlite3.connect(str(tmp_path / "test.db"))
+        try:
+            conn.execute(db_utils.TOILET_TABLE_SCHEMA)
+            conn.execute(
+                "INSERT INTO toilets (title, category, address, lat, lng, rating, review_count, "
+                "is_public_toilet, toilet_score, confidence, toilet_review_count, prefecture, sample_reviews_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                ("A", "公園", "東京都渋谷区", 35.0, 139.0, 3.0, 1, 0, 50.0, 0.5, 0, "", "[]"),
+            )
+            conn.commit()
+            fixed = db_utils.fix_null_prefectures(conn)
+            assert fixed == 1
+            pref = conn.execute("SELECT prefecture FROM toilets WHERE id = 1").fetchone()[0]
+            assert pref == "東京都"
+        finally:
+            conn.close()
+
+
+class TestToiletDbUpdateValues:
+    def test_returns_tuple(self):
+        toilet = {
+            "title": "A", "category": "公園", "address": "東京都",
+            "lat": 35.0, "lng": 139.0, "rating": 3.0, "review_count": 1,
+            "is_public_toilet": False, "toilet_score": 50.0, "confidence": 0.5,
+            "toilet_review_count": 0, "prefecture": "東京都",
+            "sample_reviews": [],
+        }
+        values = db_utils.toilet_db_update_values(toilet)
+        assert len(values) == 10
