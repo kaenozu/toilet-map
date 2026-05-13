@@ -6,6 +6,13 @@ from app_config import esc, safe_href, get_score_style, MAX_SAMPLE_REVIEWS, REVI
 from .types import ToiletDict
 
 
+def clean(s: str | None) -> str:
+    """文字列をサニタイズしてシングルクォートをエスケープ"""
+    if not s:
+        return ""
+    return esc(str(s)).replace("'", "\\'").replace("\n", " ").replace("\r", " ")
+
+
 def _build_public_badge(is_public: bool) -> str:
     if not is_public:
         return ""
@@ -108,11 +115,6 @@ def build_popup_html(t: ToiletDict) -> str:
             '<div style="font-size:10px;font-weight:600;margin-bottom:2px;">🚽 口コミ:</div>'
             + rev_html
         )
-
-    def clean(s):
-        if not s:
-            return ""
-        return esc(str(s)).replace("'", "\\'").replace("\n", " ").replace("\r", " ")
 
     title_esc = clean(t['title'])
     addr_esc = clean(t.get('address', ''))
