@@ -14,7 +14,6 @@ BATCH_SIZE = 12
 CITY_QUERY_TEMPLATES = [
     "公共トイレ in {city}",
     "トイレ in {city}",
-    "道の駅 in {city}",
     "カフェ in {city}",
     "コンビニ in {city}",
     "レストラン in {city}",
@@ -44,7 +43,6 @@ PREFECTURE_QUERY_TEMPLATES = [
     "公衆トイレ in {place}",
     "トイレ in {place}",
     "お手洗い in {place}",
-    "道の駅 トイレ in {place}",
     "サービスエリア トイレ in {place}",
     "パーキングエリア トイレ in {place}",
     "観光案内所 トイレ in {place}",

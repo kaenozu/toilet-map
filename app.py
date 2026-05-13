@@ -115,7 +115,7 @@ def main():
     else:
         st.divider()
         for _, row in display_items.iterrows():
-            render_toilet_card(row.to_dict())
+            render_toilet_card(row.to_dict(), meta)
 
     write_query_params(
         build_query_params_from_state(

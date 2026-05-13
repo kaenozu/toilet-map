@@ -11,6 +11,7 @@ from streamlit_js_eval import streamlit_js_eval
 from app_config import FILTER_CONFIG, FILTER_I18N_KEYS
 from ui.i18n import LANGUAGES, LANGUAGE_OPTIONS, get_language_strings
 from ui.query_params import resolve_ui_state_from_query_params
+from ui.submission_form import render_submission_form
 
 
 def get_translated_filters(lang: str) -> tuple[dict, dict]:
@@ -109,6 +110,9 @@ def render_sidebar(
             horizontal=True,
             key="sort_select",
         )
+
+        st.divider()
+        render_submission_form(t)
 
     return (
         t,
