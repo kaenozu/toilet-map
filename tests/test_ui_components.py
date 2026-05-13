@@ -3,7 +3,7 @@ tests/test_ui_components.py
 ui/components.py のユニットテスト（app_config テストは test_app_config.py に集約）
 """
 import pytest
-from ui.components import build_data_freshness_text, build_result_context_text, render_score_legend
+from ui.components import build_data_freshness_text, build_result_context_text, build_toilet_card_html, render_score_legend
 
 
 class TestBuildResultContextText:
@@ -66,6 +66,30 @@ class TestBuildDataFreshnessText:
 
         assert "Generated 2026-05-10 21:27:30" in text
         assert "DB synced N/A" in text
+
+
+class TestBuildToiletCardHtml:
+    def test_basic_card(self):
+        toilet = {
+            "title": "テストトイレ", "category": "公園", "address": "東京都",
+            "toilet_score": 80.0, "confidence": 0.8, "is_public_toilet": True,
+            "rating": 4.5, "review_count": 100, "lat": 35.0, "lng": 139.0,
+            "link": "", "sample_reviews": [], "top_keywords": [],
+        }
+        html = build_toilet_card_html(toilet, rank=1)
+        assert "テストトイレ" in html
+        assert "#1" in html
+
+    def test_without_rank(self):
+        toilet = {
+            "title": "A", "category": "カフェ", "address": "大阪",
+            "toilet_score": 50.0, "confidence": 0.5, "is_public_toilet": False,
+            "rating": 3.0, "review_count": 10, "lat": 34.0, "lng": 135.0,
+            "link": "https://maps.google.com/", "sample_reviews": [], "top_keywords": [],
+        }
+        html = build_toilet_card_html(toilet)
+        assert "A" in html
+        assert "#1" not in html
 
 
 class TestRenderScoreLegend:

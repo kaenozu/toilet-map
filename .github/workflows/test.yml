@@ -41,7 +41,9 @@ jobs:
           pip install pytest-cov
 
       - name: Run tests with coverage
-        run: pytest tests/ -v --tb=short --cov=. --cov-report=term-missing --cov-fail-under=50
+        run: |
+          rm -f .coverage*
+          pytest tests/ -v --tb=short --cov=. --cov-report=term-missing --cov-fail-under=50
 
       - name: Run data verification
         run: python batch/verify_data.py

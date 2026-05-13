@@ -3,7 +3,7 @@ tests/test_stats.py
 ui/stats.py のユニットテスト
 """
 import pytest
-from ui.stats import calc_avg_score, render_score_distribution
+from ui.stats import calc_avg_score, calc_score_distribution, render_score_distribution
 
 
 class TestCalcAvgScore:
@@ -43,6 +43,27 @@ class TestCalcAvgScore:
             {"toilet_score": 0},
         ]
         assert calc_avg_score(toilets) == pytest.approx(75.0)
+
+
+class TestCalcScoreDistribution:
+    def test_empty_list(self):
+        assert calc_score_distribution([]) == []
+
+    def test_all_zero(self):
+        assert calc_score_distribution([{"toilet_score": 0}]) == []
+
+    def test_returns_expected_ranges(self):
+        toilets = [
+            {"toilet_score": 90},
+            {"toilet_score": 70},
+            {"toilet_score": 55},
+            {"toilet_score": 40},
+            {"toilet_score": 20},
+        ]
+        dist = calc_score_distribution(toilets)
+        assert len(dist) == 5
+        assert "✨" in dist[0]["label"]
+        assert dist[0]["count"] == 1
 
 
 class TestRenderScoreDistribution:
