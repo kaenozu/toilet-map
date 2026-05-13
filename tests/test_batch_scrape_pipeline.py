@@ -505,8 +505,7 @@ class TestSlugify:
 class TestLoadQueryLines:
     def test_os_error_returns_empty(self, tmp_path):
         import expansion_query as eq
-        from pathlib import Path
-        result = eq._load_query_lines(Path(tmp_path / "nonexistent.txt"))
+        result = eq._load_query_lines(tmp_path / "nonexistent.txt")
         assert result == []
 
     def test_skips_comments_and_empty(self, tmp_path):
@@ -533,7 +532,7 @@ class TestNextBatchIndex:
         (tmp_path / "batch_005.txt").write_text("", encoding="utf-8")
         assert eq._next_batch_index(tmp_path) == 6
 
-    def test_no_files_returns_zero(self, tmp_path):
+    def test_no_files_returns_one(self, tmp_path):
         import expansion_query as eq
         assert eq._next_batch_index(tmp_path) == 1
 
@@ -607,13 +606,12 @@ class TestEnsureQueryFiles:
 
 
 class TestMergeQueryFilesBudget:
-    def test_budget_exceeded_stops_adding(self, tmp_path):
+    def test_budget_exceeded_stops_adding(self, tmp_path, monkeypatch):
         import expansion_query as eq
-        eq._ACTIVE_CITY_BUDGET = 1
-        eq._ACTIVE_PREF_BUDGET = 1
-        eq._ACTIVE_TARGET_CITY = "渋谷区"
-        eq._ACTIVE_TARGET_PREF = "東京都"
-        from pathlib import Path
+        monkeypatch.setattr(eq, "_ACTIVE_CITY_BUDGET", 1)
+        monkeypatch.setattr(eq, "_ACTIVE_PREF_BUDGET", 1)
+        monkeypatch.setattr(eq, "_ACTIVE_TARGET_CITY", "渋谷区")
+        monkeypatch.setattr(eq, "_ACTIVE_TARGET_PREF", "東京都")
         city_file = tmp_path / "city.txt"
         city_file.write_text("# city: 渋谷区\nq1\nq2\nq3\n", encoding="utf-8")
         result = eq.merge_query_files([str(city_file)])
