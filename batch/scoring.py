@@ -110,7 +110,7 @@ def mentions_toilet(text: str) -> bool:
     return True
 
 
-def _get_longitude(place: dict) -> float:
+def _get_longitude(place: PlaceDict) -> float:
     """経度を取得。longitude がなければ longtitude をフォールバックとして使う。"""
     lon = place.get("longitude")
     if lon is None:

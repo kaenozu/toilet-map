@@ -153,7 +153,7 @@ def json_to_sqlite(json_path: str, incremental: bool = False) -> None:
     if not incremental and os.path.exists(DB_PATH):
         import shutil
         backup_path = f"{DB_PATH}.bak"
-        shutil.copy2(DB_PATH, backup_path)
+        shutil.copy(DB_PATH, backup_path)
         logger.info(f"Existing database backed up to {backup_path}")
 
     logger.info(f"Converting {json_path} to SQLite (incremental={incremental})...")

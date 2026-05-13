@@ -67,7 +67,7 @@ TOILET_MENTION_KEYWORDS = [
 
 TOILET_CATEGORIES = ["公共トイレ", "トイレ", "restroom"]
 
-SENTENCE_SPLIT_RE = re.compile(r'[。\n]')
+SENTENCE_SPLIT_RE = re.compile(r'[。\n！？!?]')
 TOILET_MENTION_RE = re.compile(
     '|'.join(re.escape(k) for k in TOILET_MENTION_KEYWORDS),
     re.IGNORECASE,

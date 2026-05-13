@@ -18,6 +18,7 @@ import gzip
 import os
 import sys
 import shutil
+import subprocess
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
@@ -156,9 +157,9 @@ def main() -> None:
         f"total {len(all_toilets)} toilets"
     )
 
-    ret = os.system(
-        f'python "{TO_SQLITE_PATH}" "{CANONICAL_PATH}" --incremental'
-    )
+    ret = subprocess.run(
+        [sys.executable, TO_SQLITE_PATH, CANONICAL_PATH, "--incremental"],
+    ).returncode
     if ret != 0:
         logger.error("to_sqlite.py failed, SQLite may be out of sync")
 

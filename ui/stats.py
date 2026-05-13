@@ -8,7 +8,7 @@ from app_config import SCORE_DISTRIBUTION_RANGES
 
 
 def calc_avg_score(toilets: list) -> float:
-    scored = [t for t in toilets if t.get("toilet_score", 0) > 0]
+    scored = [t for t in toilets if t.get("toilet_score") is not None and t.get("toilet_score", 0) > 0]
     if not scored:
         return 0.0
     return sum(t["toilet_score"] for t in scored) / len(scored)

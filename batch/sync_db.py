@@ -6,7 +6,7 @@ update_data.bat から呼ばれる。
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from to_sqlite import DEFAULT_JSON_PATH, json_to_sqlite as _json_to_sqlite
 

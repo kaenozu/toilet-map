@@ -5,6 +5,7 @@ auto_expand.py から分離。本モジュールは test_batch_scrape_pipeline.p
 """
 import os
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from utils import logger
 from generate_queries import (
@@ -26,6 +27,15 @@ _ACTIVE_CITY_BUDGET = 0
 _ACTIVE_PREF_BUDGET = 0
 
 
+def reset_context() -> None:
+    """コンテキストを初期状態にリセットする（テスト用）"""
+    global _ACTIVE_TARGET_PREF, _ACTIVE_TARGET_CITY, _ACTIVE_CITY_BUDGET, _ACTIVE_PREF_BUDGET
+    _ACTIVE_TARGET_PREF = ""
+    _ACTIVE_TARGET_CITY = ""
+    _ACTIVE_CITY_BUDGET = 0
+    _ACTIVE_PREF_BUDGET = 0
+
+
 def set_active_context(pref: str, city: str, city_budget: int = 0, pref_budget: int = 0) -> tuple[str, str, int, int]:
     global _ACTIVE_TARGET_PREF, _ACTIVE_TARGET_CITY, _ACTIVE_CITY_BUDGET, _ACTIVE_PREF_BUDGET
     prev = (_ACTIVE_TARGET_PREF, _ACTIVE_TARGET_CITY, _ACTIVE_CITY_BUDGET, _ACTIVE_PREF_BUDGET)
@@ -34,6 +44,16 @@ def set_active_context(pref: str, city: str, city_budget: int = 0, pref_budget: 
     _ACTIVE_CITY_BUDGET = city_budget
     _ACTIVE_PREF_BUDGET = pref_budget
     return prev
+
+
+@contextmanager
+def active_context(pref: str, city: str, city_budget: int = 0, pref_budget: int = 0):
+    """コンテキスト保存/復元付きでスコープ付き利用するためのコンテキストマネージャ"""
+    prev = set_active_context(pref, city, city_budget, pref_budget)
+    try:
+        yield
+    finally:
+        set_active_context(*prev)
 
 
 def query_limits_for_count(count: int) -> tuple[int, int]:
