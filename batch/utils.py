@@ -3,17 +3,15 @@ batch/utils.py
 Common utility functions for batch processing.
 """
 import json
-import os
-import sys
 import logging
 import gzip
+import os
 import re
 import time
 import tempfile
 from contextlib import contextmanager
 from typing import Any
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from scoring_config import PREFECTURES
 
 # Configure logging

@@ -21,7 +21,6 @@ import shutil
 import subprocess
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, SCRIPT_DIR)
 
 from utils import extract_prefecture, logger  # noqa: E402
 from db_utils import load_json  # noqa: E402

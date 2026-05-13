@@ -1,5 +1,5 @@
 """
-scrape_runner.py
+batch/scrape_runner.py
 バッチスクレイプの実行エンジン（Windows batから呼び出される）
 
 使い方:
@@ -13,21 +13,17 @@ import sys
 import os
 import time
 import shutil
-from pathlib import Path
-from typing import Optional
 
-from utils import logger, count_lines
+from utils import logger
 from docker_exec import scrape_query
 from progress_tracker import (
-    load_queries, load_progress, save_progress, publish_expansion_status, merge_part_files,
+    load_queries, load_progress, save_progress, publish_expansion_status,
     PROGRESS_FILE as DEFAULT_PROGRESS_FILE,
 )
 from cli_parser import parse_args, detect_city_from_queries
 from pipeline import run_postprocess_pipeline
+from scrape_filter import prepare_input_data
 
-# ============================================================
-# 設定
-# ============================================================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 QUERIES_FILE = os.path.join(SCRIPT_DIR, os.environ.get("QUERIES", "queries.txt"))
 RAW_DIR = os.path.join(SCRIPT_DIR, os.environ.get("RAW_DIR", "raw_parts"))
@@ -40,54 +36,8 @@ RETRY_SLEEP = int(os.environ.get("RETRY_SLEEP", "300"))
 SYNC_EVERY_SUCCESS = int(os.environ.get("SYNC_EVERY_SUCCESS", "0"))
 
 
-# ============================================================
-# 市フィルタ・境界取得
-# ============================================================
-def fetch_city_bounds(city: str, pref: str) -> Optional[dict]:
-    from city_bounds import get_city_bounds
-    if pref and not city:
-        return get_city_bounds(pref)
-    if pref:
-        bounds = get_city_bounds(city, pref)
-        if bounds:
-            return bounds
-    return get_city_bounds(city)
-
-
-def apply_city_filter(city: str, pref: str, raw_output: str) -> tuple[str, int, int]:
-    from city_bounds import filter_raw_data
-    bounds = fetch_city_bounds(city, pref)
-    filtered_path = str(Path(raw_output).with_name(Path(raw_output).stem + "_filtered.json"))
-    total_raw, kept = filter_raw_data(raw_output, filtered_path, city, bounds)
-    return filtered_path, total_raw, kept
-
-
-# ============================================================
-# データ準備
-# ============================================================
-def _prepare_input_data(city: str, pref: str) -> str:
-    logger.info("Merging results...")
-    merge_part_files(RAW_DIR, RAW_OUTPUT, len(load_queries(QUERIES_FILE)))
-    total_lines = count_lines(RAW_OUTPUT)
-    logger.info(f"Total raw data: {total_lines} entries")
-
-    if not city and not pref:
-        return RAW_OUTPUT
-
-    filtered_path, total_raw, kept = apply_city_filter(city, pref, RAW_OUTPUT)
-    if kept == 0:
-        filter_label = f"{pref}{city}" if pref else city
-        logger.warning(f"\n  WARNING: No entries matched city filter '{filter_label}'")
-        logger.info(f"  ({total_raw} raw entries were checked)")
-        raise RuntimeError(f"No entries matched city filter '{filter_label}'")
-
-    pct = kept / total_raw * 100 if total_raw > 0 else 0
-    logger.info(f"  City filter: {kept}/{total_raw} entries kept ({pct:.1f}%)")
-    return filtered_path
-
-
 def _sync_canonical_data(city: str, pref: str) -> None:
-    data_for_processing = _prepare_input_data(city, pref)
+    data_for_processing = prepare_input_data(city, pref, RAW_OUTPUT, RAW_DIR, QUERIES_FILE)
     run_postprocess_pipeline(data_for_processing, PROCESSED, SCRIPT_DIR)
 
 
@@ -97,9 +47,6 @@ def _maybe_sync_after_success(city: str, pref: str, success_count: int) -> None:
         _sync_canonical_data(city, pref)
 
 
-# ============================================================
-# スクレイプループ
-# ============================================================
 def _execute_scraping_loop(
     queries: list[str],
     total: int,
@@ -194,9 +141,6 @@ def _execute_scraping_loop(
     return success, skipped, failed, done
 
 
-# ============================================================
-# 後片付け
-# ============================================================
 def _cleanup_on_success(failed: int, progress_file: str) -> None:
     if failed == 0:
         for path in [progress_file, RAW_DIR]:
@@ -208,9 +152,6 @@ def _cleanup_on_success(failed: int, progress_file: str) -> None:
                 logger.info(f"Cleaned up: {path}")
 
 
-# ============================================================
-# メイン
-# ============================================================
 def run_batch():
     args = parse_args()
     queries = load_queries(QUERIES_FILE)
@@ -274,8 +215,7 @@ def run_batch():
     logger.info(f"{'=' * 50}\n")
 
     try:
-        data_for_processing = _prepare_input_data(city, pref)
-        run_postprocess_pipeline(data_for_processing, PROCESSED, SCRIPT_DIR)
+        _sync_canonical_data(city, pref)
     except RuntimeError as exc:
         publish_expansion_status(
             run_id,

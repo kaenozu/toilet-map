@@ -5,13 +5,11 @@ Nominatim API 使用
 """
 import json
 import os
-import sys
 import time
 import urllib.request
 import urllib.parse
 from typing import Optional
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from utils import logger  # noqa: E402
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))

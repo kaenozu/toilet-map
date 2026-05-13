@@ -159,7 +159,7 @@ def get_underserved_areas_in_viewport(bounds: dict, stats: dict) -> list[dict]:
     center_lat = (sw_lat + ne_lat) / 2
     center_lng = (sw_lng + ne_lng) / 2
 
-    from app_config import PREFECTURE_CENTERS
+    from app_config_prefectures import PREFECTURE_CENTERS
 
     # 表示範囲内にある都道府県を、中心からの距離順にリスト
     visible_prefs = []

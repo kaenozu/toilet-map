@@ -7,7 +7,6 @@ import sys
 import subprocess
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from utils import file_lock
 from scoring_config import PREFECTURES
 from generate_queries import main as generate_queries_main
