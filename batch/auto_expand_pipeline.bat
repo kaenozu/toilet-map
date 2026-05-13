@@ -17,29 +17,7 @@ echo.
 python "%SCRIPT_DIR%verify_data.py"
 echo.
 echo --- Gap Analysis Summary ---
-python -c "
-import sys; sys.path.insert(0, r'%SCRIPT_DIR%')
-from gap_analyzer import get_stats, find_gaps
-from db_utils import load_json
-import os
-data_path = os.path.join(r'%DATA_DIR%', 'toilets.json.gz')
-if os.path.exists(data_path):
-    data = load_json(data_path)
-    toilets = data.get('toilets', []) if isinstance(data, dict) else []
-    stats = get_stats(toilets)
-    gaps = find_gaps(stats, include_catalog=True)
-    print(f'  Total toilets: {stats[\"total\"]}')
-    print(f'  Scored: {stats[\"scored\"]}')
-    print(f'  Avg score: {stats[\"score_avg\"]}')
-    print(f'  Underserved areas (count ^ threshold): {len(gaps)}')
-    if gaps:
-        print()
-        print('  Top underserved:')
-        for g in gaps[:5]:
-            print(f'    {g[\"prefecture\"]} {g[\"city\"]} ({g[\"count\"]} toilets)')
-else:
-    print('  No data file found.')
-"
+python "%SCRIPT_DIR%gap_summary.py"
 echo.
 
 REM Step 2: Auto expansion (top 3 underserved areas)
@@ -53,7 +31,9 @@ if errorlevel 1 (
 REM Step 3: Merge raw data files (if any were produced)
 echo.
 echo [3/5] Processing raw data (incremental merge)...
-python "%SCRIPT_DIR%process_data.py" "%SCRIPT_DIR%merged_raw.json" "%PROCESSED%" --incremental 2>nul
+if exist "%SCRIPT_DIR%merged_raw.json" (
+    python "%SCRIPT_DIR%process_data.py" "%SCRIPT_DIR%merged_raw.json" "%PROCESSED%" --incremental
+)
 REM Try each area's raw data file
 for %%f in ("%SCRIPT_DIR%raw_data_*.json") do (
     echo   Processing: %%f

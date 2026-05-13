@@ -1,0 +1,2 @@
+# No system packages required.
+# folium, streamlit-folium, and their dependencies are pure Python packages.
