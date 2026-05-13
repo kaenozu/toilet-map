@@ -4,6 +4,8 @@ tests/test_batch_verification.py
 """
 import sqlite3
 
+import pytest
+
 import db_utils
 import gap_analyzer
 import verify_data
@@ -263,3 +265,73 @@ class TestVerificationGate:
 
         assert errors == []
         assert any("No records found for 神奈川県" in message for message in warnings)
+
+
+class TestVerifyDataLoad:
+    def test_loads_gz(self, tmp_path, monkeypatch):
+        import gzip
+        import json
+        path = tmp_path / "toilets.json.gz"
+        data = {"metadata": {"total": 1}, "toilets": [{"title": "A"}]}
+        with gzip.open(path, "wt", encoding="utf-8") as f:
+            json.dump(data, f)
+
+        monkeypatch.setattr(verify_data, "DATA_PATHS", [str(path)])
+        result = verify_data.load_data()
+        assert result["metadata"]["total"] == 1
+
+    def test_loads_json(self, tmp_path, monkeypatch):
+        import json
+        path = tmp_path / "toilets.json"
+        data = {"metadata": {"total": 2}, "toilets": []}
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+        monkeypatch.setattr(verify_data, "DATA_PATHS", [str(path)])
+        result = verify_data.load_data()
+        assert result["metadata"]["total"] == 2
+
+    def test_raises_on_missing(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(verify_data, "DATA_PATHS", [str(tmp_path / "nope.json.gz")])
+        with pytest.raises(FileNotFoundError):
+            verify_data.load_data()
+
+
+class TestGetExpectedPrefectures:
+    def test_from_queries_dir(self, tmp_path, monkeypatch):
+        queries_d = tmp_path / "queries.d"
+        for pref in ["東京都", "大阪府"]:
+            d = queries_d / pref
+            d.mkdir(parents=True)
+            (d / "batch_001.txt").write_text("q1\n", encoding="utf-8")
+        monkeypatch.setattr(verify_data, "QUERIES_D", str(queries_d))
+        result = verify_data.get_expected_prefectures()
+        assert result == ["大阪府", "東京都"]
+
+    def test_falls_back_to_kanto_when_no_queries_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(verify_data, "QUERIES_D", str(tmp_path / "nonexistent"))
+        assert verify_data.get_expected_prefectures() == verify_data.KANTO_PREFECTURES
+
+    def test_skips_non_batch_dirs(self, tmp_path, monkeypatch):
+        queries_d = tmp_path / "queries.d"
+        d = queries_d / "東京都"
+        d.mkdir(parents=True)
+        (d / "batch_001.txt").write_text("q1\n", encoding="utf-8")
+        empty_dir = queries_d / "大阪府"
+        empty_dir.mkdir()
+        monkeypatch.setattr(verify_data, "QUERIES_D", str(queries_d))
+        result = verify_data.get_expected_prefectures()
+        assert result == ["東京都"]
+
+
+class TestCountQueriesForPref:
+    def test_counts_non_comment_lines(self, tmp_path, monkeypatch):
+        pref_dir = tmp_path / "queries.d" / "東京都"
+        pref_dir.mkdir(parents=True)
+        (pref_dir / "batch_001.txt").write_text("# comment\nq1\nq2\n", encoding="utf-8")
+        (pref_dir / "batch_002.txt").write_text("q3\n", encoding="utf-8")
+        monkeypatch.setattr(verify_data, "QUERIES_D", str(tmp_path / "queries.d"))
+        assert verify_data.count_queries_for_pref("東京都") == 3
+
+    def test_returns_zero_for_missing_pref(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(verify_data, "QUERIES_D", str(tmp_path / "queries.d"))
+        assert verify_data.count_queries_for_pref("存在しない県") == 0

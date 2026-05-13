@@ -232,3 +232,142 @@ class TestDeduplicate:
         ]
         result = pd_module.deduplicate(places)
         assert len(result) == 1
+
+
+class TestBuildToiletResult:
+    def test_excluded_when_no_toilet_reviews_and_not_public(self):
+        from batch.process_data import _build_toilet_result
+        place = {"title": "ラーメン屋", "category": "ラーメン"}
+        info = {"score": 0.0, "confidence": 0.1, "toilet_review_count": 0,
+                "toilet_reviews": [], "top_keywords": []}
+        assert _build_toilet_result(place, info, 35.0, 139.0) is None
+
+    def test_rescued_when_eligible_category(self):
+        from batch.process_data import _build_toilet_result
+        place = {"title": "上野公園", "category": "公園"}
+        info = {"score": 0.0, "confidence": 0.1, "toilet_review_count": 0,
+                "toilet_reviews": [], "top_keywords": []}
+        result = _build_toilet_result(place, info, 35.0, 139.0)
+        assert result is not None
+        assert result["confidence"] == 0.1
+
+    def test_confidence_zero_gives_default_score(self):
+        from batch.process_data import _build_toilet_result
+        place = {"title": "駅前トイレ", "category": "駅"}
+        info = {"score": -5.0, "confidence": 0.0, "toilet_review_count": 1,
+                "toilet_reviews": [], "top_keywords": []}
+        result = _build_toilet_result(place, info, 35.0, 139.0)
+        assert result is not None
+        assert result["toilet_score"] == 50.0
+
+    def test_rescued_when_title_matches_cafe(self):
+        from batch.process_data import _build_toilet_result
+        place = {"title": "ドトールコーヒー", "category": "飲食店"}
+        info = {"score": 0.0, "confidence": 0.1, "toilet_review_count": 0,
+                "toilet_reviews": [], "top_keywords": []}
+        result = _build_toilet_result(place, info, 35.0, 139.0)
+        assert result is not None
+
+    def test_public_toilet_passed_through_even_without_reviews(self):
+        from batch.process_data import _build_toilet_result
+        place = {"title": "公衆トイレ", "category": "公衆トイレ"}
+        info = {"score": 0.0, "confidence": 0.1, "toilet_review_count": 0,
+                "toilet_reviews": [], "top_keywords": []}
+        result = _build_toilet_result(place, info, 35.0, 139.0)
+        assert result is not None
+
+
+class TestMakePlaceKey:
+    def test_place_id_used_when_present(self):
+        place = {"place_id": "ChIJ", "data_id": "0x111", "title": "A"}
+        assert pd_module.make_place_key(place) == "place_id:ChIJ"
+
+    def test_data_id_fallback(self):
+        place = {"data_id": "0x222", "title": "A", "address": "東京"}
+        assert pd_module.make_place_key(place) == "data_id:0x222"
+
+    def test_coordinates_fallback(self):
+        place = {"title": "A", "latitude": 35.0, "longitude": 139.0}
+        assert pd_module.make_place_key(place).startswith("coords:")
+
+    def test_title_address_fallback(self):
+        place = {"title": "  Test  ", "address": "  東京  "}
+        result = pd_module.make_place_key(place)
+        assert result.startswith("title_address:")
+        assert "test" in result
+        assert "東京" in result
+
+
+class TestLoadExisting:
+    def test_loads_gz(self, tmp_path):
+        data = {"metadata": {"total": 1}, "toilets": []}
+        import gzip
+        import json
+        path = tmp_path / "out.json.gz"
+        with gzip.open(path, "wt", encoding="utf-8") as f:
+            json.dump(data, f)
+        result = pd_module.load_existing(str(path))
+        assert result["metadata"]["total"] == 1
+
+    def test_loads_json(self, tmp_path):
+        data = {"metadata": {"total": 2}, "toilets": []}
+        path = tmp_path / "out.json"
+        import json
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        result = pd_module.load_existing(str(path))
+        assert result["metadata"]["total"] == 2
+
+    def test_falls_back_to_gz_when_json_missing(self, tmp_path):
+        data = {"metadata": {"total": 3}, "toilets": []}
+        import gzip
+        import json
+        path = tmp_path / "out.json"
+        with gzip.open(f"{path}.gz", "wt", encoding="utf-8") as f:
+            json.dump(data, f)
+        result = pd_module.load_existing(str(path))
+        assert result["metadata"]["total"] == 3
+
+    def test_returns_empty_on_not_found(self, tmp_path):
+        result = pd_module.load_existing(str(tmp_path / "nonexistent.json"))
+        assert result == {"metadata": None, "toilets": []}
+
+    def test_returns_empty_on_json_decode_error(self, tmp_path):
+        path = tmp_path / "bad.json"
+        path.write_text("not valid json", encoding="utf-8")
+        result = pd_module.load_existing(str(path))
+        assert result == {"metadata": None, "toilets": []}
+
+
+class TestBuildMetadata:
+    def test_with_results(self):
+        results = [
+            {"lat": 35.68, "lng": 139.69, "address": "東京都渋谷区", "toilet_score": 80.0, "confidence": 0.8, "is_public_toilet": True},
+            {"lat": 35.70, "lng": 139.71, "address": "東京都新宿区", "toilet_score": 60.0, "confidence": 0.5, "is_public_toilet": False},
+        ]
+        meta = pd_module.build_metadata(results)
+        assert meta["total"] == 2
+        assert meta["scored"] == 2
+        assert meta["public_toilets"] == 1
+        assert isinstance(meta["last_updated"], str)
+
+    def test_without_results(self):
+        meta = pd_module.build_metadata([])
+        assert meta["total"] == 0
+        assert meta["center_lat"] == 36.2231
+        assert meta["center_lng"] == 139.3772
+        assert meta["area_name"] == "検索エリア"
+
+    def test_area_name_extracted_from_address(self):
+        results = [
+            {"lat": 35.0, "lng": 139.0, "address": "東京都渋谷区", "toilet_score": 80.0, "confidence": 0.8, "is_public_toilet": True},
+        ]
+        meta = pd_module.build_metadata(results)
+        assert "渋谷区" in meta["area_name"]
+
+    def test_area_name_fallback_when_no_address_match(self):
+        results = [
+            {"lat": 35.0, "lng": 139.0, "address": "1234567890", "toilet_score": 80.0, "confidence": 0.8, "is_public_toilet": True},
+        ]
+        meta = pd_module.build_metadata(results)
+        assert meta["area_name"] == "検索エリア"

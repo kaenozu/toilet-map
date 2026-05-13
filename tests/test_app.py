@@ -259,5 +259,62 @@ class TestQueryParamState:
             "page": "3",
         }
 
+
+class TestReadQueryParams:
+    def test_reads_from_st_query_params(self, monkeypatch):
+        from ui.query_params import read_query_params
+        fake = {"lang": ["ja"], "pref": ["東京都"]}
+        monkeypatch.setattr("streamlit.query_params", fake)
+        result = read_query_params()
+        assert result == {"lang": "ja", "pref": "東京都"}
+
+    def test_falls_back_to_experimental_get(self, monkeypatch):
+        from ui.query_params import read_query_params
+        import streamlit as st
+        container = {"lang": ["en"]}
+
+        def fake_getter():
+            return container
+
+        monkeypatch.setattr(st, "experimental_get_query_params", fake_getter, raising=False)
+        monkeypatch.delattr("streamlit.query_params", raising=False)
+        result = read_query_params()
+        assert result == {"lang": "en"}
+
+    def test_returns_empty_when_no_getter(self, monkeypatch):
+        from ui.query_params import read_query_params
+        monkeypatch.delattr("streamlit.query_params", raising=False)
+        assert read_query_params() == {}
+
+
+class TestWriteQueryParams:
+    def test_writes_to_st_query_params(self, monkeypatch):
+        from ui.query_params import write_query_params
+        fake = {"lang": "ja"}
+        monkeypatch.setattr("streamlit.query_params", fake)
+        write_query_params({"lang": "en", "pref": "東京都"})
+        assert fake["lang"] == "en"
+        assert fake["pref"] == "東京都"
+        assert len(fake) == 2
+
+    def test_falls_back_to_experimental_setter(self, monkeypatch):
+        from ui.query_params import write_query_params
+        import streamlit as st
+        calls = []
+
+        def fake_setter(**params):
+            calls.append(params)
+
+        monkeypatch.setattr(st, "experimental_set_query_params", fake_setter, raising=False)
+        monkeypatch.delattr("streamlit.query_params", raising=False)
+        write_query_params({"page": "3"})
+        assert calls == [{"page": "3"}]
+
+    def test_noop_when_no_setter(self, monkeypatch):
+        from ui.query_params import write_query_params
+        monkeypatch.delattr("streamlit.query_params", raising=False)
+        write_query_params({"page": "3"})  # should not raise
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
