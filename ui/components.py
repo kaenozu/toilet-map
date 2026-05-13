@@ -54,16 +54,18 @@ def render_score_legend():
     )
 
 
-def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None) -> str:
-    """ランキングリストのトイレカードHTMLを返す"""
+def build_toilet_card_html(toilet: ToiletDict) -> str:
+    """トイレカードのHTMLを返す"""
     t = toilet
     color, emoji, _ = get_score_style(t["toilet_score"])
     confidence_pct = int(t["confidence"] * 100)
+
     public_tag = (
         ' <span style="background:#e3f2fd;color:#1565c0;padding:1px 6px;border-radius:3px;font-size:10px;">公共</span>'
         if t.get("is_public_toilet")
         else ""
     )
+
     link_href = safe_href(t.get("link"))
     link_start = (
         f'<a href="{link_href}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit;">'
@@ -71,14 +73,13 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None) -> str:
         else ""
     )
     link_end = "</a>" if link_href else ""
-    rank_html = f'<span style="color:#999;font-weight:600;min-width:24px;">#{rank}</span>' if rank else ""
+
     return f"""
     {link_start}
     <div class="toilet-card" style="display:flex;align-items:center;gap:10px;padding:8px 12px;
         background:#ffffff;color:#222222;border-radius:8px;margin-bottom:4px;
         border:1px solid #e0e0e0;min-height:60px;
         -webkit-tap-highlight-color:transparent;">
-        {rank_html}
         <div style="min-width:50px;text-align:center;">
             <div style="font-size:24px;font-weight:800;color:{color};line-height:1;">{emoji}</div>
             <div style="font-size:14px;font-weight:700;color:{color};">{t['toilet_score']:.0f}</div>
@@ -100,8 +101,6 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None) -> str:
     """.strip()
 
 
-def render_toilet_card(toilet: ToiletDict, rank: int | None = None):
+def render_toilet_card(toilet: ToiletDict):
     """ランキングリストのトイレカード（1行）"""
-    st.markdown(build_toilet_card_html(toilet, rank), unsafe_allow_html=True)
-
-
+    st.markdown(build_toilet_card_html(toilet), unsafe_allow_html=True)

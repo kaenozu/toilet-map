@@ -103,7 +103,7 @@ class TestEscaping:
 
 class TestGeolocationScript:
     def test_build_geolocation_js_returns_plain_object(self):
-        from app import build_geolocation_js
+        from ui.sidebar import build_geolocation_js
 
         js = build_geolocation_js()
         assert "resolve(pos.coords)" not in js
@@ -206,7 +206,7 @@ class TestApplyLanguageQueryParam:
 
 class TestQueryParamState:
     def test_resolve_ui_state_from_query_params(self):
-        from app import get_translated_filters
+        from ui.sidebar import get_translated_filters
         from ui.i18n import get_language_strings
 
         _, translated_to_internal = get_translated_filters("日本語")
@@ -318,7 +318,7 @@ class TestWriteQueryParams:
 
 class TestResolveUiStateFromQueryParams:
     def test_invalid_page_returns_zero(self):
-        from app import get_translated_filters
+        from ui.sidebar import get_translated_filters
         from ui.i18n import get_language_strings
         from ui.query_params import resolve_ui_state_from_query_params
 

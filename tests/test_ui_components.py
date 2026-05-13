@@ -76,11 +76,10 @@ class TestBuildToiletCardHtml:
             "rating": 4.5, "review_count": 100, "lat": 35.0, "lng": 139.0,
             "link": "", "sample_reviews": [], "top_keywords": [],
         }
-        html = build_toilet_card_html(toilet, rank=1)
+        html = build_toilet_card_html(toilet)
         assert "テストトイレ" in html
-        assert "#1" in html
 
-    def test_without_rank(self):
+    def test_with_link(self):
         toilet = {
             "title": "A", "category": "カフェ", "address": "大阪",
             "toilet_score": 50.0, "confidence": 0.5, "is_public_toilet": False,
@@ -88,8 +87,7 @@ class TestBuildToiletCardHtml:
             "link": "https://maps.google.com/", "sample_reviews": [], "top_keywords": [],
         }
         html = build_toilet_card_html(toilet)
-        assert "A" in html
-        assert "#1" not in html
+        assert 'href="https://maps.google.com/"' in html
 
 
 class TestRenderScoreLegend:

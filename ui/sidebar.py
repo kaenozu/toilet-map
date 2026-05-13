@@ -1,0 +1,122 @@
+"""
+ui/sidebar.py
+StreamlitのサイドバーUIを描画する
+
+存在理由: app.pyからサイドバーUIを分離し責務を明確にするため
+関連ファイル: app.py, ui/i18n.py, ui/query_params.py, ui/data_loader.py
+"""
+
+import streamlit as st
+from streamlit_js_eval import streamlit_js_eval
+from app_config import FILTER_CONFIG, FILTER_I18N_KEYS
+from ui.i18n import LANGUAGES, LANGUAGE_OPTIONS, get_language_strings
+from ui.query_params import resolve_ui_state_from_query_params
+
+
+def get_translated_filters(lang: str) -> tuple[dict, dict]:
+    """
+    フィルタ表示名と内部値のマッピングを生成する
+    """
+    t = LANGUAGES[lang]
+    display_to_value = {}
+    display_to_internal = {}
+    for ja_key, i18n_key in FILTER_I18N_KEYS.items():
+        display_to_value[t[i18n_key]] = FILTER_CONFIG[ja_key]
+        display_to_internal[t[i18n_key]] = ja_key
+    return display_to_value, display_to_internal
+
+
+def build_geolocation_js() -> str:
+    """
+    位置情報取得のJavaScript式を生成する
+    """
+    return (
+        "new Promise(resolve => navigator.geolocation.getCurrentPosition("
+        "pos => resolve({latitude: pos.coords.latitude, longitude: pos.coords.longitude}), "
+        "err => resolve({error: err.message})"
+        "))"
+    )
+
+
+def render_sidebar(
+    t: dict,
+    prefectures: list[str],
+    translated_filters: dict,
+    translated_to_internal: dict,
+    query_params: dict,
+) -> tuple[dict, str, str, str, str, str, tuple | None, bool]:
+    with st.sidebar:
+        lang = st.selectbox(t["language_label"], LANGUAGE_OPTIONS, key="lang_select")
+        t = get_language_strings(lang)
+        translated_filters, translated_to_internal = get_translated_filters(lang)
+
+        st.divider()
+
+        ui_state = resolve_ui_state_from_query_params(
+            query_params, prefectures, translated_to_internal, t
+        )
+        for key, value in ui_state.items():
+            if key not in st.session_state:
+                st.session_state[key] = value
+
+        st.divider()
+
+        user_location = None
+        gps_enabled = st.checkbox(t["gps"], key="gps_enabled")
+        if not gps_enabled:
+            st.session_state.pop("_user_location", None)
+            st.session_state.pop("_gps_error", None)
+        elif "_user_location" not in st.session_state and "_gps_error" not in st.session_state:
+            loc = streamlit_js_eval(
+                js_expressions=build_geolocation_js(), key="location"
+            )
+            if isinstance(loc, dict):
+                if "latitude" in loc and "longitude" in loc:
+                    st.session_state["_user_location"] = (
+                        loc["latitude"],
+                        loc["longitude"],
+                    )
+                elif "error" in loc:
+                    st.session_state["_gps_error"] = loc["error"]
+
+        if "_user_location" in st.session_state:
+            user_location = st.session_state["_user_location"]
+            st.info(
+                f"{t['location_acquired']}: {user_location[0]:.4f}, {user_location[1]:.4f}"
+            )
+        elif "_gps_error" in st.session_state:
+            st.warning(
+                f"⚠️ {t['gps']}: {st.session_state['_gps_error']}. {t['gps_error_hint']}"
+            )
+
+        st.divider()
+
+        selected_pref = st.selectbox(
+            t["prefecture"], prefectures, key="pref_select"
+        )
+        filter_type = st.selectbox(
+            t["filter"], list(translated_filters.keys()), key="filter_select"
+        )
+        search_query = st.text_input(
+            t["search_label"],
+            "",
+            placeholder=t["search_placeholder"],
+            key="search_input",
+        )
+        sort_order = st.radio(
+            t["sort_label"],
+            [t["sort_clean"], t["sort_near"]],
+            horizontal=True,
+            key="sort_select",
+        )
+
+    return (
+        t,
+        lang,
+        selected_pref,
+        filter_type,
+        search_query,
+        sort_order,
+        user_location,
+        gps_enabled,
+    )
