@@ -12,7 +12,8 @@ from unittest.mock import MagicMock
 from docker_exec import scrape_query
 from city_bounds import _load_cache, _save_cache
 from auto_expand import _load_current_stats, _lookup_city_count, _build_gap_entry, _select_targets
-from scrape_runner import fetch_city_bounds, _cleanup_on_success
+from scrape_filter import fetch_city_bounds
+from scrape_runner import _cleanup_on_success
 
 
 class TestDockerExecScrapeQuery:
@@ -353,7 +354,7 @@ class TestScrapeRunner:
             calls.append(name if not pref else (name, pref))
             return {"south": 35.0, "north": 36.0, "west": 139.0, "east": 140.0}
 
-        monkeypatch.setattr("city_bounds.get_city_bounds", fake_get_city_bounds)
+        monkeypatch.setattr("scrape_filter.get_city_bounds", fake_get_city_bounds)
         result = fetch_city_bounds("", "東京都")
         assert result is not None
 
@@ -366,7 +367,7 @@ class TestScrapeRunner:
                 return {"south": 35.6, "north": 35.7, "west": 139.6, "east": 139.8}
             return None
 
-        monkeypatch.setattr("city_bounds.get_city_bounds", fake_get_city_bounds)
+        monkeypatch.setattr("scrape_filter.get_city_bounds", fake_get_city_bounds)
         result = fetch_city_bounds("渋谷区", "東京都")
         assert result is not None
         assert calls == [("渋谷区", "東京都")]
@@ -378,7 +379,7 @@ class TestScrapeRunner:
             calls.append((city, pref))
             return None
 
-        monkeypatch.setattr("city_bounds.get_city_bounds", fake_get_city_bounds)
+        monkeypatch.setattr("scrape_filter.get_city_bounds", fake_get_city_bounds)
         result = fetch_city_bounds("渋谷区", "東京都")
         assert result is None
         assert calls == [("渋谷区", "東京都"), ("渋谷区", "")]

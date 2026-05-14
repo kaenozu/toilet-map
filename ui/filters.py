@@ -13,27 +13,27 @@ from app_config import FILTER_CONFIG, PUBLIC_FILTER_VALUE, FILTER_KEYWORD_OR_MAP
 EARTH_RADIUS_KM = 6371.0
 
 
-def haversine_distance(lat1: float, lon1: float, lat2: float | pd.Series, lon2: float | pd.Series) -> float | pd.Series:
-    """2点間の距離を計算 (km)。lat2, lon2 はスカラーまたはpandas Series"""
+def haversine_distance(lat1: float, lng1: float, lat2: float | pd.Series, lng2: float | pd.Series) -> float | pd.Series:
+    """2点間の距離を計算 (km)。lat2, lng2 はスカラーまたはpandas Series"""
     if isinstance(lat2, pd.Series):
         lat1_rad = np.radians(lat1)
-        lon1_rad = np.radians(lon1)
+        lng1_rad = np.radians(lng1)
         lat2_rad = np.radians(lat2)
-        lon2_rad = np.radians(lon2)
+        lng2_rad = np.radians(lng2)
 
         dlat = lat2_rad - lat1_rad
-        dlon = lon2_rad - lon1_rad
+        dlng = lng2_rad - lng1_rad
 
         a = (np.sin(dlat / 2) ** 2 +
-             np.cos(lat1_rad) * np.cos(lat2_rad) * np.sin(dlon / 2) ** 2)
+             np.cos(lat1_rad) * np.cos(lat2_rad) * np.sin(dlng / 2) ** 2)
         c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
         return EARTH_RADIUS_KM * c
     else:
         dlat = math.radians(lat2 - lat1)
-        dlon = math.radians(lon2 - lon1)
+        dlng = math.radians(lng2 - lng1)
         a = (math.sin(dlat / 2) ** 2 +
              math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
-             math.sin(dlon / 2) ** 2)
+             math.sin(dlng / 2) ** 2)
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
         return EARTH_RADIUS_KM * c
 
@@ -168,7 +168,7 @@ def get_underserved_areas_in_viewport(bounds: dict, stats: dict) -> list[dict]:
     center_lat = (sw_lat + ne_lat) / 2
     center_lng = (sw_lng + ne_lng) / 2
 
-    from app_config import PREFECTURE_CENTERS
+    from app_config_prefectures import PREFECTURE_CENTERS
 
     # 表示範囲内にある都道府県を、中心からの距離順にリスト
     visible_prefs = []

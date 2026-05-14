@@ -3,13 +3,10 @@ batch/scoring.py
 スコアリングロジック（process_data.py から抽出）
 レビューからのトイレスコア計算・信頼度算出・キーワード抽出
 """
-import os
 import re
-import sys
 from collections import Counter
 from typing import Optional, TypedDict
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from scoring_config import (
     SCORE_CLAMP_MIN,
     SCORE_CLAMP_MAX,
@@ -110,6 +107,29 @@ def mentions_toilet(text: str) -> bool:
     return True
 
 
+<<<<<<< HEAD
+=======
+def _get_longitude(place: PlaceDict) -> float:
+    """経度を取得。longitude がなければ longtitude をフォールバックとして使う。"""
+    lon = place.get("longitude")
+    if lon is None:
+        lon = place.get("longtitude")
+    if lon is None:
+        return 0.0
+    try:
+        return float(lon)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _extract_coordinates(place: PlaceDict) -> tuple[Optional[float], Optional[float]]:
+    """place から緯度経度を抽出。_get_longitude 内で longtitude へのフォールバックも行う。"""
+    lat = place.get("latitude")
+    lon = _get_longitude(place)
+    return lat, lon
+
+
+>>>>>>> origin/main
 def extract_toilet_contexts(text: str) -> list[str]:
     sentences = [s.strip() for s in SENTENCE_SPLIT_RE.split(text) if s.strip()]
     toilet_indices = set()
@@ -182,16 +202,16 @@ def _collect_toilet_reviews(
     reviews = (place.get("user_reviews") or []) + (place.get("user_reviews_extended") or [])
     toilet_reviews = []
     all_highlights = []
-    seen_descs: set[int] = set()
+    seen_descs: set[str] = set()
 
     for r in reviews:
         desc = r.get("Description", "")
         if not desc or not desc.strip() or not mentions_toilet(desc):
             continue
-        desc_hash = hash(desc.strip())
-        if desc_hash in seen_descs:
+        desc_key = desc.strip()
+        if desc_key in seen_descs:
             continue
-        seen_descs.add(desc_hash)
+        seen_descs.add(desc_key)
 
         s, matched = score_toilet_from_review(desc)
         rating = float(r.get("Rating") or 0)
@@ -256,13 +276,3 @@ def is_toilet_place(place: PlaceDict) -> bool:
     return any(tc.lower() in cat or tc.lower() in title for tc in TOILET_CATEGORIES)
 
 
-def _extract_coordinates(place: PlaceDict) -> tuple[Optional[float], Optional[float]]:
-    lat = place.get("latitude")
-    lon = place.get("longitude")
-    if lon is None:
-        lon = place.get("longtitude")
-    if lat is not None and lon == 0:
-        alt_lon = place.get("longtitude")
-        if alt_lon is not None:
-            lon = alt_lon
-    return lat, lon

@@ -8,13 +8,15 @@ JSON データを SQLite データベースに変換し、検索と読み込み�
   - data/toilets.db (出力 DB)
 """
 import sqlite3
+import json
+import gzip
+import math
 import os
 import sys
-import math
+from utils import logger
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_JSON_PATH = os.path.join(SCRIPT_DIR, "..", "data", "toilets.json.gz")
-sys.path.insert(0, SCRIPT_DIR)
 
 from db_utils import (  # noqa: E402
     DB_PATH, ensure_schema,
@@ -150,7 +152,7 @@ def json_to_sqlite(json_path: str, incremental: bool = False) -> None:
     if not incremental and os.path.exists(DB_PATH):
         import shutil
         backup_path = f"{DB_PATH}.bak"
-        shutil.copy2(DB_PATH, backup_path)
+        shutil.copy(DB_PATH, backup_path)
         logger.info(f"Existing database backed up to {backup_path}")
 
     logger.info(f"Converting {json_path} to SQLite (incremental={incremental})...")

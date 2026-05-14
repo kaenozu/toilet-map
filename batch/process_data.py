@@ -6,16 +6,18 @@ Google Maps Scraper出力(JSONL)のデータ処理スクリプト
 """
 import json
 import gzip
-import os
 import sys
 from datetime import datetime
 from typing import Optional
 
+<<<<<<< HEAD
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.abspath(os.path.join(_SCRIPT_DIR, ".."))
 for _p in (_SCRIPT_DIR, _PROJECT_ROOT):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+=======
+>>>>>>> origin/main
 from scoring import (
     PlaceDict,
     ToiletScoreInfo,

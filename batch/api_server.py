@@ -3,13 +3,11 @@ batch/api_server.py
 FastAPI でトイレデータをJSONで提供するREST API
 """
 import os
-import sys
 from collections import Counter
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from db_utils import load_json
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "toilets.json.gz")

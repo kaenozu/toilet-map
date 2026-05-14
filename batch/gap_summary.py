@@ -3,11 +3,11 @@ batch/gap_summary.py
 データギャップ分析のサマリーを表示する（auto_expand_pipeline.batから呼び出し）
 """
 import os
-import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from db_utils import load_json
 from gap_analyzer import find_gaps, get_stats
+
+DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "toilets.json.gz")
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "toilets.json.gz")
 

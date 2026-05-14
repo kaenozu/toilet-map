@@ -124,16 +124,17 @@ class TestQueryLoading:
 
 class TestScrapeRunnerFiltering:
     def test_prepare_input_data_refuses_unfiltered_fallback(self, monkeypatch):
-        monkeypatch.setattr(scrape_runner, "merge_part_files", lambda *args, **kwargs: None)
-        monkeypatch.setattr(scrape_runner, "count_lines", lambda *args, **kwargs: 3)
+        import scrape_filter
+        monkeypatch.setattr(scrape_filter, "merge_part_files", lambda *args, **kwargs: None)
+        monkeypatch.setattr(scrape_filter, "count_lines", lambda *args, **kwargs: 3)
         monkeypatch.setattr(
-            scrape_runner,
+            scrape_filter,
             "apply_city_filter",
-            lambda city, pref, raw_output: ("filtered.json", 3, 0),
+            lambda city, pref, raw_output, raw_dir, queries_file: ("filtered.json", 3, 0),
         )
 
         with pytest.raises(RuntimeError, match="No entries matched city filter"):
-            scrape_runner._prepare_input_data("高崎市", "群馬県")
+            scrape_filter.prepare_input_data("高崎市", "群馬県", "raw.json", "raw_dir", "queries.txt")
 
 
 class TestExpansionStatusFile:

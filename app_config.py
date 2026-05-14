@@ -31,21 +31,21 @@ SCORE_DISTRIBUTION_RANGES = [
     (0, 35, "💩 0-34", "#e74c3c"),
 ]
 
+# フィルタ設定（ui/filters.py からも使用）
 FILTER_CONFIG = {
     "すべて": None,
-    "公共トイレ": "__public__",  # 特殊値: is_public_toilet == True でフィルタ
-    "多目的トイレ": "__keyword__multi",  # top_keywords に含まれるかでフィルタ
+    "公共トイレ": "__public__",
+    "多目的トイレ": "__keyword__multi",
     "おむつ替え": "__keyword__diaper",
     "車椅子対応": "__keyword__wheelchair",
     "バリアフリー": "__keyword__barrier_free",
     "カフェ・飲食": "カフェ|喫茶|レストラン|食堂|ダイニング|コーヒー|パン|ケーキ",
     "コンビニ・店舗": "コンビニ|スーパー|ドラッグ|ストア|マート|商店",
-    "ホテル・旅館": "ホテル|旅馆|民宿|ビジネスホテル",
+    "ホテル・旅館": "ホテル|旅馨|民宿|ビジネスホテル",
     "道の駅": "道の駅",
     "SA・PA": "サービスエリア|パーキングエリア",
 }
 
-# app.py で使うフィルタ表示名 → i18n キーの対応
 FILTER_I18N_KEYS = {
     "すべて": "filter_all",
     "公共トイレ": "filter_public",
@@ -62,7 +62,6 @@ FILTER_I18N_KEYS = {
 
 PUBLIC_FILTER_VALUE = "__public__"
 
-# top_keywords から抽出する設備フィルタのキーワード定義
 EQUIPMENT_KEYWORDS = {
     "multi": {"多目的トイレ", "多目的", "多機能"},
     "diaper": {"おむつ", "オムツ", "おむつ替え", "おむつ交換"},
@@ -77,9 +76,9 @@ TILE_OPTIONS = {
     "モノクロ（Cartodb）": "CartoDB positron",
 }
 
-# ギャップ検出しきい値（gap_analyzer.find_gaps と統一）
 THRESHOLD = 10
 
+<<<<<<< HEAD
 # フィルタ設定拡張: 設備フィルタは OR 結合するキーワードマップ
 FILTER_KEYWORD_OR_MAP = {
     "__keyword__barrier_free": {"multi", "diaper", "wheelchair"},
@@ -89,6 +88,11 @@ FILTER_KEYWORD_OR_MAP = {
 MAX_SAMPLE_REVIEWS = 2  # ポップアップ内の最大レビュー数
 REVIEW_TEXT_MAX_LENGTH = 120  # レビュー文の最大表示文字数
 MAX_KEYWORD_TAGS = 5  # ポップアップ内の最大キーワードタグ数
+=======
+MAX_SAMPLE_REVIEWS = 2
+REVIEW_TEXT_MAX_LENGTH = 120
+MAX_KEYWORD_TAGS = 5
+>>>>>>> origin/main
 
 
 def esc(text):
@@ -116,6 +120,7 @@ def get_score_style(score: float) -> tuple[str, str, str]:
     return SCORE_RANGES[-1][1:]
 
 
+<<<<<<< HEAD
 # 各都道府県の代表座標（Google Maps に基づく簡易中心点）
 PREFECTURE_CENTERS = {
     "北海道": (43.0642, 141.3469),
@@ -176,6 +181,8 @@ POTENTIAL_CATEGORIES = [
     "役場", "市役所", "図書館",
 ]
 
+=======
+>>>>>>> origin/main
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 POPUP_FIX_PATH = os.path.join(_SCRIPT_DIR, "static", "popup_fix.js")
 

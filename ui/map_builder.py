@@ -11,9 +11,9 @@ from app_config import (
     PUBLIC_MARKER_RADIUS,
     NORMAL_MARKER_RADIUS,
     POPUP_FIX_JS,
-    PREFECTURE_CENTERS,
     get_score_style,
 )
+from app_config_prefectures import PREFECTURE_CENTERS
 from .popups import build_popup_html
 from .types import ToiletDict
 
@@ -38,8 +38,16 @@ def _coordinate_key(lat: float, lng: float) -> tuple[float, float]:
     return (round(lat, COORD_DEDUPE_PRECISION), round(lng, COORD_DEDUPE_PRECISION))
 
 
+<<<<<<< HEAD
 def _collect_valid_toilets(toilets: list[ToiletDict]) -> list[tuple[ToiletDict, float, float]]:
     valid_toilets: list[tuple[ToiletDict, float, float]] = []
+=======
+def _collect_valid_toilets(
+    toilets: list[ToiletDict],
+) -> list[tuple[ToiletDict, float, float]]:
+    """重複座標を除外して有効なトイレデータを収集"""
+    valid: list[tuple[ToiletDict, float, float]] = []
+>>>>>>> origin/main
     seen: set[tuple[float, float]] = set()
     for toilet in toilets:
         lat = _coerce_coordinate(toilet.get("lat"))
@@ -52,8 +60,18 @@ def _collect_valid_toilets(toilets: list[ToiletDict]) -> list[tuple[ToiletDict, 
         if key in seen:
             continue
         seen.add(key)
+<<<<<<< HEAD
         valid_toilets.append((toilet, lat, lng))
     return valid_toilets
+=======
+        valid.append((toilet, lat, lng))
+    return valid
+
+
+def _collect_valid_coordinates(toilets: list[ToiletDict]) -> list[tuple[float, float]]:
+    """_collect_valid_toilets から座標のみを抽出"""
+    return [(lat, lng) for _, lat, lng in _collect_valid_toilets(toilets)]
+>>>>>>> origin/main
 
 
 def _collect_valid_coordinates(toilets: list[ToiletDict]) -> list[tuple[float, float]]:
