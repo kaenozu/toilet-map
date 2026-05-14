@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from typing import Optional
 from app_config import THRESHOLD
-from app_config import FILTER_CONFIG, PUBLIC_FILTER_VALUE, FILTER_KEYWORD_OR_MAP
+from app_config import FILTER_CONFIG, PUBLIC_FILTER_VALUE
 
 EARTH_RADIUS_KM = 6371.0
 
@@ -38,6 +38,10 @@ def haversine_distance(lat1: float, lng1: float, lat2: float | pd.Series, lng2: 
         return EARTH_RADIUS_KM * c
 
 
+# barrier_free は多目的・おむつ替え・車椅子のいずれかが true ならマッチ
+_BARRIER_FREE_OR_COLS = ["has_multi", "has_diaper", "has_wheelchair"]
+
+
 def _apply_equipment_filter(df: pd.DataFrame, pattern: str) -> pd.DataFrame:
     """設備フィルタ（__keyword__*）を適用"""
     column_map = {
@@ -45,15 +49,14 @@ def _apply_equipment_filter(df: pd.DataFrame, pattern: str) -> pd.DataFrame:
         "__keyword__diaper": "has_diaper",
         "__keyword__wheelchair": "has_wheelchair",
     }
-    or_cols = FILTER_KEYWORD_OR_MAP.get(pattern)
-    if or_cols:
-        mask = None
-        for kw in or_cols:
-            col = column_map.get(f"__keyword__{kw}")
-            if col and col in df.columns:
-                col_mask = df[col]
-                mask = col_mask if mask is None else (mask | col_mask)
-        return df[mask] if mask is not None else df
+    if pattern == "__keyword__barrier_free":
+        cols = [c for c in _BARRIER_FREE_OR_COLS if c in df.columns]
+        if cols:
+            mask = df[cols[0]]
+            for c in cols[1:]:
+                mask = mask | df[c]
+            return df[mask]
+        return df
     col = column_map.get(pattern)
     if col and col in df.columns:
         return df[df[col]]
