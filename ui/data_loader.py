@@ -76,13 +76,8 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None):
             pref_stats[pref]["lats"].append(t["lat"])
             pref_stats[pref]["lngs"].append(t["lng"])
 
-<<<<<<< HEAD
-        return {"metadata": metadata, "toilets": toilets, "pref_stats": prefecture_stats}
-    except sqlite3.Error as e:
-=======
         return {"metadata": metadata, "toilets": toilets, "pref_stats": pref_stats}
-    except Exception as e:
->>>>>>> origin/main
+    except sqlite3.Error as e:
         st.error(f"データベース読み込みエラー: {e}")
         return {"metadata": ERROR_METADATA, "toilets": [], "pref_stats": {}}
     finally:

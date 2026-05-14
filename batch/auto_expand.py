@@ -148,10 +148,6 @@ def run_auto_expansion(max_areas: int = 5, target_pref: str = "", target_city: s
                     logger.warning(f"[{prefecture}] No query files were merged.")
                     continue
 
-<<<<<<< HEAD
-            try:
-=======
->>>>>>> origin/main
                 area_slug = _slugify(f"{prefecture}_{city or 'pref'}")
                 raw_dir = os.path.join(SCRIPT_DIR, f"raw_parts_{area_slug}")
                 raw_output = os.path.join(SCRIPT_DIR, f"raw_data_{area_slug}.json")
@@ -173,24 +169,11 @@ def run_auto_expansion(max_areas: int = 5, target_pref: str = "", target_city: s
                 if city:
                     cmd.extend(["--city", city])
 
-<<<<<<< HEAD
-                result = subprocess.run(cmd, env=env, cwd=SCRIPT_DIR)
-            except FileNotFoundError:
-                logger.error("Python executable or Docker runtime not found for auto expansion.")
-                break
-            finally:
-                if merged_query_file and os.path.exists(merged_query_file):
-                    try:
-                        os.remove(merged_query_file)
-                    except OSError as exc:
-                        logger.warning(f"Failed to remove temporary merged query file {merged_query_file}: {exc}")
-=======
                 try:
                     result = subprocess.run(cmd, env=env, cwd=SCRIPT_DIR)
                 except FileNotFoundError:
                     logger.error("Python executable or Docker runtime not found for auto expansion.")
                     break
->>>>>>> origin/main
 
                 if result.returncode != 0:
                     logger.error(f"[{prefecture}] auto expansion failed with exit code {result.returncode}")
