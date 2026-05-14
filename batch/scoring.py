@@ -121,14 +121,10 @@ def _get_longitude(place: PlaceDict) -> float:
 
 
 def _extract_coordinates(place: PlaceDict) -> tuple[Optional[float], Optional[float]]:
-    """place から緯度経度を抽出。longitude がなければ longtitude をフォールバックとして使う。"""
+    """place から緯度経度を抽出。_get_longitude 内で longtitude へのフォールバックも行う。"""
     lat = place.get("latitude")
     lon = _get_longitude(place)
-    if lat is not None and lon == 0:
-        alt_lon = place.get("longtitude")
-        if alt_lon is not None:
-            lon = float(alt_lon) if isinstance(alt_lon, (int, float)) else 0.0
-    return (lat, lon) if (lat is not None and lon is not None) else (lat, lon)
+    return lat, lon
 
 
 def extract_toilet_contexts(text: str) -> list[str]:
