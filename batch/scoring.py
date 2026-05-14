@@ -29,7 +29,7 @@ from scoring_config import (
     TOILET_MENTION_RE,
     TOILET_CATEGORIES,
 )
-from utils import logger as _unused_logger  # noqa: F401
+
 
 
 class PlaceDict(TypedDict, total=False):
@@ -108,13 +108,6 @@ def mentions_toilet(text: str) -> bool:
     if TOILET_ABSENCE_RE.search(text):
         return False
     return True
-
-
-def _get_longitude(place: PlaceDict) -> float:
-    lon = place.get("longitude")
-    if lon is None:
-        lon = place.get("longtitude")
-    return float(lon or 0)
 
 
 def extract_toilet_contexts(text: str) -> list[str]:

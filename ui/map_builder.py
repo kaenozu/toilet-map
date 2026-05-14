@@ -38,24 +38,6 @@ def _coordinate_key(lat: float, lng: float) -> tuple[float, float]:
     return (round(lat, COORD_DEDUPE_PRECISION), round(lng, COORD_DEDUPE_PRECISION))
 
 
-def _collect_valid_coordinates(toilets: list[ToiletDict]) -> list[tuple[float, float]]:
-    coords: list[tuple[float, float]] = []
-    seen: set[tuple[float, float]] = set()
-    for toilet in toilets:
-        lat = _coerce_coordinate(toilet.get("lat"))
-        lng = _coerce_coordinate(toilet.get("lng"))
-        if lat is None or lng is None:
-            continue
-        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
-            continue
-        key = _coordinate_key(lat, lng)
-        if key in seen:
-            continue
-        seen.add(key)
-        coords.append((lat, lng))
-    return coords
-
-
 def _collect_valid_toilets(toilets: list[ToiletDict]) -> list[tuple[ToiletDict, float, float]]:
     valid_toilets: list[tuple[ToiletDict, float, float]] = []
     seen: set[tuple[float, float]] = set()
@@ -72,6 +54,10 @@ def _collect_valid_toilets(toilets: list[ToiletDict]) -> list[tuple[ToiletDict, 
         seen.add(key)
         valid_toilets.append((toilet, lat, lng))
     return valid_toilets
+
+
+def _collect_valid_coordinates(toilets: list[ToiletDict]) -> list[tuple[float, float]]:
+    return [(lat, lng) for _, lat, lng in _collect_valid_toilets(toilets)]
 
 
 def calc_cluster_radius(count: int) -> int:

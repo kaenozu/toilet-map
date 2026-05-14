@@ -56,7 +56,7 @@ def scrape_query(query: str, output_path: str, cwd: str = ".") -> bool:
         except FileNotFoundError:
             logger.error("Docker executable not found. Is Docker Desktop running?")
             return False
-        except Exception as e:
+        except OSError as e:
             logger.error(f"{type(e).__name__}: {e}")
             return False
 

@@ -10,6 +10,7 @@ PROGRESS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.envi
 
 
 def load_queries(path: str) -> list[str]:
+    """Load non-comment query lines from a batch query file."""
     if not os.path.exists(path):
         return []
     with open(path, "r", encoding="utf-8") as f:
@@ -17,6 +18,7 @@ def load_queries(path: str) -> list[str]:
 
 
 def load_progress(path: str = PROGRESS_FILE) -> set[int]:
+    """Load completed query indices from a progress file."""
     if not os.path.exists(path):
         return set()
     with open(path, "r") as f:
@@ -24,6 +26,7 @@ def load_progress(path: str = PROGRESS_FILE) -> set[int]:
 
 
 def save_progress(done: set[int], path: str = PROGRESS_FILE) -> None:
+    """Persist completed query indices in ascending order."""
     with open(path, "w") as f:
         for idx in sorted(done):
             f.write(f"{idx}\n")
@@ -42,6 +45,7 @@ def publish_expansion_status(
     status: str = "running",
     message: str = "",
 ) -> None:
+    """Publish the current expansion status to the shared status file."""
     update_expansion_status(
         run_id,
         {
@@ -62,6 +66,7 @@ def publish_expansion_status(
 
 
 def merge_part_files(raw_dir: str, output_path: str, total: int) -> None:
+    """Merge numbered part_###.json files into one output file."""
     with open(output_path, "w", encoding="utf-8") as outf:
         for i in range(1, total + 1):
             part = os.path.join(raw_dir, f"part_{i:03d}.json")

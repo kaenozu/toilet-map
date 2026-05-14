@@ -220,7 +220,7 @@ class TestCityBoundsGetCityBounds:
         original = cb.CACHE_FILE
 
         def raise_error(*a, **kw):
-            raise Exception("API error")
+            raise cb.urllib.error.URLError("API error")
 
         try:
             cb.CACHE_FILE = str(cache_file)

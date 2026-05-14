@@ -98,7 +98,7 @@ def run_scrape(pref: str, city: str, queries_rel: str, dry_run: bool = False) ->
     except FileNotFoundError:
         logger.error(f"  [{pref}] [ERROR] Docker executable not found. Is Docker Desktop running?")
         return False
-    except Exception as e:
+    except OSError as e:
         logger.error(f"  [{pref}] [ERROR] {type(e).__name__}: {e}")
         return False
 

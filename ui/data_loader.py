@@ -25,12 +25,11 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None):
     SQLite から全データを読み込み、アプリ用の辞書形式で返す。
     """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        # トイレデータ読み込み
-        df = pd.read_sql("SELECT * FROM toilets", conn)
-        # メタデータ読み込み
-        meta_df = pd.read_sql("SELECT * FROM metadata", conn)
-        conn.close()
+        with sqlite3.connect(DB_PATH) as conn:
+            # トイレデータ読み込み
+            df = pd.read_sql("SELECT * FROM toilets", conn)
+            # メタデータ読み込み
+            meta_df = pd.read_sql("SELECT * FROM metadata", conn)
 
         # メタデータを辞書に変換
         metadata = dict(zip(meta_df["key"], meta_df["value"]))
@@ -50,7 +49,11 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None):
             if sample_reviews_json in (None, ""):
                 t["sample_reviews"] = []
             else:
-                t["sample_reviews"] = json.loads(sample_reviews_json)
+                try:
+                    t["sample_reviews"] = json.loads(sample_reviews_json)
+                except json.JSONDecodeError:
+                    st.warning("sample_reviews_json の解析に失敗したため空配列で読み込みました。")
+                    t["sample_reviews"] = []
 
         # 都道府県別の統計を pandas groupby で計算
         pdf = pd.DataFrame(toilets)
@@ -69,7 +72,7 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None):
                 prefecture_stats = grouped.to_dict("index")
 
         return {"metadata": metadata, "toilets": toilets, "pref_stats": prefecture_stats}
-    except Exception as e:
+    except sqlite3.Error as e:
         st.error(f"データベース読み込みエラー: {e}")
         return {"metadata": ERROR_METADATA, "toilets": [], "pref_stats": {}}
 

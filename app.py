@@ -8,6 +8,7 @@ from time import perf_counter
 import streamlit as st
 from streamlit_folium import st_folium
 from ui.styles import MOBILE_CSS
+from app_config import TILE_OPTIONS
 from ui.components import build_data_freshness_text, build_result_context_text, render_score_legend, render_toilet_card
 from ui.data_loader import load_toilet_data, toilets_to_dataframe, get_prefectures, get_data_cache_token
 from ui.filters import filter_toilets, search_toilets
@@ -23,7 +24,7 @@ from ui.query_params import (
 from ui.sidebar import render_sidebar
 
 
-def main():
+def main() -> None:
     st.set_page_config(
         page_title=APP_TITLE,
         page_icon="🚽",
@@ -54,12 +55,29 @@ def main():
             var search = document.querySelector('input[aria-label*="検索" i]');
             if (search) { search.focus(); e.preventDefault(); }
           }
+          if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+            var help = document.getElementById('shortcut-help');
+            if (help) { help.style.display = help.style.display === 'none' ? 'block' : 'none'; e.preventDefault(); }
+          }
         });
         </script>
         """,
         unsafe_allow_html=True,
     )
     st.markdown(MOBILE_CSS, unsafe_allow_html=True)
+    st.markdown(
+        """
+        <style>
+        @keyframes skeleton-pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
+        .skeleton {
+            display:inline-block;height:1em;background:linear-gradient(90deg,#e0e0e0 25%,#f0f0f0 50%,#e0e0e0 75%);
+            background-size:200% 100%;animation:skeleton-pulse 1.5s ease-in-out infinite;
+            border-radius:4px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
     query_params = read_query_params()
     apply_language_query_param(query_params)
@@ -84,6 +102,8 @@ def main():
     sort_order = sidebar_result.sort_order
     user_location = sidebar_result.user_location
     gps_enabled = sidebar_result.gps_enabled
+    dark_mode = sidebar_result.dark_mode
+    selected_tile = sidebar_result.selected_tile
     translated_to_internal = sidebar_result.translated_to_internal
 
     internal_filter = translated_to_internal[filter_type]
@@ -117,7 +137,7 @@ def main():
     render_score_legend()
 
     map_started_at = perf_counter()
-    m = build_map(map_items, map_lat, map_lng, map_zoom)
+    m = build_map(map_items, map_lat, map_lng, map_zoom, tile=TILE_OPTIONS[selected_tile])
     map_elapsed_ms = (perf_counter() - map_started_at) * 1000
 
     st.caption(
@@ -145,6 +165,16 @@ def main():
         for i, (_, row) in enumerate(display_items.iterrows()):
             render_toilet_card(row.to_dict(), rank=i + 1, meta=meta)
         st.markdown('</div>', unsafe_allow_html=True)
+
+    if dark_mode:
+        st.markdown(
+            "<style>.toilet-card{background:#1e1e1e!important;color:#e0e0e0!important;border-color:#333!important;}"
+            ".toilet-card .toilet-card-title,.toilet-card .toilet-card-subtitle,.toilet-card .toilet-card-meta,.toilet-card .toilet-card-arrow{color:inherit!important}</style>",
+            unsafe_allow_html=True,
+        )
+
+    if st.session_state.get("_show_shortcuts", False):
+        st.info(t["shortcut_info"])
 
     write_query_params(
         build_query_params_from_state(

@@ -10,10 +10,9 @@ from typing import NamedTuple
 
 import streamlit as st
 from streamlit_js_eval import streamlit_js_eval
-from app_config import FILTER_CONFIG, FILTER_I18N_KEYS
+from app_config import FILTER_CONFIG, FILTER_I18N_KEYS, TILE_OPTIONS
 from ui.i18n import LANGUAGES, LANGUAGE_OPTIONS, get_language_strings
 from ui.query_params import resolve_ui_state_from_query_params
-from ui.submission_form import render_submission_form
 
 
 class SidebarResult(NamedTuple):
@@ -25,6 +24,8 @@ class SidebarResult(NamedTuple):
     sort_order: str
     user_location: tuple | None
     gps_enabled: bool
+    dark_mode: bool
+    selected_tile: str
     translated_to_internal: dict
 
 
@@ -125,7 +126,12 @@ def render_sidebar(
         )
 
         st.divider()
-        render_submission_form(t)
+        dark_mode = st.checkbox(t["dark_mode"], key="dark_mode")
+        selected_tile = st.selectbox(
+            t["tile_select"], list(TILE_OPTIONS.keys()), key="tile_select"
+        )
+
+        st.caption(t["shortcut_info"])
 
     return SidebarResult(
         t=t,
@@ -136,5 +142,7 @@ def render_sidebar(
         sort_order=sort_order,
         user_location=user_location,
         gps_enabled=gps_enabled,
+        dark_mode=dark_mode,
+        selected_tile=selected_tile,
         translated_to_internal=translated_to_internal,
     )

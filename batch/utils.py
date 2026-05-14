@@ -112,8 +112,8 @@ def write_json_atomic(path: str, data: Any) -> None:
         if os.path.exists(tmp_path):
             try:
                 os.remove(tmp_path)
-            except OSError:
-                pass
+            except OSError as exc:
+                logger.warning(f"Could not remove temporary file {tmp_path}: {exc}")
 
 
 def update_expansion_status(run_id: str, data: dict[str, Any] | None = None, remove: bool = False) -> dict[str, Any]:

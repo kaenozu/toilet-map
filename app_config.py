@@ -37,6 +37,7 @@ FILTER_CONFIG = {
     "多目的トイレ": "__keyword__multi",  # top_keywords に含まれるかでフィルタ
     "おむつ替え": "__keyword__diaper",
     "車椅子対応": "__keyword__wheelchair",
+    "バリアフリー": "__keyword__barrier_free",
     "カフェ・飲食": "カフェ|喫茶|レストラン|食堂|ダイニング|コーヒー|パン|ケーキ",
     "コンビニ・店舗": "コンビニ|スーパー|ドラッグ|ストア|マート|商店",
     "ホテル・旅館": "ホテル|旅馆|民宿|ビジネスホテル",
@@ -51,6 +52,7 @@ FILTER_I18N_KEYS = {
     "多目的トイレ": "filter_multi",
     "おむつ替え": "filter_diaper",
     "車椅子対応": "filter_wheelchair",
+    "バリアフリー": "filter_barrier_free",
     "カフェ・飲食": "filter_cafe",
     "コンビニ・店舗": "filter_convenience",
     "ホテル・旅館": "filter_hotel",
@@ -77,6 +79,11 @@ TILE_OPTIONS = {
 
 # ギャップ検出しきい値（gap_analyzer.find_gaps と統一）
 THRESHOLD = 10
+
+# フィルタ設定拡張: 設備フィルタは OR 結合するキーワードマップ
+FILTER_KEYWORD_OR_MAP = {
+    "__keyword__barrier_free": {"multi", "diaper", "wheelchair"},
+}
 
 # UI表示上限
 MAX_SAMPLE_REVIEWS = 2  # ポップアップ内の最大レビュー数
@@ -159,6 +166,15 @@ PREFECTURE_CENTERS = {
     "鹿児島県": (31.5601, 130.5580),
     "沖縄県": (26.2124, 127.6809),
 }
+
+# スコア未計算でも救済するカテゴリ（口コミ0件でも表示対象とする）
+POTENTIAL_CATEGORIES = [
+    "公園", "駅", "道の駅", "サービスエリア", "パーキングエリア",
+    "カフェ", "喫茶", "レストラン", "食堂", "ダイニング", "コーヒー", "パン", "ケーキ",
+    "コンビニ", "スーパー", "ドラッグ", "ストア", "マート", "商店",
+    "ホテル", "旅館", "民宿", "ビジネスホテル",
+    "役場", "市役所", "図書館",
+]
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 POPUP_FIX_PATH = os.path.join(_SCRIPT_DIR, "static", "popup_fix.js")
