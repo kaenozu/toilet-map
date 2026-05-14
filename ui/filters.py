@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from typing import Optional
 from app_config import THRESHOLD
-from app_config import FILTER_CONFIG, PUBLIC_FILTER_VALUE
+from app_config import FILTER_CONFIG, PUBLIC_FILTER_VALUE, FILTER_KEYWORD_OR_MAP
 
 EARTH_RADIUS_KM = 6371.0
 
@@ -45,6 +45,15 @@ def _apply_equipment_filter(df: pd.DataFrame, pattern: str) -> pd.DataFrame:
         "__keyword__diaper": "has_diaper",
         "__keyword__wheelchair": "has_wheelchair",
     }
+    or_cols = FILTER_KEYWORD_OR_MAP.get(pattern)
+    if or_cols:
+        mask = None
+        for kw in or_cols:
+            col = column_map.get(f"__keyword__{kw}")
+            if col and col in df.columns:
+                col_mask = df[col]
+                mask = col_mask if mask is None else (mask | col_mask)
+        return df[mask] if mask is not None else df
     col = column_map.get(pattern)
     if col and col in df.columns:
         return df[df[col]]

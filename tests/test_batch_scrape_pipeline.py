@@ -478,6 +478,7 @@ class TestPostProcessPipeline:
         auto_expand.run_auto_expansion(max_areas=1, target_city="名古屋市", target_pref="愛知県")
 
         assert captured_env["SYNC_EVERY_SUCCESS"] == "1"
+        assert not temp_query.exists()
 
     def test_auto_expand_query_budget_scales_with_gap_size(self):
         assert auto_expand.query_limits_for_count(0) == (8, 4)

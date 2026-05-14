@@ -24,7 +24,7 @@ exclude_lines = [
     "if __name__ == .__main__.",
     "raise NotImplementedError",
 ]
-fail_under = 50
+fail_under = 80
 
 [tool.ruff]
 target-version = "py311"

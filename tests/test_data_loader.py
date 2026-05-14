@@ -116,10 +116,29 @@ class TestLoadToiletData:
         result = dl.load_toilet_data()
         assert result["toilets"][0]["sample_reviews"] == []
 
+    def test_invalid_sample_reviews_json_falls_back_to_empty_list(self, monkeypatch):
+        import ui.data_loader as dl
+
+        mock_conn = MagicMock()
+        monkeypatch.setattr(sqlite3, "connect", lambda _: mock_conn)
+        toilets_df, meta_df = self.make_mock_df(
+            [{"title": "D", "prefecture": "東京都", "lat": 35.0, "lng": 139.0, "sample_reviews_json": "not-json"}],
+            {"total": "1"},
+        )
+
+        def mock_read_sql(sql, conn):
+            return toilets_df if "toilets" in sql.lower() else meta_df
+
+        monkeypatch.setattr(pd, "read_sql", mock_read_sql)
+        monkeypatch.setattr(dl.st, "warning", lambda msg: None)
+
+        result = dl.load_toilet_data()
+        assert result["toilets"][0]["sample_reviews"] == []
+
     def test_returns_error_metadata_on_exception(self, monkeypatch):
         import ui.data_loader as dl
 
-        monkeypatch.setattr(sqlite3, "connect", lambda _: (_ for _ in ()).throw(Exception("DB error")))
+        monkeypatch.setattr(sqlite3, "connect", lambda _: (_ for _ in ()).throw(sqlite3.OperationalError("DB error")))
         monkeypatch.setattr(dl.st, "error", lambda msg: None)
 
         result = dl.load_toilet_data()

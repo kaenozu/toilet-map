@@ -13,7 +13,6 @@ Auto-judges toilet cleanliness from Google Maps reviews, displayed on a Streamli
 - Mobile responsive layout
 - Dark mode support
 - Collapsible sidebar
-- User submission form
 
 ## Quick Start
 

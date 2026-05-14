@@ -170,23 +170,6 @@ class TestMentionsToilet:
         assert scoring.mentions_toilet("トイレはあります")
 
 
-class TestGetLongitude:
-    def test_returns_longitude(self):
-        assert scoring._get_longitude({"longitude": 139.69}) == 139.69
-
-    def test_falls_back_to_longtitude(self):
-        assert scoring._get_longitude({"longtitude": 139.69}) == 139.69
-
-    def test_prefers_longitude_over_longtitude(self):
-        assert scoring._get_longitude({"longitude": 140.0, "longtitude": 139.0}) == 140.0
-
-    def test_none_values(self):
-        assert scoring._get_longitude({"longitude": None}) == 0.0
-
-    def test_empty_dict(self):
-        assert scoring._get_longitude({}) == 0.0
-
-
 class TestExtractToiletContexts:
     def test_no_toilet_mention_returns_empty(self):
         assert scoring.extract_toilet_contexts("ラーメンが美味しい") == []

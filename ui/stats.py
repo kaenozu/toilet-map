@@ -1,9 +1,11 @@
 """
 ui/stats.py
-統計ダッシュボード表示
+統計ダッシュボード表示（Altair グラフ）
 app.py から分離
 """
 import streamlit as st
+import pandas as pd
+import altair as alt
 from app_config import SCORE_DISTRIBUTION_RANGES
 
 
@@ -37,19 +39,14 @@ def render_score_distribution(toilets: list):
     dist = calc_score_distribution(toilets)
     if not dist:
         return
-    bars_html = "<div style='margin-top:12px;'>"
-    for d in dist:
-        bars_html += (
-            f"<div style='display:flex;align-items:center;margin:4px 0;font-size:13px;'>"
-            f"<span style='width:90px;color:#f0f0f0;'>{d['label']}</span>"
-            f"<div style='flex:1;background:#2a3444;border-radius:4px;height:20px;overflow:hidden;'>"
-            f"<div style='width:{d['pct']}%;background:{d['color']};height:100%;border-radius:4px;"
-            f"min-width:{2 if d['count'] > 0 else 0}px;'></div></div>"
-            f"<span style='width:60px;text-align:right;color:#aaa;margin-left:8px;'>{d['count']} ({d['pct']:.0f}%)</span>"
-            f"</div>"
-        )
-    bars_html += "</div>"
-    st.markdown(bars_html, unsafe_allow_html=True)
+    df = pd.DataFrame(dist)
+    chart = alt.Chart(df).mark_bar().encode(
+        x=alt.X("label:N", title=None, sort=None),
+        y=alt.Y("count:Q", title="件数"),
+        color=alt.Color("color:N", scale=None, legend=None),
+        tooltip=["label:N", "count:Q", "pct:Q"],
+    ).properties(height=200)
+    st.altair_chart(chart, use_container_width=True)
 
 
 def render_stats(meta: dict, toilets: list, t: dict):
