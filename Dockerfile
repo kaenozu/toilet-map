@@ -7,6 +7,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 EXPOSE 8501
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

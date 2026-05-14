@@ -55,10 +55,8 @@ def main() -> None:
             var search = document.querySelector('input[aria-label*="検索" i]');
             if (search) { search.focus(); e.preventDefault(); }
           }
-          if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
-            var help = document.getElementById('shortcut-help');
-            if (help) { help.style.display = help.style.display === 'none' ? 'block' : 'none'; e.preventDefault(); }
-          }
+          // ? キーのショートカットヘルプは未実装のためコメントアウト
+          // if (e.key === '?' && !e.ctrlKey && !e.metaKey) { ... }
         });
         </script>
         """,
