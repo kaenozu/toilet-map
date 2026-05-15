@@ -12,4 +12,4 @@ jobs:
           python-version: '3.11'
       - run: pip install -r requirements.txt
       - run: pytest tests/ -v --tb=short
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
