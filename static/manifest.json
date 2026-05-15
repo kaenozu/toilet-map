@@ -1,11 +1,13 @@
 {
-  "name": "トイレきれい度マップ",
+  "name": "トイレきれい度マップ - Toilet Cleanliness Map",
   "short_name": "トイレマップ",
-  "description": "Google Mapsの口コミからトイレのきれい度を自動判定",
+  "description": "Google Mapsの口コミからトイレのきれい度を自動判定して地図上に表示。日本全国のトイレ清掃状況をチェック。",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#1a73e8",
+  "lang": "ja",
+  "categories": ["lifestyle", "maps", "utilities"],
   "icons": [
     {
       "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='80'%3E🚽%3C/text%3E%3C/svg%3E",

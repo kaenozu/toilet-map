@@ -6,6 +6,7 @@ auto_expand.py から分離。本モジュールは test_batch_scrape_pipeline.p
 import os
 import tempfile
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from utils import logger
 from generate_queries import (
@@ -18,31 +19,39 @@ from generate_queries import (
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 QUERIES_DIR = os.path.join(SCRIPT_DIR, "queries.d")
 
-CITY_QUERY_BUDGET_TEMPLATES = ["{city} トイレ", "{city} 公衆トイレ"]
-PREFECTURE_QUERY_BUDGET_TEMPLATES = ["{pref} トイレ きれい", "{pref} トイレ アクセス"]
+# スコープ付き拡張用テンプレート（auto_expand の budget 制限付きクエリ）
+# generate_queries.py の CITY_QUERY_TEMPLATES（フル21種）とは別物
+SCOPED_CITY_TEMPLATES = ["{city} トイレ", "{city} 公衆トイレ"]
+SCOPED_PREFECTURE_TEMPLATES = ["{pref} トイレ きれい", "{pref} トイレ アクセス"]
 
-_ACTIVE_TARGET_PREF = ""
-_ACTIVE_TARGET_CITY = ""
-_ACTIVE_CITY_BUDGET = 0
-_ACTIVE_PREF_BUDGET = 0
+CITY_QUERY_BUDGET_TEMPLATES = SCOPED_CITY_TEMPLATES
+PREFECTURE_QUERY_BUDGET_TEMPLATES = SCOPED_PREFECTURE_TEMPLATES
+
+@dataclass
+class _ExpansionContext:
+    target_pref: str = ""
+    target_city: str = ""
+    city_budget: int = 0
+    pref_budget: int = 0
+
+
+_ctx = _ExpansionContext()
 
 
 def reset_context() -> None:
     """コンテキストを初期状態にリセットする（テスト用）"""
-    global _ACTIVE_TARGET_PREF, _ACTIVE_TARGET_CITY, _ACTIVE_CITY_BUDGET, _ACTIVE_PREF_BUDGET
-    _ACTIVE_TARGET_PREF = ""
-    _ACTIVE_TARGET_CITY = ""
-    _ACTIVE_CITY_BUDGET = 0
-    _ACTIVE_PREF_BUDGET = 0
+    _ctx.target_pref = ""
+    _ctx.target_city = ""
+    _ctx.city_budget = 0
+    _ctx.pref_budget = 0
 
 
 def set_active_context(pref: str, city: str, city_budget: int = 0, pref_budget: int = 0) -> tuple[str, str, int, int]:
-    global _ACTIVE_TARGET_PREF, _ACTIVE_TARGET_CITY, _ACTIVE_CITY_BUDGET, _ACTIVE_PREF_BUDGET
-    prev = (_ACTIVE_TARGET_PREF, _ACTIVE_TARGET_CITY, _ACTIVE_CITY_BUDGET, _ACTIVE_PREF_BUDGET)
-    _ACTIVE_TARGET_PREF = pref
-    _ACTIVE_TARGET_CITY = city
-    _ACTIVE_CITY_BUDGET = city_budget
-    _ACTIVE_PREF_BUDGET = pref_budget
+    prev = (_ctx.target_pref, _ctx.target_city, _ctx.city_budget, _ctx.pref_budget)
+    _ctx.target_pref = pref
+    _ctx.target_city = city
+    _ctx.city_budget = city_budget
+    _ctx.pref_budget = pref_budget
     return prev
 
 
@@ -63,7 +72,7 @@ def query_limits_for_count(count: int) -> tuple[int, int]:
         return (12, 4)
     if count < 6:
         return (16, 6)
-    return (len(CITY_QUERY_BUDGET_TEMPLATES), len(PREFECTURE_QUERY_BUDGET_TEMPLATES))
+    return (len(SCOPED_CITY_TEMPLATES), len(SCOPED_PREFECTURE_TEMPLATES))
 
 
 def _slugify(value: str) -> str:
@@ -131,14 +140,14 @@ def ensure_query_files(pref: str) -> None:
     pref_dir = Path(QUERIES_DIR) / pref
     pref_dir.mkdir(parents=True, exist_ok=True)
 
-    if not _ACTIVE_TARGET_CITY:
+    if not _ctx.target_city:
         return
 
-    target_label = f"{pref}{_ACTIVE_TARGET_CITY}" if pref else _ACTIVE_TARGET_CITY
-    target_path = pref_dir / "batch_000_target.txt"
+    target_label = f"{pref}{_ctx.target_city}" if pref else _ctx.target_city
+    target_path = pref_dir / f"batch_{_next_batch_index(pref_dir):03d}_target.txt"
     city_queries = build_queries([target_label], GENERATE_CITY_QUERY_TEMPLATES)
     with target_path.open("w", encoding="utf-8") as f:
-        f.write(f"# city: {_ACTIVE_TARGET_CITY}\n")
+        f.write(f"# city: {_ctx.target_city}\n")
         if pref:
             f.write(f"# prefecture: {pref}\n")
         f.write("\n".join(city_queries) + "\n")
@@ -177,20 +186,20 @@ def find_batch_files(pref: str) -> list[Path]:
 
 def _classify_query_file(path: Path) -> str:
     header_city, header_pref = _read_query_header(path)
-    if _ACTIVE_TARGET_CITY:
-        if header_city and header_city != _ACTIVE_TARGET_CITY:
+    if _ctx.target_city:
+        if header_city and header_city != _ctx.target_city:
             return ""
-        if header_city == _ACTIVE_TARGET_CITY or _file_mentions_city(path, _ACTIVE_TARGET_CITY):
+        if header_city == _ctx.target_city or _file_mentions_city(path, _ctx.target_city):
             return "city"
-        if header_pref and _ACTIVE_TARGET_PREF and header_pref != _ACTIVE_TARGET_PREF:
+        if header_pref and _ctx.target_pref and header_pref != _ctx.target_pref:
             return ""
         return "pref"
     return "pref" if not header_city else "city"
 
 
 def merge_query_files(files: list[str | Path]) -> str:
-    city_budget = _ACTIVE_CITY_BUDGET or len(CITY_QUERY_BUDGET_TEMPLATES)
-    pref_budget = _ACTIVE_PREF_BUDGET or len(PREFECTURE_QUERY_BUDGET_TEMPLATES)
+    city_budget = _ctx.city_budget or len(SCOPED_CITY_TEMPLATES)
+    pref_budget = _ctx.pref_budget or len(SCOPED_PREFECTURE_TEMPLATES)
     city_queries: list[str] = []
     pref_queries: list[str] = []
     seen: set[str] = set()
@@ -220,10 +229,10 @@ def merge_query_files(files: list[str | Path]) -> str:
         return ""
 
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, suffix=".txt", dir=SCRIPT_DIR) as tmp:
-        if _ACTIVE_TARGET_PREF:
-            tmp.write(f"# prefecture: {_ACTIVE_TARGET_PREF}\n")
-        if _ACTIVE_TARGET_CITY:
-            tmp.write(f"# city: {_ACTIVE_TARGET_CITY}\n")
+        if _ctx.target_pref:
+            tmp.write(f"# prefecture: {_ctx.target_pref}\n")
+        if _ctx.target_city:
+            tmp.write(f"# city: {_ctx.target_city}\n")
         for query in merged_queries:
             tmp.write(f"{query}\n")
         return tmp.name

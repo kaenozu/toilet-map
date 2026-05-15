@@ -13,14 +13,14 @@ from typing import Iterable
 logger = logging.getLogger(__name__)
 
 
-def _coerce_int(value):
+def _coerce_int(value: object) -> int | None:
     try:
         return int(value)
     except (TypeError, ValueError):
         return None
 
 
-def _coerce_float(value):
+def _coerce_float(value: object) -> float | None:
     try:
         return float(value)
     except (TypeError, ValueError):

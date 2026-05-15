@@ -72,6 +72,10 @@ def resolve_ui_state_from_query_params(
     if gps_enabled in {"0", "1"}:
         state["gps_enabled"] = gps_enabled == "1"
 
+    dark_mode = query_params.get("dark", "")
+    if dark_mode in {"0", "1"}:
+        state["dark_mode"] = dark_mode == "1"
+
     sort_key = query_params.get("sort", "")
     sort_label_map = {"clean": t["sort_clean"], "near": t["sort_near"]}
     if sort_key in sort_label_map:
@@ -97,6 +101,7 @@ def build_query_params_from_state(
     gps_enabled: bool,
     page: int,
     t: dict[str, str],
+    dark_mode: bool = False,
 ) -> dict[str, str]:
     params: dict[str, str] = {}
 
@@ -111,5 +116,7 @@ def build_query_params_from_state(
 
     params["sort"] = "near" if sort_order == t["sort_near"] else "clean"
     params["gps"] = "1" if gps_enabled else "0"
+    if dark_mode:
+        params["dark"] = "1"
     params["page"] = str(max(1, page))
     return params

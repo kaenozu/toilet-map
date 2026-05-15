@@ -73,31 +73,31 @@ class TestSearchToilets:
 
 class TestGetScoreStyle:
     def test_very_clean(self):
-        from app_config import get_score_style
+        from ui.helpers import get_score_style
         color, emoji, label = get_score_style(90)
         assert emoji == "✨"
         assert label == "とてもきれい"
 
     def test_dirty(self):
-        from app_config import get_score_style
+        from ui.helpers import get_score_style
         color, emoji, label = get_score_style(20)
         assert emoji == "💩"
 
 
 class TestEscaping:
     def test_esc(self):
-        from app_config import esc
+        from ui.helpers import esc
         assert esc("<test>") == "&lt;test&gt;"
     def test_esc_none(self):
-        from app_config import esc
+        from ui.helpers import esc
         assert esc(None) == ""
 
     def test_safe_href_blocks_javascript(self):
-        from app_config import safe_href
+        from ui.helpers import safe_href
         assert safe_href("javascript:alert(1)") == ""
 
     def test_safe_href_allows_https(self):
-        from app_config import safe_href
+        from ui.helpers import safe_href
         assert safe_href("https://maps.google.com/?q=test") == "https://maps.google.com/?q=test"
 
 
@@ -314,6 +314,39 @@ class TestWriteQueryParams:
         from ui.query_params import write_query_params
         monkeypatch.delattr("streamlit.query_params", raising=False)
         write_query_params({"page": "3"})  # should not raise
+
+
+class TestQueryParamsDarkMode:
+    def test_dark_mode_true(self):
+        from ui.query_params import resolve_ui_state_from_query_params
+        from ui.i18n import get_language_strings
+        from ui.sidebar import get_translated_filters
+        _, translated_to_internal = get_translated_filters("日本語")
+        t = get_language_strings("日本語")
+        state = resolve_ui_state_from_query_params(
+            {"dark": "1"}, ["全て"], translated_to_internal, t
+        )
+        assert state["dark_mode"] is True
+
+    def test_dark_mode_false(self):
+        from ui.query_params import resolve_ui_state_from_query_params
+        from ui.i18n import get_language_strings
+        from ui.sidebar import get_translated_filters
+        _, translated_to_internal = get_translated_filters("日本語")
+        t = get_language_strings("日本語")
+        state = resolve_ui_state_from_query_params(
+            {}, ["全て"], translated_to_internal, t
+        )
+        assert "dark_mode" not in state
+
+    def test_build_with_dark_mode(self):
+        from ui.query_params import build_query_params_from_state
+        from ui.i18n import get_language_strings
+        t = get_language_strings("日本語")
+        params = build_query_params_from_state(
+            "日本語", "東京都", "公共トイレ", "", t["sort_clean"], False, 1, t, dark_mode=True
+        )
+        assert params.get("dark") == "1"
 
 
 class TestResolveUiStateFromQueryParams:

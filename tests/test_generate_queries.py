@@ -108,3 +108,13 @@ class TestMain:
 class TestBatchSizeConstant:
     def test_batch_size(self):
         assert BATCH_SIZE == 12
+
+
+class TestQueryTemplatesAlias:
+    def test_is_independent_copy(self):
+        from generate_queries import QUERY_TEMPLATES, CITY_QUERY_TEMPLATES
+        original_len = len(QUERY_TEMPLATES)
+        QUERY_TEMPLATES.append("__test_dummy__")
+        assert len(QUERY_TEMPLATES) == original_len + 1
+        assert len(CITY_QUERY_TEMPLATES) == original_len
+        QUERY_TEMPLATES.pop()

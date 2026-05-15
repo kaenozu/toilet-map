@@ -89,6 +89,10 @@ class TestBuildPopupHtml:
         html = build_popup_html(toilet)
         assert "公共トイレ" not in html
 
+    def test_clean_none_returns_empty(self):
+        from ui.popups import clean
+        assert clean(None) == ""
+
     def test_low_confidence_shows_reference_note(self):
         toilet = {
             "title": "信頼度確認トイレ", "category": "公園", "toilet_score": 58.0,

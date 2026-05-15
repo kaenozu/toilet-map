@@ -39,7 +39,7 @@ def _build_toilet_result(place: PlaceDict, info: ToiletScoreInfo, lat: float, ln
     display_score = (info["score"] + DISPLAY_SCORE_OFFSET) * DISPLAY_SCORE_MULTIPLIER
 
     # スコアがない地点（口コミなし救済地点）のデフォルト値を調整
-    if info["confidence"] == 0:
+    if info["confidence"] <= 0:
         display_score = 50.0  # デフォルト「普通」
 
     return {

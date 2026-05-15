@@ -68,3 +68,5 @@ __pycache__/
 .DS_Store
 Thumbs.db
 nul
+*.py,cover
+batch/queries.d/

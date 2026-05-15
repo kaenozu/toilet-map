@@ -76,6 +76,12 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None):
             pref_stats[pref]["lats"].append(t["lat"])
             pref_stats[pref]["lngs"].append(t["lng"])
 
+        for pref, data in pref_stats.items():
+            data["center_lat"] = sum(data["lats"]) / len(data["lats"]) if data["lats"] else 0
+            data["center_lng"] = sum(data["lngs"]) / len(data["lngs"]) if data["lngs"] else 0
+            del data["lats"]
+            del data["lngs"]
+
         return {"metadata": metadata, "toilets": toilets, "pref_stats": pref_stats}
     except sqlite3.Error as e:
         st.error(f"データベース読み込みエラー: {e}")

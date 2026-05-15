@@ -15,6 +15,7 @@ import sys
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_JSON_PATH = os.path.join(SCRIPT_DIR, "..", "data", "toilets.json.gz")
 
+from utils import logger  # noqa: E402
 from db_utils import (  # noqa: E402
     DB_PATH, ensure_schema,
     dedupe_duplicate_toilets, fix_null_prefectures, update_metadata_from_db,
@@ -114,8 +115,6 @@ def _convert_core(
     incremental: bool = False,
 ) -> int:
     """JSON → SQLite 変換のコア処理。総件数を返す。"""
-    from utils import logger
-
     data = load_json(json_path)
     metadata = data.get("metadata", {})
     toilets = _validate_toilet_records(data.get("toilets", []))
@@ -144,8 +143,6 @@ def _convert_core(
 
 
 def json_to_sqlite(json_path: str, incremental: bool = False) -> None:
-    from utils import logger
-
     if not incremental and os.path.exists(DB_PATH):
         import shutil
         backup_path = f"{DB_PATH}.bak"
@@ -158,7 +155,6 @@ def json_to_sqlite(json_path: str, incremental: bool = False) -> None:
 
 
 def merge(json_path: str, db_path: str = DB_PATH) -> None:
-    from utils import logger
     logger.info(f"Merging {json_path} into SQLite...")
     total = _convert_core(json_path, db_path, incremental=True)
     conn = sqlite3.connect(db_path)

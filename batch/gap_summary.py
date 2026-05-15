@@ -9,8 +9,6 @@ from gap_analyzer import find_gaps, get_stats
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "toilets.json.gz")
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "toilets.json.gz")
-
 
 def print_gap_summary():
     data = load_json(DATA_PATH)

@@ -114,12 +114,27 @@ class TestCalcMapCenter:
         assert lng == 139.5
 
 
+class TestCalcMapCenterFallback:
+    def test_all_prefecture_uses_meta(self):
+        from ui.map_builder import calc_map_center
+        meta = {"center_lat": 36.0, "center_lng": 138.0, "zoom": 6}
+        lat, lng, zoom = calc_map_center("全て", meta, {})
+        assert lat == 36.0
+        assert lng == 138.0
+        assert zoom == 6
+
+
 class TestCalcFitBoundsEdgeCases:
     def test_no_valid_coords_returns_none(self):
         from ui.map_builder import _calc_fit_bounds
 
         toilets = [_make_toilet("bad", None, None)]
         assert _calc_fit_bounds(toilets) is None
+
+    def test_empty_list_returns_none(self):
+        from ui.map_builder import _calc_fit_bounds
+
+        assert _calc_fit_bounds([]) is None
 
     def test_single_point_expands(self):
         from ui.map_builder import _calc_fit_bounds

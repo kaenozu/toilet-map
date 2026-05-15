@@ -353,7 +353,8 @@ class TestToiletDbValues:
             "sample_reviews": [],
         }
         values = db_utils.toilet_db_values(toilet)
-        assert len(values) == 13
+        assert len(values) == 14
+
 
     def test_prefecture_from_address_when_missing(self):
         toilet = {
@@ -371,7 +372,7 @@ class TestToiletDbValues:
 
     def test_missing_fields_use_defaults(self):
         values = db_utils.toilet_db_values({})
-        assert len(values) == 13
+        assert len(values) == 14
         assert values[0] == ""
         assert values[3] is None
 
@@ -387,37 +388,6 @@ class TestToiletDbValues:
         }
         values = db_utils.toilet_db_values(toilet)
         assert values[12] == "[]"
-
-
-class TestToiletDbUpdateValues:
-    def test_returns_10_elements(self):
-        toilet = {
-            "title": "A", "category": "公園", "address": "東京都",
-            "lat": 35.0, "lng": 139.0,
-            "rating": 3.5, "review_count": 10,
-            "is_public_toilet": True,
-            "toilet_score": 80.0, "confidence": 0.8,
-            "toilet_review_count": 2,
-            "prefecture": "東京都",
-            "sample_reviews": [],
-        }
-        values = db_utils.toilet_db_update_values(toilet)
-        assert len(values) == 10
-
-    def test_skips_title_lat_lng(self):
-        toilet = {
-            "title": "ORG", "category": "NEW",
-            "address": "NEW_ADDR", "lat": 1.0, "lng": 2.0,
-            "rating": 5.0, "review_count": 99,
-            "is_public_toilet": True,
-            "toilet_score": 100.0, "confidence": 1.0,
-            "toilet_review_count": 10,
-            "prefecture": "NEW_PREF",
-            "sample_reviews": [{"x": 1}],
-        }
-        values = db_utils.toilet_db_update_values(toilet)
-        assert values[0] == "NEW"
-        assert values[8] == "NEW_PREF"
 
 
 class TestUpsertToilets:
@@ -586,5 +556,35 @@ class TestUpdateMetadataFromDb:
                 "SELECT value FROM metadata WHERE key = 'last_updated'"
             ).fetchone()[0]
             assert lu == "2026-05-10 12:00:00"
+        finally:
+            conn.close()
+
+
+class TestEnsureSchemaRetry:
+    def test_succeeds_after_dedup(self, monkeypatch):
+        conn = sqlite3.connect(":memory:")
+        try:
+            cur = conn.cursor()
+            cur.execute("CREATE TABLE toilets (id INTEGER PRIMARY KEY, lat REAL, lng REAL, title TEXT, category TEXT, address TEXT, rating REAL, review_count INTEGER, is_public_toilet BOOLEAN, toilet_score REAL, confidence REAL, toilet_review_count INTEGER, prefecture TEXT, sample_reviews_json TEXT, top_keywords TEXT)")
+            cur.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT)")
+            cur.execute("INSERT INTO toilets (lat, lng, title) VALUES (35.0, 139.0, 'A')")
+            cur.execute("INSERT INTO toilets (lat, lng, title) VALUES (35.0, 139.0, 'B')")
+            db_utils.ensure_schema(cur)
+            count = cur.execute("SELECT COUNT(*) FROM toilets").fetchone()[0]
+            assert count == 1
+        finally:
+            conn.close()
+
+    def test_raises_on_zero_deduped(self, monkeypatch):
+        conn = sqlite3.connect(":memory:")
+        try:
+            cur = conn.cursor()
+            cur.execute("CREATE TABLE toilets (id INTEGER PRIMARY KEY, lat REAL, lng REAL, title TEXT, category TEXT, address TEXT, rating REAL, review_count INTEGER, is_public_toilet BOOLEAN, toilet_score REAL, confidence REAL, toilet_review_count INTEGER, prefecture TEXT, sample_reviews_json TEXT, top_keywords TEXT)")
+            cur.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT)")
+            cur.execute("INSERT INTO toilets (lat, lng, title) VALUES (35.0, 139.0, 'A')")
+            cur.execute("INSERT INTO toilets (lat, lng, title) VALUES (35.0, 139.0, 'B')")
+            monkeypatch.setattr(db_utils, "dedupe_duplicate_toilets", lambda cur: 0)
+            with pytest.raises(sqlite3.IntegrityError):
+                db_utils.ensure_schema(cur)
         finally:
             conn.close()

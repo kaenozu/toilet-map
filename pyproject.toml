@@ -13,8 +13,6 @@ omit = [
     "**/__pycache__/*",
     "app.py",
     "batch/scrape_runner.py",
-    "batch/kanto_phase1.py",
-    "batch/nationwide_runner.py",
     "ui/styles.py",
 ]
 
