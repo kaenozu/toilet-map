@@ -1,6 +1,6 @@
 streamlit>=1.30.0
 folium>=0.15.0
-streamlit-folium>=0.20.0
+streamlit-folium>=0.27.2
 pandas>=2.0.0
 numpy>=1.24.0
 streamlit-js-eval>=1.0.0
