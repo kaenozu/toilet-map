@@ -58,13 +58,16 @@ def detect_city_from_queries(queries_path: str) -> tuple[str, str]:
                 elif line.startswith("# prefecture:"):
                     pref = line.split(":", 1)[1].strip()
                 elif line and not line.startswith("#"):
+                    seen_in_line: set[str] = set()
                     m = re.search(r'\bin\s+(\S+[市区町村])', line)
                     if m:
                         c = m.group(1)
                         city_counts[c] = city_counts.get(c, 0) + 1
-                    for m in re.finditer(r'(\S*[市区町村])', line):
-                        c = m.group(1)
-                        if len(c) >= 2:
+                        seen_in_line.add(c)
+                    for m2 in re.finditer(r'(\S*[市区町村])', line):
+                        c = m2.group(1)
+                        if len(c) >= 2 and c not in seen_in_line:
+                            seen_in_line.add(c)
                             city_counts[c] = city_counts.get(c, 0) + 1
     except OSError as exc:
         logger.warning(f"Failed to read query file: {queries_path} ({exc})")

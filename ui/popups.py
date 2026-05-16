@@ -2,7 +2,8 @@
 ui/popups.py
 Popup HTML builders for toilet map markers
 """
-from app_config import esc, safe_href, get_score_style, MAX_SAMPLE_REVIEWS, REVIEW_TEXT_MAX_LENGTH
+from app_config import MAX_SAMPLE_REVIEWS, REVIEW_TEXT_MAX_LENGTH
+from .helpers import esc, safe_href, get_score_style
 from .types import ToiletDict
 
 

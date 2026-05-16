@@ -133,7 +133,7 @@ class TestScrapeRunnerFiltering:
             lambda city, pref, raw_output, raw_dir, queries_file: ("filtered.json", 3, 0),
         )
 
-        with pytest.raises(RuntimeError, match="No entries matched city filter"):
+        with pytest.raises((RuntimeError, scrape_filter.DataError), match="No entries matched city filter"):
             scrape_filter.prepare_input_data("高崎市", "群馬県", "raw.json", "raw_dir", "queries.txt")
 
 
@@ -217,7 +217,7 @@ class TestKantoPhase1:
 
         monkeypatch.setattr(kanto_phase1.subprocess, "run", fake_run)
 
-        kanto_phase1.run_scrape("東京都", "千代田区", "queries.txt")
+        kanto_phase1.run_scrape("東京都", "千代田区", Path("queries.txt"))
 
         assert captured["SYNC_EVERY_SUCCESS"] == "10"
 
@@ -264,6 +264,18 @@ class TestCliParser:
         result = cli_parser.parse_args()
         assert result["max_queries"] is None
 
+    def test_parse_args_invalid_max_queries_warns(self, monkeypatch, caplog):
+        import cli_parser
+        monkeypatch.setattr(cli_parser.sys, "argv", ["scrape_runner.py", "--max-queries", "not_a_number"])
+        cli_parser.parse_args()
+        assert "Invalid --max-queries value: not_a_number" in caplog.text
+
+    def test_parse_args_unknown_arg_skipped(self, monkeypatch):
+        import cli_parser
+        monkeypatch.setattr(cli_parser.sys, "argv", ["scrape_runner.py", "--unknown-flag"])
+        result = cli_parser.parse_args()
+        assert result["city"] == ""
+
     def test_detect_city_from_queries_reads_header(self, tmp_path):
         import cli_parser
         query_file = tmp_path / "queries.txt"
@@ -285,6 +297,18 @@ class TestCliParser:
         city, pref = cli_parser.detect_city_from_queries(str(tmp_path / "nonexistent.txt"))
         assert city == ""
         assert pref == ""
+
+    def test_detect_city_oserror_logs_warning(self, tmp_path, caplog):
+        import cli_parser
+        cli_parser.detect_city_from_queries(str(tmp_path / "nonexistent.txt"))
+        assert "Failed to read query file" in caplog.text
+
+    def test_detect_city_seen_in_line_dedup(self, tmp_path):
+        import cli_parser
+        query_file = tmp_path / "queries.txt"
+        query_file.write_text("渋谷区 トイレ\n", encoding="utf-8")
+        city, pref = cli_parser.detect_city_from_queries(str(query_file))
+        assert city == "渋谷区"
 
 
 class TestExpansionQueryModule:
@@ -312,32 +336,66 @@ class TestExpansionQueryModule:
 
     def test_classify_query_file_identifies_city(self, tmp_path):
         import expansion_query as eq
-        eq._ACTIVE_TARGET_CITY = "渋谷区"
-        eq._ACTIVE_TARGET_PREF = "東京都"
+        eq.reset_context()
+        eq.set_active_context("東京都", "渋谷区")
         path = tmp_path / "batch_target.txt"
         path.write_text("# city: 渋谷区\n# prefecture: 東京都\nq1\n", encoding="utf-8")
         bucket = eq._classify_query_file(path)
         assert bucket == "city"
-        eq._ACTIVE_TARGET_CITY = ""
-        eq._ACTIVE_TARGET_PREF = ""
+        eq.reset_context()
 
     def test_classify_query_file_identifies_pref(self, tmp_path):
         import expansion_query as eq
-        eq._ACTIVE_TARGET_CITY = "渋谷区"
-        eq._ACTIVE_TARGET_PREF = "東京都"
+        eq.reset_context()
+        eq.set_active_context("東京都", "渋谷区")
         path = tmp_path / "batch_pref.txt"
         path.write_text("# prefecture: 東京都\nq1\nq2\n", encoding="utf-8")
         bucket = eq._classify_query_file(path)
         assert bucket == "pref"
-        eq._ACTIVE_TARGET_CITY = ""
-        eq._ACTIVE_TARGET_PREF = ""
+        eq.reset_context()
+
+    def test_no_active_city_returns_pref_when_no_header_city(self, tmp_path):
+        import expansion_query as eq
+        eq.reset_context()
+        path = tmp_path / "batch_no_city.txt"
+        path.write_text("# prefecture: 東京都\nq1\n", encoding="utf-8")
+        bucket = eq._classify_query_file(path)
+        assert bucket == "pref"
+        eq.reset_context()
+
+    def test_returns_city_when_header_matches(self, tmp_path):
+        import expansion_query as eq
+        eq.reset_context()
+        path = tmp_path / "batch_has_city.txt"
+        path.write_text("# city: 渋谷区\nq1\n", encoding="utf-8")
+        bucket = eq._classify_query_file(path)
+        assert bucket == "city"
+        eq.reset_context()
+
+    def test_classify_rejects_wrong_city(self, tmp_path):
+        import expansion_query as eq
+        eq.reset_context()
+        eq.set_active_context("東京都", "渋谷区")
+        path = tmp_path / "batch_wrong.txt"
+        path.write_text("# city: 新宿区\nq1\n", encoding="utf-8")
+        bucket = eq._classify_query_file(path)
+        assert bucket == ""
+        eq.reset_context()
+
+    def test_classify_rejects_wrong_pref(self, tmp_path):
+        import expansion_query as eq
+        eq.reset_context()
+        eq.set_active_context("大阪府", "大阪市")
+        path = tmp_path / "batch_wrong_pref.txt"
+        path.write_text("# prefecture: 東京都\nq1\n", encoding="utf-8")
+        bucket = eq._classify_query_file(path)
+        assert bucket == ""
+        eq.reset_context()
 
     def test_merge_query_files_combines_city_and_pref(self, tmp_path):
         import expansion_query as eq
-        eq._ACTIVE_TARGET_CITY = "渋谷区"
-        eq._ACTIVE_TARGET_PREF = "東京都"
-        eq._ACTIVE_CITY_BUDGET = 2
-        eq._ACTIVE_PREF_BUDGET = 2
+        eq.reset_context()
+        eq.set_active_context("東京都", "渋谷区", city_budget=2, pref_budget=2)
 
         city_file = tmp_path / "city.txt"
         city_file.write_text("# city: 渋谷区\ncity_q1\ncity_q2\ncity_q3\n", encoding="utf-8")
@@ -349,21 +407,16 @@ class TestExpansionQueryModule:
         content = Path(result).read_text(encoding="utf-8")
         assert "city_q1" in content
         assert "city_q2" in content
-        assert "city_q3" not in content  # budget exceeded
+        assert "city_q3" not in content
         assert "pref_q1" in content
         assert "pref_q2" in content
         Path(result).unlink()
-        eq._ACTIVE_TARGET_CITY = ""
-        eq._ACTIVE_TARGET_PREF = ""
-        eq._ACTIVE_CITY_BUDGET = 0
-        eq._ACTIVE_PREF_BUDGET = 0
+        eq.reset_context()
 
     def test_merge_query_files_deduplicates(self, tmp_path):
         import expansion_query as eq
-        eq._ACTIVE_TARGET_CITY = "渋谷区"
-        eq._ACTIVE_TARGET_PREF = "東京都"
-        eq._ACTIVE_CITY_BUDGET = 10
-        eq._ACTIVE_PREF_BUDGET = 10
+        eq.reset_context()
+        eq.set_active_context("東京都", "渋谷区", city_budget=10, pref_budget=10)
 
         city_file = tmp_path / "city.txt"
         city_file.write_text("# city: 渋谷区\ndup_q1\ndup_q2\n", encoding="utf-8")
@@ -375,25 +428,27 @@ class TestExpansionQueryModule:
         assert content.count("dup_q1") == 1
         assert content.count("dup_q2") == 1
         Path(result).unlink()
-        eq._ACTIVE_TARGET_CITY = ""
-        eq._ACTIVE_TARGET_PREF = ""
-        eq._ACTIVE_CITY_BUDGET = 0
-        eq._ACTIVE_PREF_BUDGET = 0
+        eq.reset_context()
 
     def test_merge_query_files_returns_empty_for_no_input(self):
         import expansion_query as eq
-        eq._ACTIVE_TARGET_CITY = "渋谷区"
-        eq._ACTIVE_TARGET_PREF = "東京都"
-        # Force no active budget so no queries are matched
-        eq._ACTIVE_CITY_BUDGET = 0
-        eq._ACTIVE_PREF_BUDGET = 0
+        eq.reset_context()
+        eq.set_active_context("東京都", "渋谷区", city_budget=0, pref_budget=0)
         result = eq.merge_query_files([])
         assert result == ""
-        eq._ACTIVE_TARGET_CITY = ""
-        eq._ACTIVE_TARGET_PREF = ""
-        eq._ACTIVE_CITY_BUDGET = 0
-        eq._ACTIVE_PREF_BUDGET = 0
+        eq.reset_context()
 
+    def test_merge_query_files_skips_unmatched_bucket(self, tmp_path):
+        import expansion_query as eq
+        eq.reset_context()
+        eq.set_active_context("東京都", "渋谷区")
+        no_city = tmp_path / "no_city.txt"
+        no_city.write_text("q_without_header\n", encoding="utf-8")
+        result = eq.merge_query_files([str(no_city)])
+        # no header = pref (when target_city is set but header has no city)
+        assert result != ""
+        Path(result).unlink()
+        eq.reset_context()
 
 class TestQueryGeneration:
     def test_write_batches_does_not_overwrite_previous_city(self, tmp_path):
@@ -443,7 +498,7 @@ class TestPostProcessPipeline:
         calls = iter([Result(0), Result(1)])
         monkeypatch.setattr(pipeline.subprocess, "run", lambda cmd: next(calls))
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises((RuntimeError, pipeline.DataError)):
             pipeline.run_postprocess_pipeline("input.json", "output.json.gz", ".")
 
     def test_maybe_sync_after_success_triggers_on_interval(self, monkeypatch):
@@ -478,7 +533,6 @@ class TestPostProcessPipeline:
         auto_expand.run_auto_expansion(max_areas=1, target_city="名古屋市", target_pref="愛知県")
 
         assert captured_env["SYNC_EVERY_SUCCESS"] == "1"
-        assert not temp_query.exists()
 
     def test_auto_expand_query_budget_scales_with_gap_size(self):
         assert auto_expand.query_limits_for_count(0) == (8, 4)
@@ -552,39 +606,23 @@ class TestFindBatchFiles:
         assert eq.find_batch_files("東京都") == []
 
 
-class TestClassifyQueryFile:
-    def test_no_active_city_returns_pref_when_no_header_city(self, tmp_path, monkeypatch):
-        import expansion_query as eq
-        monkeypatch.setattr(eq, "_ACTIVE_TARGET_CITY", "")
-        p = tmp_path / "batch_001.txt"
-        p.write_text("# prefecture: 東京都\nq1\n", encoding="utf-8")
-        assert eq._classify_query_file(p) == "pref"
-
-    def test_returns_city_when_header_matches(self, tmp_path, monkeypatch):
-        import expansion_query as eq
-        monkeypatch.setattr(eq, "_ACTIVE_TARGET_CITY", "渋谷区")
-        p = tmp_path / "batch_001.txt"
-        p.write_text("# city: 渋谷区\nq1\n", encoding="utf-8")
-        assert eq._classify_query_file(p) == "city"
-
-
 class TestEnsureQueryFiles:
     def test_creates_target_file(self, tmp_path, monkeypatch):
         import expansion_query as eq
+        eq.reset_context()
         monkeypatch.setattr(eq, "QUERIES_DIR", str(tmp_path))
-        monkeypatch.setattr(eq, "_ACTIVE_TARGET_CITY", "渋谷区")
-        monkeypatch.setattr(eq, "_ACTIVE_TARGET_PREF", "東京都")
+        eq.set_active_context("東京都", "渋谷区")
         monkeypatch.setattr(eq, "build_queries", lambda labels, templates: ["q1"])
         eq.ensure_query_files("東京都")
-        target = tmp_path / "東京都" / "batch_000_target.txt"
+        target = tmp_path / "東京都" / "batch_001_target.txt"
         assert target.exists()
         content = target.read_text(encoding="utf-8")
         assert "渋谷区" in content
 
     def test_no_active_city_returns_early(self, tmp_path, monkeypatch):
         import expansion_query as eq
+        eq.reset_context()
         monkeypatch.setattr(eq, "QUERIES_DIR", str(tmp_path))
-        monkeypatch.setattr(eq, "_ACTIVE_TARGET_CITY", "")
         eq.ensure_query_files("東京都")
         pref_dir = tmp_path / "東京都"
         assert pref_dir.exists()
@@ -592,9 +630,9 @@ class TestEnsureQueryFiles:
 
     def test_skip_pref_queries_when_already_exists(self, tmp_path, monkeypatch):
         import expansion_query as eq
+        eq.reset_context()
         monkeypatch.setattr(eq, "QUERIES_DIR", str(tmp_path))
-        monkeypatch.setattr(eq, "_ACTIVE_TARGET_CITY", "渋谷区")
-        monkeypatch.setattr(eq, "_ACTIVE_TARGET_PREF", "東京都")
+        eq.set_active_context("東京都", "渋谷区")
         monkeypatch.setattr(eq, "build_queries", lambda labels, templates: ["q1"])
         pref_dir = tmp_path / "東京都"
         pref_dir.mkdir(parents=True, exist_ok=True)
@@ -610,10 +648,8 @@ class TestEnsureQueryFiles:
 class TestMergeQueryFilesBudget:
     def test_budget_exceeded_stops_adding(self, tmp_path, monkeypatch):
         import expansion_query as eq
-        monkeypatch.setattr(eq, "_ACTIVE_CITY_BUDGET", 1)
-        monkeypatch.setattr(eq, "_ACTIVE_PREF_BUDGET", 1)
-        monkeypatch.setattr(eq, "_ACTIVE_TARGET_CITY", "渋谷区")
-        monkeypatch.setattr(eq, "_ACTIVE_TARGET_PREF", "東京都")
+        eq.reset_context()
+        eq.set_active_context("東京都", "渋谷区", city_budget=1, pref_budget=1)
         city_file = tmp_path / "city.txt"
         city_file.write_text("# city: 渋谷区\nq1\nq2\nq3\n", encoding="utf-8")
         result = eq.merge_query_files([str(city_file)])

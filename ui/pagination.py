@@ -10,6 +10,7 @@ PER_PAGE = 20
 
 def init_page_state() -> None:
     st.session_state.setdefault("page", 1)
+    st.session_state.setdefault("page_filter_key", "")
 
 
 def reset_page(filter_key: str) -> None:

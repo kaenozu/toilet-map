@@ -24,106 +24,36 @@ from ui.query_params import (
 from ui.sidebar import render_sidebar
 
 
-def main() -> None:
-    st.set_page_config(
-        page_title=APP_TITLE,
-        page_icon="🚽",
-        layout="wide",
-    )
-    st.markdown(
-        """
-        <style>
-        [data-testid="stSidebarNav"] {
-            display: none !important;
-        }
-        </style>
-        <link rel="manifest" href="/static/manifest.json">
-        <meta name="theme-color" content="#1a73e8">
-        """,
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        """
-        <script>
-        document.addEventListener('keydown', function(e) {
-          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-          if (e.key === 'g' && !e.ctrlKey && !e.metaKey) {
-            var gps = document.querySelector('input[aria-label*="GPS" i]');
-            if (gps) { gps.click(); e.preventDefault(); }
-          }
-          if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
-            var search = document.querySelector('input[aria-label*="検索" i]');
-            if (search) { search.focus(); e.preventDefault(); }
-          }
-          // ? キーのショートカットヘルプは未実装のためコメントアウト
-          // if (e.key === '?' && !e.ctrlKey && !e.metaKey) { ... }
-        });
-        </script>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.markdown(MOBILE_CSS, unsafe_allow_html=True)
-    st.markdown(
-        """
-        <style>
-        @keyframes skeleton-pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
-        .skeleton {
-            display:inline-block;height:1em;background:linear-gradient(90deg,#e0e0e0 25%,#f0f0f0 50%,#e0e0e0 75%);
-            background-size:200% 100%;animation:skeleton-pulse 1.5s ease-in-out infinite;
-            border-radius:4px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
+def _load_and_prepare():
     query_params = read_query_params()
     apply_language_query_param(query_params)
-
     current_lang = st.session_state.get("lang_select", DEFAULT_LANGUAGE)
     t = get_language_strings(current_lang)
-
     data = load_toilet_data(get_data_cache_token())
     meta = data["metadata"]
     toilets = data["toilets"]
     prefecture_stats = data.get("pref_stats", {})
-
     df = toilets_to_dataframe(toilets)
     prefectures = get_prefectures(df)
+    return meta, df, prefectures, prefecture_stats, t, query_params, toilets
 
-    sidebar_result = render_sidebar(t, prefectures, query_params)
-    t = sidebar_result.t
-    lang = sidebar_result.lang
-    selected_pref = sidebar_result.selected_pref
-    filter_type = sidebar_result.filter_type
-    search_query = sidebar_result.search_query
-    sort_order = sidebar_result.sort_order
-    user_location = sidebar_result.user_location
-    gps_enabled = sidebar_result.gps_enabled
-    dark_mode = sidebar_result.dark_mode
-    selected_tile = sidebar_result.selected_tile
-    translated_to_internal = sidebar_result.translated_to_internal
 
-    internal_filter = translated_to_internal[filter_type]
+def _process_filters(df, selected_pref, internal_filter, search_query, sort_order, user_location, t):
     user_lat, user_lng = user_location if user_location else (None, None)
     filter_started_at = perf_counter()
     filtered = filter_toilets(df, internal_filter, selected_pref, user_lat, user_lng)
     filtered = search_toilets(filtered, search_query)
-
     if sort_order == t["sort_near"] and user_location:
         filtered = filtered.sort_values("distance", ascending=True)
     else:
         filtered = filtered.sort_values("toilet_score", ascending=False)
     filter_elapsed_ms = (perf_counter() - filter_started_at) * 1000
+    return filtered, filter_elapsed_ms
 
-    st.title(t["title"])
-    st.caption(build_data_freshness_text(meta, t))
 
+def _render_main_content(filtered, map_items, meta, t, selected_pref, sort_order, dark_mode, selected_tile, toilets, filter_elapsed_ms, prefecture_stats, internal_filter, search_query):
     map_lat, map_lng, map_zoom = calc_map_center(selected_pref, meta, prefecture_stats)
     total_items = len(filtered)
-
-    map_items = filtered.to_dict("records")
-
     init_page_state()
     page_filter_key = f"{selected_pref}|{internal_filter}|{search_query}"
     reset_page(page_filter_key)
@@ -164,6 +94,95 @@ def main() -> None:
             render_toilet_card(row.to_dict(), rank=i + 1, meta=meta)
         st.markdown('</div>', unsafe_allow_html=True)
 
+    return dark_mode, page, display_items
+
+
+def _inject_html():
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebarNav"] {
+            display: none !important;
+        }
+        </style>
+        <link rel="manifest" href="/static/manifest.json">
+        <meta name="theme-color" content="#1a73e8">
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        """
+        <script>
+        document.addEventListener('keydown', function(e) {
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+          if (e.key === 'g' && !e.ctrlKey && !e.metaKey) {
+            var gps = document.querySelector('input[aria-label*="GPS" i]');
+            if (gps) { gps.click(); e.preventDefault(); }
+          }
+          if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+            var search = document.querySelector('input[aria-label*="検索" i]');
+            if (search) { search.focus(); e.preventDefault(); }
+          }
+        });
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(MOBILE_CSS, unsafe_allow_html=True)
+    st.markdown(
+        """
+        <style>
+        @keyframes skeleton-pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
+        .skeleton {
+            display:inline-block;height:1em;background:linear-gradient(90deg,#e0e0e0 25%,#f0f0f0 50%,#e0e0e0 75%);
+            background-size:200% 100%;animation:skeleton-pulse 1.5s ease-in-out infinite;
+            border-radius:4px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def main() -> None:
+    st.set_page_config(
+        page_title=APP_TITLE,
+        page_icon="🚽",
+        layout="wide",
+    )
+    _inject_html()
+
+    meta, df, prefectures, prefecture_stats, t, query_params, toilets = _load_and_prepare()
+
+    sidebar_result = render_sidebar(t, prefectures, query_params)
+    t = sidebar_result.t
+    lang = sidebar_result.lang
+    selected_pref = sidebar_result.selected_pref
+    filter_type = sidebar_result.filter_type
+    search_query = sidebar_result.search_query
+    sort_order = sidebar_result.sort_order
+    user_location = sidebar_result.user_location
+    gps_enabled = sidebar_result.gps_enabled
+    dark_mode = sidebar_result.dark_mode
+    selected_tile = sidebar_result.selected_tile
+    translated_to_internal = sidebar_result.translated_to_internal
+
+    internal_filter = translated_to_internal[filter_type]
+    filtered, filter_elapsed_ms = _process_filters(
+        df, selected_pref, internal_filter, search_query, sort_order, user_location, t
+    )
+
+    st.title(t["title"])
+    st.caption(build_data_freshness_text(meta, t))
+
+    map_items = filtered.to_dict("records")
+
+    dark_mode, page, display_items = _render_main_content(
+        filtered, map_items, meta, t, selected_pref,
+        sort_order, dark_mode, selected_tile, toilets, filter_elapsed_ms,
+        prefecture_stats, internal_filter, search_query,
+    )
+
     if dark_mode:
         st.markdown(
             "<style>.toilet-card{background:#1e1e1e!important;color:#e0e0e0!important;border-color:#333!important;}"
@@ -174,10 +193,14 @@ def main() -> None:
     if st.session_state.get("_show_shortcuts", False):
         st.info(t["shortcut_info"])
 
+    if len(display_items) > 0:
+        csv_data = filtered.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(t.get("csv_download", "📥 CSVダウンロード"), csv_data, f"toilets_{selected_pref}.csv", "text/csv", use_container_width=True)
+
     write_query_params(
         build_query_params_from_state(
             lang, selected_pref, internal_filter, search_query,
-            sort_order, gps_enabled, page, t,
+            sort_order, gps_enabled, page, t, dark_mode=dark_mode,
         )
     )
 

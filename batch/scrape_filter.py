@@ -9,6 +9,7 @@ from typing import Optional
 from utils import count_lines, logger
 from city_bounds import filter_raw_data, get_city_bounds
 from progress_tracker import load_queries, merge_part_files
+from exceptions import DataError
 
 
 def fetch_city_bounds(city: str, pref: str) -> Optional[dict]:
@@ -46,7 +47,7 @@ def prepare_input_data(
         filter_label = f"{pref}{city}" if pref else city
         logger.warning(f"\n  WARNING: No entries matched city filter '{filter_label}'")
         logger.info(f"  ({total_raw} raw entries were checked)")
-        raise RuntimeError(f"No entries matched city filter '{filter_label}'")
+        raise DataError(f"No entries matched city filter '{filter_label}'")
 
     pct = kept / total_raw * 100 if total_raw > 0 else 0
     logger.info(f"  City filter: {kept}/{total_raw} entries kept ({pct:.1f}%)")

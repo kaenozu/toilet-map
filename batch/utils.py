@@ -6,6 +6,7 @@ import json
 import logging
 import gzip
 import os
+import platform
 import re
 import time
 import tempfile
@@ -22,14 +23,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-try:
+if platform.system() == "Windows":
     import msvcrt
-except ImportError:  # pragma: no cover - Windows fallback only
-    msvcrt = None
-
-try:
+    fcntl = None
+elif platform.system() == "Linux":
     import fcntl
-except ImportError:  # pragma: no cover - Windows fallback only
+    msvcrt = None
+else:
+    msvcrt = None
     fcntl = None
 
 
@@ -213,8 +214,5 @@ def extract_prefecture(address: str) -> str:
     for alias, prefecture in sorted(PREFECTURE_ALIASES.items(), key=lambda item: len(item[0]), reverse=True):
         if alias and alias in normalized:
             return prefecture
-
-    if "北海道" in normalized:
-        return "北海道"
 
     return ""

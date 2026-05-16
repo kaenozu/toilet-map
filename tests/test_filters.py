@@ -281,5 +281,69 @@ class TestViewportFilters:
         assert len(result) >= 1
 
 
+class TestSearchToiletsEdgeCases:
+    def test_score_range_search(self):
+        df = pd.DataFrame([
+            {"title": "A", "address": "X", "category": "C", "toilet_score": 80},
+            {"title": "B", "address": "X", "category": "C", "toilet_score": 50},
+            {"title": "C", "address": "X", "category": "C", "toilet_score": 30},
+        ])
+        result = search_toilets(df, "40-90")
+        assert len(result) == 2
+        assert list(result["toilet_score"]) == [80, 50]
+
+    def test_whitespace_only_query_returns_all(self):
+        df = pd.DataFrame([{"title": "A", "address": "B", "category": "C"}])
+        result = search_toilets(df, "  ")
+        assert len(result) == 1
+
+    def test_empty_after_split_returns_all(self):
+        df = pd.DataFrame([{"title": "A", "address": "B", "category": "C"}])
+        result = search_toilets(df, ",")
+        assert len(result) == 1
+
+    def test_multi_word_search(self):
+        df = pd.DataFrame([
+            {"title": "東京タワートイレ", "address": "東京都港区", "category": "公園"},
+            {"title": "大阪城トイレ", "address": "大阪市", "category": "公園"},
+        ])
+        result = search_toilets(df, "東京 港区")
+        assert len(result) == 1
+        assert result.iloc[0]["title"] == "東京タワートイレ"
+
+
+class TestFilterToiletsEdgeCases:
+    def test_equipment_filter(self):
+        df = pd.DataFrame([
+            {"title": "A", "category": "公園", "is_public_toilet": False,
+             "prefecture": "東京都", "has_multi": True, "has_diaper": False},
+            {"title": "B", "category": "公園", "is_public_toilet": False,
+             "prefecture": "東京都", "has_multi": False, "has_diaper": False},
+        ])
+        result = filter_toilets(df, "多目的トイレ")
+        assert len(result) == 1
+        assert result.iloc[0]["title"] == "A"
+
+    def test_barrier_free_no_equip_columns_returns_all(self):
+        df = pd.DataFrame({"title": ["A", "B"], "category": "公園", "is_public_toilet": False, "prefecture": "東京都"})
+        result = _apply_equipment_filter(df, "__keyword__barrier_free")
+        assert len(result) == 2
+
+    def test_barrier_free_or_combines_multiple_columns(self):
+        df = pd.DataFrame({
+            "title": ["A", "B", "C"],
+            "has_multi": [True, False, False],
+            "has_diaper": [False, True, False],
+            "has_wheelchair": [False, False, False],
+        })
+        result = _apply_equipment_filter(df, "__keyword__barrier_free")
+        assert len(result) == 2
+        assert list(result["title"]) == ["A", "B"]
+
+    def test_get_underserved_with_empty_bounds(self):
+        result = get_underserved_areas_in_viewport({}, {"東京都": {"渋谷区": 2}})
+        assert result == []
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

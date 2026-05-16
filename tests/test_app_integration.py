@@ -4,7 +4,6 @@ app.py の統合テスト（Streamlit ランタイム不要な範囲で検証）
 """
 import importlib.util
 import sys
-import pytest
 
 
 class TestAppImports:

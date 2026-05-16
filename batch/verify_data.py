@@ -141,9 +141,11 @@ def main():
     scores = [t["toilet_score"] for t in toilets if t.get("toilet_score") is not None]
     if scores:
         print("[SCORE DISTRIBUTION]")
-        for s in [5, 4, 3, 2, 1]:
-            pct = sum(1 for x in scores if x >= s and x < s + 1) / len(scores) * 100
-            print(f"  {s}.0 - {s+1:.1f}: {pct:.1f}%")
+        buckets = [(80, 101, "✨ 80-100"), (65, 80, "😊 65-79"), (50, 65, "😐 50-64"), (35, 50, "😨 35-49"), (0, 35, "💩 0-34")]
+        for lo, hi, label in buckets:
+            count = sum(1 for x in scores if lo <= x < hi)
+            pct = count / len(scores) * 100
+            print(f"  {label}: {count}件 ({pct:.1f}%)")
     print()
 
     if warnings:

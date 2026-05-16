@@ -36,7 +36,7 @@ CITY_QUERY_TEMPLATES = [
 ]
 
 # Backward-compatible alias for existing callers/tests
-QUERY_TEMPLATES = CITY_QUERY_TEMPLATES
+QUERY_TEMPLATES = CITY_QUERY_TEMPLATES.copy()
 
 PREFECTURE_QUERY_TEMPLATES = [
     "公共トイレ in {place}",
