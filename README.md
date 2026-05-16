@@ -25,6 +25,12 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
+**Streamlit Cloud でデプロイする場合:**
+```bash
+streamlit run streamlit_app.py
+```
+`streamlit_app.py` は `app.py` の薄いラッパーで、Streamlit Cloud のエントリポイントとして使います。
+
 ### データ処理フロー
 1. **スクレイピング**:
    ```bash
@@ -57,7 +63,8 @@ streamlit run app.py
 ```
 toilet-map/
 ├── app.py                  # Streamlitメインアプリ
-├── app_config.py           # 定数定義
+├── streamlit_app.py        # Streamlit Cloud エントリポイント
+├── app_config.py           # 定数定義（都道府県座標含む）
 ├── static/                 # 静的アセット
 │   ├── mobile.css         # モバイル最適化CSS
 │   └── popup_fix.js       # Leafletポップアップ位置修正
@@ -74,6 +81,7 @@ toilet-map/
 │   ├── styles.py         # モバイルCSS読み込み
 │   └── types.py          # TypedDict型定義
 ├── batch/                 # バッチ処理
+│   ├── api_server.py     # FastAPI REST API
 │   ├── auto_expand.py    # データ不足エリア自動拡張
 │   ├── city_bounds.py    # Nominatim市区町村境界
 │   ├── cli_parser.py     # CLI引数解析
@@ -125,6 +133,25 @@ python batch/kanto_phase1.py
 # データ検証
 python batch/verify_data.py
 ```
+
+## API サーバー
+
+FastAPI ベースの REST API を独立して起動できます:
+
+```bash
+# 依存関係のインストール
+pip install -r requirements-api.txt
+
+# API サーバー起動
+cd batch
+uvicorn api_server:app --reload --port 8000
+```
+
+エンドポイント一覧:
+- `GET /api/toilets` — トイレ一覧（prefecture, min_score, q でフィルタ可能）
+- `GET /api/toilets/{id}` — 個別トイレ情報
+- `GET /api/stats` — 全体統計
+- `GET /api/stats/distribution` — スコア分布
 
 ## 品質チェック
 - `batch/generate_queries.py` は重複クエリを除外して batch を生成します

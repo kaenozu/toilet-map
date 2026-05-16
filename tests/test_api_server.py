@@ -5,7 +5,6 @@ batch/api_server.py の FastAPI エンドポイントテスト
 import pytest
 from fastapi.testclient import TestClient
 
-
 SAMPLE_TOILETS = [
     {"title": "トイレA", "prefecture": "東京都", "toilet_score": 80, "address": "東京都新宿区", "category": "公園"},
     {"title": "トイレB", "prefecture": "大阪府", "toilet_score": 60, "address": "大阪市", "category": "コンビニ"},

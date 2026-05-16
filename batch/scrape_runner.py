@@ -9,20 +9,25 @@ batch/scrape_runner.py
 
 関連: city_bounds.py, process_data.py, generate_queries.py
 """
-import sys
 import os
-import time
 import shutil
+import sys
+import time
 
-from utils import logger
+from cli_parser import detect_city_from_queries, parse_args
 from docker_exec import scrape_query
+from pipeline import run_postprocess_pipeline
 from progress_tracker import (
-    load_queries, load_progress, save_progress, publish_expansion_status,
     PROGRESS_FILE as DEFAULT_PROGRESS_FILE,
 )
-from cli_parser import parse_args, detect_city_from_queries
-from pipeline import run_postprocess_pipeline
+from progress_tracker import (
+    load_progress,
+    load_queries,
+    publish_expansion_status,
+    save_progress,
+)
 from scrape_filter import prepare_input_data
+from utils import logger
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 QUERIES_FILE = os.path.join(SCRIPT_DIR, os.environ.get("QUERIES", "queries.txt"))

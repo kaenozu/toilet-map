@@ -7,11 +7,13 @@ missing data stats, and freshness info.
 
 Related: ui/stats.py, app.py, app_config.py
 """
-import streamlit as st
 import pandas as pd
+import streamlit as st
+
+from .types import ToiletDict
 
 
-def _calc_missing_stats(toilets: list) -> dict:
+def _calc_missing_stats(toilets: list[ToiletDict]) -> dict[str, int]:
     total = len(toilets)
     no_score = sum(1 for t in toilets if t.get("toilet_score") is None)
     no_address = sum(
@@ -32,7 +34,7 @@ def _calc_missing_stats(toilets: list) -> dict:
     }
 
 
-def render_data_quality(meta: dict, toilets: list, t: dict) -> None:
+def render_data_quality(meta: dict, toilets: list[ToiletDict], t: dict) -> None:
     with st.expander(t.get("data_quality", "📊 データ品質")):
         missing = _calc_missing_stats(toilets)
 

@@ -8,6 +8,11 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - "dependencies"
+    groups:
+      dev-dependencies:
+        patterns: ["pytest*", "mypy*", "types-*"]
+      app-dependencies:
+        patterns: ["streamlit*", "folium*", "pandas", "numpy", "altair"]
 
   - package-ecosystem: "github-actions"
     directory: "/"

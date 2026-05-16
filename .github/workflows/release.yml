@@ -12,4 +12,14 @@ jobs:
           python-version: '3.11'
       - run: pip install -r requirements.txt
       - run: pytest tests/ -v --tb=short
-      - uses: softprops/action-gh-release@v3
+      - name: Build Docker image
+        run: docker build -t ghcr.io/${{ github.repository }}:${{ github.ref_name }} .
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## Toilet Map ${{ github.ref_name }}
+
+            Docker image: `ghcr.io/${{ github.repository }}:${{ github.ref_name }}`
+          files: |

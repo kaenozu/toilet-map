@@ -2,9 +2,9 @@
 tests/test_process_data.py
 process_data.py + scoring.py のユニットテスト
 """
+import process_data as pd_module
 import pytest
 import scoring
-import process_data as pd_module
 
 
 class TestToiletDetection:

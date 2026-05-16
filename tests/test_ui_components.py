@@ -3,7 +3,13 @@ tests/test_ui_components.py
 ui/components.py のユニットテスト（app_config テストは test_app_config.py に集約）
 """
 import pytest
-from ui.components import build_data_freshness_text, build_result_context_text, build_toilet_card_html, render_score_legend
+
+from ui.components import (
+    build_data_freshness_text,
+    build_result_context_text,
+    build_toilet_card_html,
+    render_score_legend,
+)
 
 
 class TestBuildResultContextText:

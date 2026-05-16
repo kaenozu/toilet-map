@@ -4,12 +4,11 @@ tests/test_batch_verification.py
 """
 import sqlite3
 
-import pytest
-
 import db_utils
 import gap_analyzer
-import verify_data
+import pytest
 import sync_db
+import verify_data
 
 
 class TestQualityMetricsUtilities:
@@ -36,8 +35,9 @@ class TestQualityMetricsUtilities:
         assert result == {"b": 3}
 
     def test_normalize_count_map_handles_counter(self):
-        from quality_metrics import _normalize_count_map
         from collections import Counter
+
+        from quality_metrics import _normalize_count_map
         result = _normalize_count_map(Counter({"a": 5, "b": 3}))
         assert result == {"a": 5, "b": 3}
 
@@ -556,7 +556,7 @@ class TestNormalizeCityCounts:
 
 class TestExtractCityCatalogFallback:
     def test_all_cities_when_no_prefecture(self, tmp_path, monkeypatch):
-        from gap_analyzer import _load_prefecture_catalog, _extract_city
+        from gap_analyzer import _extract_city, _load_prefecture_catalog
         _load_prefecture_catalog.cache_clear()
         path = tmp_path / "cities.json"
         path.write_text('{"東京都": ["新宿"]}', encoding="utf-8")

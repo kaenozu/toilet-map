@@ -50,7 +50,7 @@ class TestDataFlowSchema:
         assert thresholds[-1] >= 0
 
     def test_score_distribution_ranges_match(self):
-        from app_config import SCORE_RANGES, SCORE_DISTRIBUTION_RANGES
+        from app_config import SCORE_DISTRIBUTION_RANGES, SCORE_RANGES
         assert len(SCORE_RANGES) == len(SCORE_DISTRIBUTION_RANGES)
         for sr, sdr in zip(SCORE_RANGES, SCORE_DISTRIBUTION_RANGES):
             assert sr[0] == sdr[0], f"スコアしきい値不一致: {sr[0]} != {sdr[0]}"

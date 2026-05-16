@@ -4,15 +4,14 @@ batch/scrape_filter.py
 scrape_runner.py から抽出
 """
 from pathlib import Path
-from typing import Optional
 
-from utils import count_lines, logger
 from city_bounds import filter_raw_data, get_city_bounds
-from progress_tracker import load_queries, merge_part_files
 from exceptions import DataError
+from progress_tracker import load_queries, merge_part_files
+from utils import count_lines, logger
 
 
-def fetch_city_bounds(city: str, pref: str) -> Optional[dict]:
+def fetch_city_bounds(city: str, pref: str) -> dict | None:
     if pref and not city:
         return get_city_bounds(pref)
     if pref:

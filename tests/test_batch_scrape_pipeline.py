@@ -5,18 +5,17 @@ tests/test_batch_scrape_pipeline.py
 import json
 from pathlib import Path
 
-import pytest
-
-import process_data as pd_module
-from generate_queries import build_queries, write_batches
-from city_bounds import filter_raw_data
 import auto_expand
-from progress_tracker import load_queries
-import scrape_runner
-import pipeline
-import nationwide_runner
 import kanto_phase1
+import nationwide_runner
+import pipeline
+import process_data as pd_module
+import pytest
+import scrape_runner
 import utils as batch_utils
+from city_bounds import filter_raw_data
+from generate_queries import build_queries, write_batches
+from progress_tracker import load_queries
 
 
 class TestLongitudeNormalization:

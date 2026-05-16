@@ -4,16 +4,16 @@ Phase 1 スクレイピング後のデータ品質を検証
 実行: python verify_data.py
 関連: data/toilets.json.gz, batch/queries.d/, quality_metrics.py
 """
+import gzip
 import json
 import os
-import gzip
 
 from quality_metrics import (
+    _format_duplicate_key,
     collect_quality_metrics,
     collect_sqlite_metrics,
     compare_sqlite_metrics,
     evaluate_quality_gate,
-    _format_duplicate_key,
 )
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -34,7 +34,7 @@ def load_data():
             if path.endswith(".gz"):
                 with gzip.open(path, "rt", encoding="utf-8") as f:
                     return json.load(f)
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 return json.load(f)
     raise FileNotFoundError(DATA_PATHS[0])
 
@@ -61,7 +61,7 @@ def count_queries_for_pref(pref: str) -> int:
         if not (name.startswith("batch_") and name.endswith(".txt")):
             continue
         path = os.path.join(pref_dir, name)
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             total += sum(1 for line in f if (stripped := line.strip()) and not stripped.startswith("#"))
     return total
 

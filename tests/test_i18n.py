@@ -13,7 +13,7 @@ def test_get_language_strings_falls_back_to_default_language():
 
     assert fallback["title"] == default_strings["title"]
     assert fallback["no_results"] == default_strings["no_results"]
-    assert APP_TITLE == default_strings["title"]
+    assert default_strings["title"] == APP_TITLE
 
 
 def test_build_result_context_text_uses_translations():

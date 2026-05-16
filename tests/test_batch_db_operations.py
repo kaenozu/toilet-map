@@ -5,11 +5,10 @@ tests/test_batch_db_operations.py
 import json
 import sqlite3
 
-import pytest
-
 import db_utils
-import process_data as pd_module
 import merge_to_db
+import process_data as pd_module
+import pytest
 import to_sqlite
 
 

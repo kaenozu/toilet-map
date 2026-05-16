@@ -3,13 +3,13 @@ batch/nationwide_runner.py
 全国47都道府県のクエリバッチを順にスクレイピングする
 """
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
-from utils import file_lock
-from scoring_config import PREFECTURES
 from generate_queries import main as generate_queries_main
+from scoring_config import PREFECTURES
+from utils import file_lock
 
 SCRIPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 QUERY_LOCK_PATH = os.path.join(SCRIPT_DIR, ".queries.lock")

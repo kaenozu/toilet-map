@@ -3,6 +3,8 @@
   "short_name": "トイレマップ",
   "description": "Google Mapsの口コミからトイレのきれい度を自動判定して地図上に表示。日本全国のトイレ清掃状況をチェック。",
   "start_url": "/",
+  "scope": "/",
+  "id": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#1a73e8",

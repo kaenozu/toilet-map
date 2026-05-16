@@ -47,7 +47,7 @@ batch/*_processed.json.gz
 batch/merged_toilets.json
 data/.toilet_sync.lock
 data/*.bak
-static/expansion_status.json
+batch/expansion_status.json
 
 # IDE
 .idea/
@@ -69,4 +69,3 @@ __pycache__/
 Thumbs.db
 nul
 *.py,cover
-batch/queries.d/

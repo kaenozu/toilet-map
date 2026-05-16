@@ -3,8 +3,12 @@ tests/test_pagination.py
 ui/pagination.py のユニットテスト
 """
 import pytest
+
 from ui.pagination import (
-    calc_pagination, init_page_state, reset_page, PER_PAGE,
+    PER_PAGE,
+    calc_pagination,
+    init_page_state,
+    reset_page,
 )
 
 

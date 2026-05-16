@@ -3,8 +3,8 @@ batch/generate_queries.py
 日本全国的クエリファイル自動生成
 prefecture_cities.json からデータを読み込む
 """
-import os
 import json
+import os
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 QUERIES_DIR = os.path.join(SCRIPT_DIR, "queries.d")
@@ -50,7 +50,7 @@ PREFECTURE_QUERY_TEMPLATES = [
 
 
 def load_prefectures() -> dict:
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
+    with open(DATA_FILE, encoding="utf-8") as f:
         return json.load(f)
 
 

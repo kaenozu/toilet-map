@@ -7,13 +7,12 @@ toilet_db_values, update_metadata_from_db, upsert_metadata 等
 関連: batch/db_utils.py, tests/test_batch_db_operations.py
 """
 
-import json
 import gzip
+import json
 import sqlite3
 
-import pytest
-
 import db_utils
+import pytest
 
 
 def _create_table(conn):

@@ -2,10 +2,11 @@
 tests/test_app.py
 app.py モジュールのユニットテスト
 """
-import pytest
 import pandas as pd
+import pytest
+
 from ui.filters import filter_toilets, search_toilets
-from ui.query_params import resolve_ui_state_from_query_params, build_query_params_from_state
+from ui.query_params import build_query_params_from_state, resolve_ui_state_from_query_params
 
 
 class TestFilterToilets:
@@ -206,8 +207,8 @@ class TestApplyLanguageQueryParam:
 
 class TestQueryParamState:
     def test_resolve_ui_state_from_query_params(self):
-        from ui.sidebar import get_translated_filters
         from ui.i18n import get_language_strings
+        from ui.sidebar import get_translated_filters
 
         _, translated_to_internal = get_translated_filters("日本語")
         t = get_language_strings("English")
@@ -269,8 +270,9 @@ class TestReadQueryParams:
         assert result == {"lang": "ja", "pref": "東京都"}
 
     def test_falls_back_to_experimental_get(self, monkeypatch):
-        from ui.query_params import read_query_params
         import streamlit as st
+
+        from ui.query_params import read_query_params
         container = {"lang": ["en"]}
 
         def fake_getter():
@@ -298,8 +300,9 @@ class TestWriteQueryParams:
         assert len(fake) == 2
 
     def test_falls_back_to_experimental_setter(self, monkeypatch):
-        from ui.query_params import write_query_params
         import streamlit as st
+
+        from ui.query_params import write_query_params
         calls = []
 
         def fake_setter(**params):
@@ -318,8 +321,8 @@ class TestWriteQueryParams:
 
 class TestQueryParamsDarkMode:
     def test_dark_mode_true(self):
-        from ui.query_params import resolve_ui_state_from_query_params
         from ui.i18n import get_language_strings
+        from ui.query_params import resolve_ui_state_from_query_params
         from ui.sidebar import get_translated_filters
         _, translated_to_internal = get_translated_filters("日本語")
         t = get_language_strings("日本語")
@@ -329,8 +332,8 @@ class TestQueryParamsDarkMode:
         assert state["dark_mode"] is True
 
     def test_dark_mode_false(self):
-        from ui.query_params import resolve_ui_state_from_query_params
         from ui.i18n import get_language_strings
+        from ui.query_params import resolve_ui_state_from_query_params
         from ui.sidebar import get_translated_filters
         _, translated_to_internal = get_translated_filters("日本語")
         t = get_language_strings("日本語")
@@ -340,8 +343,8 @@ class TestQueryParamsDarkMode:
         assert "dark_mode" not in state
 
     def test_build_with_dark_mode(self):
-        from ui.query_params import build_query_params_from_state
         from ui.i18n import get_language_strings
+        from ui.query_params import build_query_params_from_state
         t = get_language_strings("日本語")
         params = build_query_params_from_state(
             "日本語", "東京都", "公共トイレ", "", t["sort_clean"], False, 1, t, dark_mode=True
@@ -351,9 +354,9 @@ class TestQueryParamsDarkMode:
 
 class TestResolveUiStateFromQueryParams:
     def test_invalid_page_returns_zero(self):
-        from ui.sidebar import get_translated_filters
         from ui.i18n import get_language_strings
         from ui.query_params import resolve_ui_state_from_query_params
+        from ui.sidebar import get_translated_filters
 
         _, translated_to_internal = get_translated_filters("日本語")
         t = get_language_strings("日本語")

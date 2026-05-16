@@ -3,7 +3,8 @@ ui/popups.py
 Popup HTML builders for toilet map markers
 """
 from app_config import MAX_SAMPLE_REVIEWS, REVIEW_TEXT_MAX_LENGTH
-from .helpers import esc, safe_href, get_score_style
+
+from .helpers import esc, get_score_style, safe_href
 from .types import ToiletDict
 
 
@@ -29,7 +30,7 @@ def _build_keyword_tags(keywords: list[tuple[str, int]]) -> str:
     tags = []
     for kw, cnt in keywords[:5]:
         safe_kw = esc(kw[1:]) if kw.startswith(("+", "-")) else esc(kw)
-        prefix = "👍" if kw.startswith("+") else "👎" if kw.startswith("-") else ""
+        prefix = '<span aria-label="positive" role="img">👍</span>' if kw.startswith("+") else '<span aria-label="negative" role="img">👎</span>' if kw.startswith("-") else ""
         bg = "#e8f5e9" if kw.startswith("+") else "#ffebee" if kw.startswith("-") else "#f5f5f5"
         color = "#2e7d32" if kw.startswith("+") else "#c62828" if kw.startswith("-") else "#555"
         border = "#a5d6a7" if kw.startswith("+") else "#ef9a9a" if kw.startswith("-") else "#e0e0e0"
@@ -54,7 +55,7 @@ def _build_review_html(reviews: list[dict]) -> str:
             continue
         seen.add(key)
         score_val = r.get("score", 0)
-        icon = "👍" if score_val > 0 else "👎" if score_val < 0 else "📝"
+        icon = '<span aria-label="thumbs up" role="img">👍</span>' if score_val > 0 else '<span aria-label="thumbs down" role="img">👎</span>' if score_val < 0 else '<span aria-label="review" role="img">📝</span>'
         border_color = "#2e7d32" if score_val > 0 else "#c62828" if score_val < 0 else "#bbb"
         name = esc(r.get("name", ""))
         rating = r.get("rating", "")
@@ -103,7 +104,7 @@ def build_popup_html(t: ToiletDict) -> str:
     color, emoji, label = get_score_style(t["toilet_score"])
     badge = _build_public_badge(t["is_public_toilet"])
     confidence_pct = int(t["confidence"] * 100)
-    phone_html = f'<span style="margin-right:6px;">📞{esc(t["phone"])}</span>' if t.get("phone") else ""
+    phone_html = f'<span style="margin-right:6px;"><span aria-label="phone" role="img">📞</span>{esc(t["phone"])}</span>' if t.get("phone") else ""
     kw_html = _build_keyword_tags(t.get("top_keywords", []))
     rev_html = _build_review_html(t.get("sample_reviews", []))
     link_html = _build_link_html(t.get("link", ""))
@@ -144,7 +145,7 @@ def build_popup_html(t: ToiletDict) -> str:
       </div>
 
       <div style="font-size:10px;color:#555;margin-bottom:1px;">📍 {addr_esc}</div>
-      <div style="font-size:10px;color:#555;">⭐{t.get('rating', '-')} ({t.get('review_count', 0)}件) {phone_html}</div>
+      <div style="font-size:10px;color:#555;"><span aria-label="rating" role="img">⭐</span>{t.get('rating', '-')} ({t.get('review_count', 0)}件) {phone_html}</div>
     {confidence_note_html}
       {kw_html}
       {review_section}

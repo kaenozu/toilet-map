@@ -1,0 +1,15 @@
+/*
+ * static/dark_mode.css
+ * Dark mode overrides for toilet-card components
+ */
+.toilet-card {
+    background: #1e1e1e !important;
+    color: #e0e0e0 !important;
+    border-color: #333 !important;
+}
+.toilet-card .toilet-card-title,
+.toilet-card .toilet-card-subtitle,
+.toilet-card .toilet-card-meta,
+.toilet-card .toilet-card-arrow {
+    color: inherit !important;
+}

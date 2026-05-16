@@ -9,19 +9,20 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from utils import logger
+
 from db_utils import load_json
-from gap_analyzer import find_gaps, get_stats
 from expansion_query import (
     CITY_QUERY_BUDGET_TEMPLATES,  # noqa: F401
     PREFECTURE_QUERY_BUDGET_TEMPLATES,  # noqa: F401
-    query_limits_for_count,
-    active_context,
     _slugify,
+    active_context,
     ensure_query_files,
     find_batch_files,
     merge_query_files,
+    query_limits_for_count,
 )
+from gap_analyzer import find_gaps, get_stats
+from utils import logger
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
