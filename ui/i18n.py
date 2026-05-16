@@ -59,6 +59,7 @@ LANGUAGES = {
         "shortcuts": "⌨️ ショートカット",
         "shortcut_info": "G: GPS切替 | /: 検索にフォーカス",
         "tile_select": "地図タイル",
+        "csv_download": "📥 CSVダウンロード",
     },
     "English": {
         "title": "🚽 Toilet Cleanliness Map",
@@ -114,6 +115,7 @@ LANGUAGES = {
         "shortcuts": "⌨️ Shortcuts",
         "shortcut_info": "G: Toggle GPS | /: Focus search",
         "tile_select": "Map tiles",
+        "csv_download": "📥 CSV Download",
     },
     "한국어": {
         "title": "🚽 화장실 청결도 지도",
@@ -169,6 +171,7 @@ LANGUAGES = {
         "shortcuts": "⌨️ 단축키",
         "shortcut_info": "G: GPS 전환 | /: 검색 포커스",
         "tile_select": "지도 타일",
+        "csv_download": "📥 CSV 다운로드",
     },
     "中文": {
         "title": "🚽 厕所清洁度地图",

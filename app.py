@@ -196,7 +196,7 @@ def main() -> None:
 
     if len(display_items) > 0:
         csv_data = filtered.to_csv(index=False).encode("utf-8-sig")
-        st.download_button("📥 CSVダウンロード", csv_data, f"toilets_{selected_pref}.csv", "text/csv", use_container_width=True)
+        st.download_button(t.get("csv_download", "📥 CSVダウンロード"), csv_data, f"toilets_{selected_pref}.csv", "text/csv", use_container_width=True)
 
     write_query_params(
         build_query_params_from_state(

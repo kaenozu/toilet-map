@@ -43,12 +43,14 @@ def list_toilets(
         toilets = [t for t in toilets if t.get("prefecture") == prefecture]
     toilets = [t for t in toilets if min_score <= t.get("toilet_score", 0) <= max_score]
     if q:
-        words = [w for w in re.split(r"[\s,、]+", q.strip()) if w]
+        words = [w.lower() for w in re.split(r"[\s,、]+", q.strip()) if w]
         if words:
-            toilets = [t for t in toilets if any(
-                w.lower() in (t.get("title", "") + t.get("address", "") + t.get("category", "")).lower()
-                for w in words
-            )]
+            filtered = []
+            for t in toilets:
+                target = (t.get("title", "") + t.get("address", "") + t.get("category", "")).lower()
+                if all(w in target for w in words):
+                    filtered.append(t)
+            toilets = filtered
     return {"total": len(toilets), "toilets": toilets[offset:offset + limit]}
 
 
