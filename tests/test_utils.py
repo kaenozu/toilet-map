@@ -5,6 +5,7 @@ batch/utils.py のユニットテスト
 import json
 import gzip
 import os
+import sys
 from unittest.mock import MagicMock
 
 import pytest
@@ -190,6 +191,7 @@ class TestRuntimeError:
 
 
 class TestFileLock:
+    @pytest.mark.skipif(sys.platform == "win32", reason="fcntl not available on Windows")
     def test_file_lock_timeout(self, tmp_path):
         lock_path = str(tmp_path / "test.lock")
         import fcntl as fcntl_mod
