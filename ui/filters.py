@@ -38,6 +38,10 @@ def haversine_distance(lat1: float, lng1: float, lat2: float | pd.Series, lng2: 
         return EARTH_RADIUS_KM * c
 
 
+# barrier_free は多目的・おむつ替え・車椅子のいずれかが true ならマッチ
+_BARRIER_FREE_OR_COLS = ["has_multi", "has_diaper", "has_wheelchair"]
+
+
 def _apply_equipment_filter(df: pd.DataFrame, pattern: str) -> pd.DataFrame:
     """設備フィルタ（__keyword__*）を適用"""
     column_map = {
@@ -45,6 +49,14 @@ def _apply_equipment_filter(df: pd.DataFrame, pattern: str) -> pd.DataFrame:
         "__keyword__diaper": "has_diaper",
         "__keyword__wheelchair": "has_wheelchair",
     }
+    if pattern == "__keyword__barrier_free":
+        cols = [c for c in _BARRIER_FREE_OR_COLS if c in df.columns]
+        if cols:
+            mask = df[cols[0]]
+            for c in cols[1:]:
+                mask = mask | df[c]
+            return df[mask]
+        return df
     col = column_map.get(pattern)
     if col and col in df.columns:
         return df[df[col]]

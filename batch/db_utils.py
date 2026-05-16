@@ -27,7 +27,8 @@ TOILET_TABLE_SCHEMA = """
         confidence REAL,
         toilet_review_count INTEGER,
         prefecture TEXT,
-        sample_reviews_json TEXT
+        sample_reviews_json TEXT,
+        top_keywords TEXT
     )
 """
 
@@ -40,15 +41,16 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_score ON toilets(toilet_score)",
 ]
 
-TOILET_UNIQUE_INDEX = "CREATE UNIQUE INDEX IF NOT EXISTS ux_toilets_key ON toilets(title, lat, lng)"
+TOILET_UNIQUE_INDEX = "CREATE UNIQUE INDEX IF NOT EXISTS ux_toilets_key ON toilets(lat, lng)"
 
 TOILET_UPSERT_SQL = """
     INSERT INTO toilets (
         title, category, address, lat, lng, rating, review_count,
         is_public_toilet, toilet_score, confidence, toilet_review_count,
-        prefecture, sample_reviews_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(title, lat, lng) DO UPDATE SET
+        prefecture, sample_reviews_json, top_keywords
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(lat, lng) DO UPDATE SET
+        title = excluded.title,
         category = excluded.category,
         address = excluded.address,
         rating = excluded.rating,
@@ -58,7 +60,8 @@ TOILET_UPSERT_SQL = """
         confidence = excluded.confidence,
         toilet_review_count = excluded.toilet_review_count,
         prefecture = excluded.prefecture,
-        sample_reviews_json = excluded.sample_reviews_json
+        sample_reviews_json = excluded.sample_reviews_json,
+        top_keywords = excluded.top_keywords
 """
 
 
@@ -92,11 +95,14 @@ def ensure_schema(cur: sqlite3.Cursor) -> None:
         cur.execute(sql)
     for sql in INDEXES:
         cur.execute(sql)
-    try:
-        cur.execute(TOILET_UNIQUE_INDEX)
-    except sqlite3.IntegrityError:
-        dedupe_duplicate_toilets(cur)
-        cur.execute(TOILET_UNIQUE_INDEX)
+    for _ in range(3):
+        try:
+            cur.execute(TOILET_UNIQUE_INDEX)
+            return
+        except sqlite3.IntegrityError:
+            removed = dedupe_duplicate_toilets(cur)
+            if removed == 0:
+                raise
 
 
 def fix_null_prefectures(conn: sqlite3.Connection) -> int:
@@ -159,13 +165,17 @@ def reviews_to_json(reviews: list) -> str:
     return json.dumps(reviews, ensure_ascii=False)
 
 
+def keywords_to_json(keywords: list) -> str:
+    return json.dumps(keywords, ensure_ascii=False)
+
+
 def upsert_toilets(cur: sqlite3.Cursor, toilets: list[dict]) -> None:
     """toilets テーブルへまとめて upsert する"""
     cur.executemany(TOILET_UPSERT_SQL, (toilet_db_values(toilet) for toilet in toilets))
 
 
 def toilet_db_values(toilet: dict) -> tuple:
-    """toilets テーブルに書き込む 13 列分の値をまとめて返す"""
+    """toilets テーブルに書き込む 14 列分の値をまとめて返す"""
     address = toilet.get("address", "")
     prefecture = toilet.get("prefecture") or extract_prefecture(address)
     return (
@@ -182,21 +192,5 @@ def toilet_db_values(toilet: dict) -> tuple:
         toilet.get("toilet_review_count"),
         prefecture,
         reviews_to_json(toilet.get("sample_reviews", [])),
-    )
-
-
-def toilet_db_update_values(toilet: dict) -> tuple:
-    """toilets テーブル更新用の 10 列分の値を返す"""
-    values = toilet_db_values(toilet)
-    return (
-        values[1],  # category
-        values[2],  # address
-        values[5],  # rating
-        values[6],  # review_count
-        values[7],  # is_public_toilet
-        values[8],  # toilet_score
-        values[9],  # confidence
-        values[10], # toilet_review_count
-        values[11], # prefecture
-        values[12], # sample_reviews_json
+        keywords_to_json(toilet.get("top_keywords", [])),
     )

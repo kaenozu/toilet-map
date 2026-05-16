@@ -8,7 +8,7 @@ Google Mapsのレビューからトイレのきれい度を自動判定して地
   - 地域別・カテゴリ別フィルタリング
   - 現在地からの距離順ソート
   - スコア分布の統計表示
-   - データ鮮度表示（生成日時 / SQLite同期日時）
+  - データ鮮度表示（生成日時 / SQLite同期日時）
   - 多言語対応（日本語・英語）
 
 ## 技術スタック
@@ -133,7 +133,7 @@ python batch/verify_data.py
 
 ## テスト実行
 ```bash
-# 全テスト実行（438 tests）
+# 全テスト実行
 pytest tests/ -v
 
 # カバレッジ計測
@@ -142,8 +142,8 @@ pytest tests/ --cov=. --cov-report=term-missing
 
 ## プロジェクト設定
 - `pyproject.toml` で pytest / coverage / ruff を一元管理
-- coverage `fail_under = 50`（現在 **88%**）
-- テスト 21 ファイル、438 テスト、全パス
+- coverage `fail_under = 80`（現在 **90%**）
+- 全テストパス
 - lint: ruff 0 errors
 
 ## 注意事項

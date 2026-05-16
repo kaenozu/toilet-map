@@ -7,7 +7,10 @@ import json
 import os
 import shutil
 import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock
+
+import pytest
 
 from docker_exec import scrape_query
 from city_bounds import _load_cache, _save_cache
@@ -69,6 +72,50 @@ class TestDockerExecScrapeQuery:
         monkeypatch.setattr(os.path, "exists", lambda p: p == str(output_path))
 
         assert scrape_query("test query", str(output_path)) is False
+
+    def test_scrape_query_oserror(self, monkeypatch, tmp_path):
+        monkeypatch.setattr("tempfile.NamedTemporaryFile", lambda *a, **kw: _fake_tempfile(tmp_path))
+
+        def _os_error(*a, **kw):
+            raise OSError("Docker not available")
+
+        monkeypatch.setattr(subprocess, "run", _os_error)
+        monkeypatch.setattr(os.path, "exists", lambda p: False)
+
+        assert scrape_query("test query", str(tmp_path / "output.json")) is False
+
+    def test_scrape_query_permission_error_on_cleanup(self, monkeypatch, tmp_path):
+        output_path = tmp_path / "output.json"
+        output_path.write_text('{"result": "ok"}\n', encoding="utf-8")
+
+        temp_path = tmp_path / "tmp_query.txt"
+        temp_path.write_text("test query", encoding="utf-8")
+
+        class _RealTemp:
+            name = str(temp_path)
+            def write(self, text): pass
+            def close(self): pass
+            def __enter__(self): return self
+            def __exit__(self, *a): pass
+
+        def _raise_on_remove(p):
+            if p.endswith(".txt"):
+                raise PermissionError("Permission denied")
+            return True
+
+        monkeypatch.setattr("tempfile.NamedTemporaryFile", lambda *a, **kw: _RealTemp())
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _make_result(0))
+        monkeypatch.setattr(os, "remove", _raise_on_remove)
+        monkeypatch.setattr(os.path, "exists", lambda p: p == str(output_path) or p == str(temp_path))
+
+        assert scrape_query("test query", str(output_path)) is True
+
+    def test_scrape_query_output_not_created(self, monkeypatch, tmp_path):
+        monkeypatch.setattr("tempfile.NamedTemporaryFile", lambda *a, **kw: _fake_tempfile(tmp_path))
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _make_result(0))
+        monkeypatch.setattr(os.path, "exists", lambda p: False)
+
+        assert scrape_query("test query", str(tmp_path / "output.json")) is False
 
     def test_scrape_query_builds_docker_command(self, monkeypatch, tmp_path):
         captured = {}
@@ -221,7 +268,7 @@ class TestCityBoundsGetCityBounds:
         original = cb.CACHE_FILE
 
         def raise_error(*a, **kw):
-            raise Exception("API error")
+            raise cb.urllib.error.URLError("API error")
 
         try:
             cb.CACHE_FILE = str(cache_file)
@@ -441,3 +488,134 @@ def _make_result(returncode):
     r = MagicMock()
     r.returncode = returncode
     return r
+
+
+class TestAutoExpandEdgeCases:
+    def test_load_current_stats_oserror(self, monkeypatch):
+        from auto_expand import _load_current_stats
+        monkeypatch.setattr("auto_expand.load_json", lambda _: (_ for _ in ()).throw(OSError))
+        stats = _load_current_stats()
+        assert stats["total"] == 0
+
+    def test_select_targets_exact_match(self):
+        from auto_expand import _select_targets
+        stats = {"prefecture_city_counts": {"埼玉県": {"羽生市": "0"}}}
+        targets = _select_targets(stats, max_areas=5, target_pref="埼玉県", target_city="羽生市")
+        assert len(targets) == 1
+
+    def test_select_targets_pref_fallback_with_city_order(self):
+        from auto_expand import _select_targets
+        stats = {"prefecture_city_counts": {"埼玉県": {"熊谷市": "0", "羽生市": "1"}}}
+        targets = _select_targets(stats, max_areas=3, target_pref="埼玉県")
+        assert len(targets) >= 1
+
+    def test_run_auto_expansion_no_targets(self, monkeypatch):
+        import auto_expand as ae
+        monkeypatch.setattr(ae, "_load_current_stats", lambda: {"prefecture_city_counts": {}, "total": 0, "scored": 0, "score_avg": 0})
+        monkeypatch.setattr(ae, "find_gaps", lambda *a, **kw: [])
+        ae.run_auto_expansion(max_areas=5)
+
+    def test_auto_expand_main_exits_on_zero_args(self, monkeypatch):
+        import auto_expand as ae
+        monkeypatch.setattr("sys.argv", ["auto_expand.py"])
+        monkeypatch.setattr(ae, "run_auto_expansion", lambda *a, **kw: None)
+        ae.main()
+
+    def test_auto_expand_main_passes_args(self, monkeypatch):
+        import auto_expand as ae
+        monkeypatch.setattr("sys.argv", ["auto_expand.py", "--prefecture", "東京都", "--city", "渋谷区"])
+        captured = {}
+        def _capture(*args):
+            captured["max_areas"] = args[0] if len(args) > 0 else None
+            captured["target_pref"] = args[1] if len(args) > 1 else ""
+            captured["target_city"] = args[2] if len(args) > 2 else ""
+        monkeypatch.setattr(ae, "run_auto_expansion", _capture)
+        ae.main()
+        assert captured.get("target_city") == "渋谷区"
+
+    def test_run_auto_expansion_file_not_found(self, monkeypatch):
+        import auto_expand as ae
+        monkeypatch.setattr(ae, "_load_current_stats", lambda: {"prefecture_city_counts": {"埼玉県": {"羽生市": "0"}}, "total": 0, "scored": 0, "score_avg": 0})
+        monkeypatch.setattr(ae, "find_gaps", lambda *a, **kw: [{"prefecture": "埼玉県", "city": "羽生市", "count": 0}])
+        monkeypatch.setattr(ae, "query_limits_for_count", lambda c: (2, 2))
+        monkeypatch.setattr(ae, "active_context", lambda *a, **kw: _null_context())
+        monkeypatch.setattr(ae, "ensure_query_files", lambda p: None)
+        monkeypatch.setattr(ae, "find_batch_files", lambda p: [])
+        monkeypatch.setattr(ae, "merge_query_files", lambda f: "")
+        monkeypatch.setattr(ae.subprocess, "run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError))
+        ae.run_auto_expansion(max_areas=1)
+
+
+class TestPipeline:
+    def test_raises_on_process_failure(self, monkeypatch):
+        import pipeline
+        monkeypatch.setattr("pipeline.file_lock", lambda *a, **kw: _null_context())
+        monkeypatch.setattr(pipeline.subprocess, "run", lambda *a, **kw: _make_result(1))
+        with pytest.raises((RuntimeError, pipeline.DataError), match="Data processing failed"):
+            pipeline.run_postprocess_pipeline("in.json", "out.json", "/tmp")
+
+    def test_raises_on_sqlite_failure(self, monkeypatch):
+        import pipeline
+        calls = []
+        def _fake_run(*a, **kw):
+            calls.append(1)
+            r = MagicMock()
+            r.returncode = 0 if len(calls) == 1 else 1
+            return r
+        monkeypatch.setattr("pipeline.file_lock", lambda *a, **kw: _null_context())
+        monkeypatch.setattr(pipeline.subprocess, "run", _fake_run)
+        with pytest.raises((RuntimeError, pipeline.DataError), match="SQLite conversion failed"):
+            pipeline.run_postprocess_pipeline("in.json", "out.json", "/tmp")
+
+
+class TestCityBoundsNoBoundingBox:
+    def test_main_without_results_prints_message(self, monkeypatch, capsys):
+        import city_bounds
+        monkeypatch.setattr("sys.argv", ["city_bounds.py", "存在しない市"])
+        monkeypatch.setattr(city_bounds, "_load_cache", lambda: {})
+        monkeypatch.setattr(city_bounds, "urllib", None)
+
+        def _fake_request(*a, **kw):
+            class FakeResp:
+                def read(self): return b'[{"boundingbox": ["a"]]'  # too short
+                def decode(self, e): return self.read().decode(e) if hasattr(self.read(), 'decode') else self.read()
+            return FakeResp()
+        monkeypatch.setattr(city_bounds, "get_city_bounds", lambda c, p="": None)
+        with pytest.raises(SystemExit):
+            city_bounds.main()
+
+
+def _null_context():
+    class NullCtx:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+    return NullCtx()
+
+
+class TestScrapeFilterPrepareInputData:
+    def test_no_city_no_pref_returns_raw_output(self, monkeypatch, tmp_path):
+        from scrape_filter import prepare_input_data
+        raw_out = str(tmp_path / "raw.json")
+        prepare_input_data("", "", raw_out, str(tmp_path), "")
+        assert True
+
+    def test_with_city_and_pref_routes_through_filter(self, monkeypatch, tmp_path):
+        import scrape_filter
+        raw_out = str(tmp_path / "raw.json")
+        Path(raw_out).write_text("", encoding="utf-8")
+        monkeypatch.setattr("scrape_filter.count_lines", lambda _: 0)
+        monkeypatch.setattr("scrape_filter.merge_part_files", lambda *a: None)
+        monkeypatch.setattr("scrape_filter.fetch_city_bounds", lambda c, p: None)
+        monkeypatch.setattr("scrape_filter.filter_raw_data", lambda i, o, c, b: (0, 0))
+        with pytest.raises((RuntimeError, scrape_filter.DataError), match="No entries matched"):
+            scrape_filter.prepare_input_data("渋谷区", "東京都", raw_out, str(tmp_path), str(tmp_path / "queries.txt"))
+
+    def test_with_city_and_pref_kept_returns_filtered_path(self, monkeypatch, tmp_path):
+        from scrape_filter import prepare_input_data
+        raw_out = str(tmp_path / "raw.json")
+        monkeypatch.setattr("scrape_filter.count_lines", lambda _: 10)
+        monkeypatch.setattr("scrape_filter.merge_part_files", lambda *a: None)
+        monkeypatch.setattr("scrape_filter.fetch_city_bounds", lambda c, p: {})
+        monkeypatch.setattr("scrape_filter.filter_raw_data", lambda i, o, c, b: (10, 3))
+        result = prepare_input_data("渋谷区", "東京都", raw_out, str(tmp_path), str(tmp_path / "queries.txt"))
+        assert "_filtered" in result

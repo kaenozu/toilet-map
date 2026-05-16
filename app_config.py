@@ -2,9 +2,7 @@
 app_config.py
 Shared configuration constants for toilet map app
 """
-import html
 import os
-from urllib.parse import urlparse
 
 DATA_PATH = "data/toilets.json.gz"
 DB_PATH = "data/toilets.db"
@@ -38,9 +36,10 @@ FILTER_CONFIG = {
     "多目的トイレ": "__keyword__multi",
     "おむつ替え": "__keyword__diaper",
     "車椅子対応": "__keyword__wheelchair",
+    "バリアフリー": "__keyword__barrier_free",
     "カフェ・飲食": "カフェ|喫茶|レストラン|食堂|ダイニング|コーヒー|パン|ケーキ",
     "コンビニ・店舗": "コンビニ|スーパー|ドラッグ|ストア|マート|商店",
-    "ホテル・旅館": "ホテル|旅馨|民宿|ビジネスホテル",
+    "ホテル・旅館": "ホテル|旅館|民宿|ビジネスホテル",
     "道の駅": "道の駅",
     "SA・PA": "サービスエリア|パーキングエリア",
 }
@@ -51,6 +50,7 @@ FILTER_I18N_KEYS = {
     "多目的トイレ": "filter_multi",
     "おむつ替え": "filter_diaper",
     "車椅子対応": "filter_wheelchair",
+    "バリアフリー": "filter_barrier_free",
     "カフェ・飲食": "filter_cafe",
     "コンビニ・店舗": "filter_convenience",
     "ホテル・旅館": "filter_hotel",
@@ -72,6 +72,8 @@ NORMAL_MARKER_RADIUS = 10
 TILE_OPTIONS = {
     "OpenStreetMap（標準）": "OpenStreetMap",
     "モノクロ（Cartodb）": "CartoDB positron",
+    "ナビゲーション（CartoDB）": "CartoDB voyager",
+    "地形図（OpenTopoMap）": "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
 }
 
 THRESHOLD = 10
@@ -80,31 +82,14 @@ MAX_SAMPLE_REVIEWS = 2
 REVIEW_TEXT_MAX_LENGTH = 120
 MAX_KEYWORD_TAGS = 5
 
-
-def esc(text):
-    """HTMLエスケープ"""
-    return html.escape(str(text or ""), quote=True) if text else ""
-
-
-def safe_href(url):
-    """安全な外部リンクだけを href に使える文字列に変換する"""
-    if not url:
-        return ""
-    parsed = urlparse(str(url).strip())
-    if parsed.scheme not in {"http", "https"}:
-        return ""
-    if not parsed.netloc:
-        return ""
-    return html.escape(parsed.geturl(), quote=True)
-
-
-def get_score_style(score: float) -> tuple[str, str, str]:
-    """スコアに基づいて (色, 絵文字, ラベル) を返す"""
-    for threshold, color, emoji, label in SCORE_RANGES:
-        if score >= threshold:
-            return color, emoji, label
-    return SCORE_RANGES[-1][1:]
-
+# スコア未計算でも救済するカテゴリ（口コミ0件でも表示対象とする）
+POTENTIAL_CATEGORIES = [
+    "公園", "駅", "道の駅", "サービスエリア", "パーキングエリア",
+    "カフェ", "喫茶", "レストラン", "食堂", "ダイニング", "コーヒー", "パン", "ケーキ",
+    "コンビニ", "スーパー", "ドラッグ", "ストア", "マート", "商店",
+    "ホテル", "旅館", "民宿", "ビジネスホテル",
+    "役場", "市役所", "図書館",
+]
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 POPUP_FIX_PATH = os.path.join(_SCRIPT_DIR, "static", "popup_fix.js")

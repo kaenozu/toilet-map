@@ -24,13 +24,13 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None):
     """
     SQLite から全データを読み込み、アプリ用の辞書形式で返す。
     """
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         # トイレデータ読み込み
         df = pd.read_sql("SELECT * FROM toilets", conn)
         # メタデータ読み込み
         meta_df = pd.read_sql("SELECT * FROM metadata", conn)
-        conn.close()
 
         # メタデータを辞書に変換
         metadata = dict(zip(meta_df["key"], meta_df["value"]))
@@ -50,28 +50,45 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None):
             if sample_reviews_json in (None, ""):
                 t["sample_reviews"] = []
             else:
-                t["sample_reviews"] = json.loads(sample_reviews_json)
+                try:
+                    t["sample_reviews"] = json.loads(sample_reviews_json)
+                except json.JSONDecodeError:
+                    st.warning("sample_reviews_json の解析に失敗したため空配列で読み込みました。")
+                    t["sample_reviews"] = []
 
-        # 都道府県別の統計を pandas groupby で計算
-        pdf = pd.DataFrame(toilets)
-        if pdf.empty or "prefecture" not in pdf.columns:
-            prefecture_stats = {}
-        else:
-            valid = pdf[pdf["prefecture"].notna() & (pdf["prefecture"] != "")]
-            if valid.empty:
-                prefecture_stats = {}
-            else:
-                grouped = valid.groupby("prefecture").agg(
-                    count=("lat", "size"),
-                    center_lat=("lat", "mean"),
-                    center_lng=("lng", "mean"),
-                )
-                prefecture_stats = grouped.to_dict("index")
+            # top_keywords のデシリアライズ（JSON文字列→リスト）
+            tk_json = t.get("top_keywords")
+            if isinstance(tk_json, str):
+                try:
+                    t["top_keywords"] = json.loads(tk_json)
+                except json.JSONDecodeError:
+                    t["top_keywords"] = []
 
-        return {"metadata": metadata, "toilets": toilets, "pref_stats": prefecture_stats}
-    except Exception as e:
+        # 都道府県別の統計（中心座標など）を動的に計算
+        pref_stats = {}
+        for t in toilets:
+            pref = t.get("prefecture")
+            if not pref:
+                continue
+            if pref not in pref_stats:
+                pref_stats[pref] = {"count": 0, "lats": [], "lngs": []}
+            pref_stats[pref]["count"] += 1
+            pref_stats[pref]["lats"].append(t["lat"])
+            pref_stats[pref]["lngs"].append(t["lng"])
+
+        for pref, data in pref_stats.items():
+            data["center_lat"] = sum(data["lats"]) / len(data["lats"]) if data["lats"] else 0
+            data["center_lng"] = sum(data["lngs"]) / len(data["lngs"]) if data["lngs"] else 0
+            del data["lats"]
+            del data["lngs"]
+
+        return {"metadata": metadata, "toilets": toilets, "pref_stats": pref_stats}
+    except sqlite3.Error as e:
         st.error(f"データベース読み込みエラー: {e}")
         return {"metadata": ERROR_METADATA, "toilets": [], "pref_stats": {}}
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def toilets_to_dataframe(toilets: list) -> pd.DataFrame:

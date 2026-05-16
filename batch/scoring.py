@@ -26,7 +26,7 @@ from scoring_config import (
     TOILET_MENTION_RE,
     TOILET_CATEGORIES,
 )
-from utils import logger as _unused_logger  # noqa: F401
+
 
 
 class PlaceDict(TypedDict, total=False):
@@ -107,21 +107,21 @@ def mentions_toilet(text: str) -> bool:
     return True
 
 
-def _get_longitude(place: PlaceDict) -> float:
+def _get_longitude(place: PlaceDict) -> float | None:
     """経度を取得。longitude がなければ longtitude をフォールバックとして使う。"""
     lon = place.get("longitude")
-    if lon is None:
+    if not lon:
         lon = place.get("longtitude")
-    if lon is None:
-        return 0.0
+    if not lon:
+        return None
     try:
         return float(lon)
     except (TypeError, ValueError):
-        return 0.0
+        return None
 
 
 def _extract_coordinates(place: PlaceDict) -> tuple[Optional[float], Optional[float]]:
-    """place から緯度経度を抽出。"""
+    """place から緯度経度を抽出。_get_longitude 内で longtitude へのフォールバックも行う。"""
     lat = place.get("latitude")
     lon = _get_longitude(place)
     return lat, lon

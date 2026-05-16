@@ -2,7 +2,7 @@
 ui/types.py
 Shared TypedDict definitions for UI components
 """
-from typing import TypedDict, Optional
+from typing import TypedDict, Optional, Any
 
 class ToiletDict(TypedDict, total=False):
     """トイレデータの型定義"""
@@ -20,7 +20,7 @@ class ToiletDict(TypedDict, total=False):
     confidence: float
     toilet_review_count: int
     top_keywords: list[tuple[str, int]]
-    sample_reviews: list[dict]
+    sample_reviews: list[dict[str, Any]]
     prefecture: str
-    distance: Optional[float]  # 現在地からの距離（km）
+    distance: Optional[float]
 

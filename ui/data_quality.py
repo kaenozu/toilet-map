@@ -15,10 +15,10 @@ def _calc_missing_stats(toilets: list) -> dict:
     total = len(toilets)
     no_score = sum(1 for t in toilets if t.get("toilet_score") is None)
     no_address = sum(
-        1 for t in toilets if not t.get("address", "").strip()
+        1 for t in toilets if not (t.get("address") or "").strip()
     )
     no_prefecture = sum(
-        1 for t in toilets if not t.get("prefecture", "").strip()
+        1 for t in toilets if not (t.get("prefecture") or "").strip()
     )
     no_reviews = sum(
         1 for t in toilets if t.get("toilet_review_count", 0) == 0
@@ -38,7 +38,7 @@ def render_data_quality(meta: dict, toilets: list, t: dict) -> None:
 
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric(t.get("total", "Total"), missing["total"])
+            st.metric(t.get("dq_total", "Total"), missing["total"])
         with col2:
             st.metric(
                 t.get("dq_missing_score", "スコア欠損"),

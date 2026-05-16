@@ -197,8 +197,8 @@ class TestVerificationGate:
             )
             insert_sql = (
                 "INSERT INTO toilets (title, category, address, lat, lng, rating, review_count, "
-                "is_public_toilet, toilet_score, confidence, toilet_review_count, prefecture, sample_reviews_json) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                "is_public_toilet, toilet_score, confidence, toilet_review_count, prefecture, sample_reviews_json, top_keywords) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             )
             conn.execute(insert_sql, row)
             conn.execute("INSERT INTO metadata (key, value) VALUES (?, ?)", ("area_name", "テスト"))
@@ -502,6 +502,25 @@ class TestGapAnalyzerLoadPrefectureCatalog:
         monkeypatch.setattr("gap_analyzer.PREFECTURE_CITIES_PATH", str(path))
         assert _load_prefecture_catalog() == {}
 
+    def test_lru_cache_reads_file_once(self, tmp_path, monkeypatch):
+        from gap_analyzer import _load_prefecture_catalog
+        _load_prefecture_catalog.cache_clear()
+        path = tmp_path / "cities.json"
+        path.write_text('{"東京都": ["千代田区"]}', encoding="utf-8")
+        monkeypatch.setattr("gap_analyzer.PREFECTURE_CITIES_PATH", str(path))
+        read_count = [0]
+        original_open = __builtins__["open"]
+
+        def tracking_open(*args, **kw):
+            if "cities.json" in str(args[0]):
+                read_count[0] += 1
+            return original_open(*args, **kw)
+
+        monkeypatch.setattr("builtins.open", tracking_open)
+        _load_prefecture_catalog()
+        _load_prefecture_catalog()
+        assert read_count[0] == 1
+
 
 class TestExtractCityEdgeCases:
     def test_empty_address(self):
@@ -526,6 +545,24 @@ class TestGetStatsEdgeCases:
         stats = get_stats(toilets)
         assert stats["scored"] == 0
         assert stats["total"] == 1
+
+
+class TestNormalizeCityCounts:
+    def test_non_int_value_continues(self):
+        from gap_analyzer import _normalize_city_counts
+        result = _normalize_city_counts({"渋谷区": "abc", "新宿区": "3"})
+        assert result == {"新宿区": 3}
+
+
+class TestExtractCityCatalogFallback:
+    def test_all_cities_when_no_prefecture(self, tmp_path, monkeypatch):
+        from gap_analyzer import _load_prefecture_catalog, _extract_city
+        _load_prefecture_catalog.cache_clear()
+        path = tmp_path / "cities.json"
+        path.write_text('{"東京都": ["新宿"]}', encoding="utf-8")
+        monkeypatch.setattr("gap_analyzer.PREFECTURE_CITIES_PATH", str(path))
+        result = _extract_city("abc新宿")
+        assert result == "新宿"
 
 
 class TestFindGapsEdgeCases:

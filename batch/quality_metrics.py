@@ -5,18 +5,22 @@ verify_data.py から分離
 """
 import os
 import sqlite3
+import logging
 from collections import Counter
 from typing import Iterable
 
 
-def _coerce_int(value):
+logger = logging.getLogger(__name__)
+
+
+def _coerce_int(value: object) -> int | None:
     try:
         return int(value)
     except (TypeError, ValueError):
         return None
 
 
-def _coerce_float(value):
+def _coerce_float(value: object) -> float | None:
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -94,7 +98,8 @@ def collect_sqlite_metrics(db_path: str) -> dict | None:
             "prefecture_counts": {str(prefecture or ""): int(count) for prefecture, count in prefecture_rows},
             "metadata": dict(metadata_rows),
         }
-    except (sqlite3.OperationalError, sqlite3.DatabaseError):
+    except (sqlite3.OperationalError, sqlite3.DatabaseError) as exc:
+        logger.error(f"Failed to collect SQLite metrics from {db_path}: {exc}")
         return None
     finally:
         conn.close()

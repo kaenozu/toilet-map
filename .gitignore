@@ -18,6 +18,9 @@ batch/raw_data_filtered.json
 batch/.progress_*_phase1
 batch/tmp*.txt
 batch/tmp*.json
+batch/city_bounds_cache.json
+batch/output/
+batch/test_query.txt
 kanto_*.log
 
 # Debug scripts
@@ -34,6 +37,8 @@ ui/start.bat
 
 # Screenshots
 *.png
+toilet-map-snapshot.txt
+toilet-map-mobile-snapshot.txt
 
 # Scraper data
 batch/data/
@@ -63,3 +68,5 @@ __pycache__/
 .DS_Store
 Thumbs.db
 nul
+*.py,cover
+batch/queries.d/

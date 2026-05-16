@@ -2,11 +2,13 @@
 ui/popups.py
 Popup HTML builders for toilet map markers
 """
-from app_config import esc, safe_href, get_score_style, MAX_SAMPLE_REVIEWS, REVIEW_TEXT_MAX_LENGTH
+from app_config import MAX_SAMPLE_REVIEWS, REVIEW_TEXT_MAX_LENGTH
+from .helpers import esc, safe_href, get_score_style
 from .types import ToiletDict
 
 
 def clean(s: str | None) -> str:
+    """文字列をサニタイズして改行をスペースに置換（シングルクォートは esc が自動エスケープ）"""
     if not s:
         return ""
     return esc(str(s)).replace("\n", " ").replace("\r", " ")

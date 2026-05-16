@@ -5,7 +5,9 @@ batch/utils.py のユニットテスト
 import json
 import gzip
 import os
+from unittest.mock import MagicMock
 
+import pytest
 import utils as batch_utils
 
 
@@ -120,6 +122,15 @@ class TestWriteJsonAtomic:
         batch_utils.write_json_atomic(path, {"a": 1})
         assert json.loads((tmp_path / "sub" / "nested" / "atomic.json").read_text(encoding="utf-8")) == {"a": 1}
 
+    def test_cleanup_oserror_logs_warning(self, tmp_path, caplog, monkeypatch):
+        path = str(tmp_path / "atomic.json")
+        monkeypatch.setattr(os, "replace", MagicMock(side_effect=OSError("replace failed")))
+        monkeypatch.setattr(os, "remove", MagicMock(side_effect=OSError("remove failed")))
+
+        with pytest.raises(OSError):
+            batch_utils.write_json_atomic(path, {"data": 1})
+        assert "Could not remove temporary file" in caplog.text
+
 
 class TestUpdateExpansionStatus:
     def test_remove_run(self, tmp_path, monkeypatch):
@@ -164,6 +175,36 @@ class TestExtractPrefecture:
     def test_normalize_removes_spaces_and_symbols(self):
         assert batch_utils.extract_prefecture("東 京 都 渋谷区") == "東京都"
         assert batch_utils.extract_prefecture("大阪・府大阪市") == "大阪府"
+
+    def test_no_match_after_alias_falls_through(self):
+        assert batch_utils.extract_prefecture("完全に未知の住所") == ""
+
+
+class TestRuntimeError:
+    def test_file_lock_runtime_error(self, monkeypatch):
+        monkeypatch.setattr("utils.msvcrt", None)
+        monkeypatch.setattr("utils.fcntl", None)
+        with pytest.raises(RuntimeError, match="File locking is not supported"):
+            with batch_utils.file_lock("/tmp/nonexistent/test.lock"):
+                pass
+
+
+class TestFileLock:
+    def test_file_lock_timeout(self, tmp_path):
+        lock_path = str(tmp_path / "test.lock")
+        import fcntl as fcntl_mod
+        original_flock = fcntl_mod.flock
+
+        def _block_flock(*a, **kw):
+            raise OSError("Resource temporarily unavailable")
+
+        fcntl_mod.flock = _block_flock
+        try:
+            with pytest.raises(TimeoutError):
+                with batch_utils.file_lock(lock_path, timeout=0.1, poll_interval=0.05):
+                    pass
+        finally:
+            fcntl_mod.flock = original_flock
 
 
 class TestScoreConfigImport:

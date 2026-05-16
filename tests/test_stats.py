@@ -118,5 +118,53 @@ class TestCalcAvgScoreEdgeCases:
         assert avg < 150
 
 
+class TestRenderStats:
+    def test_empty_data(self, monkeypatch):
+        from ui.stats import render_stats
+        _mock_streamlit(monkeypatch)
+        render_stats({"total": 0, "scored": 0, "public_toilets": 0}, [], {"stats": "📊", "stats_all": "All",
+                                                                           "total": "Total", "scored": "Scored",
+                                                                           "public": "Public", "avg_score": "Avg"})
+
+    def test_with_data(self, monkeypatch):
+        from ui.stats import render_stats
+        _mock_streamlit(monkeypatch)
+        toilets = [{"toilet_score": 80}, {"toilet_score": 60}, {"toilet_score": 90}]
+        render_stats({"total": 3, "scored": 3, "public_toilets": 1}, toilets,
+                      {"stats": "📊", "stats_all": "All", "total": "Total",
+                       "scored": "Scored", "public": "Public", "avg_score": "Avg"})
+
+    def test_boundary_scores(self, monkeypatch):
+        from ui.stats import render_stats
+        _mock_streamlit(monkeypatch)
+        toilets = [
+            {"toilet_score": 100}, {"toilet_score": 80},
+            {"toilet_score": 79}, {"toilet_score": 65},
+            {"toilet_score": 64}, {"toilet_score": 50},
+            {"toilet_score": 49}, {"toilet_score": 35},
+            {"toilet_score": 34}, {"toilet_score": 0},
+        ]
+        render_stats({"total": 10, "scored": 10, "public_toilets": 5}, toilets,
+                      {"stats": "📊", "stats_all": "All", "total": "Total",
+                       "scored": "Scored", "public": "Public", "avg_score": "Avg"})
+
+
+def _mock_streamlit(monkeypatch):
+    import streamlit as st
+    monkeypatch.setattr(st, "expander", lambda *a, **kw: _NullContext())
+    monkeypatch.setattr(st, "columns", lambda n: [_NullContext() for _ in range(n)])
+    monkeypatch.setattr(st, "metric", lambda *a, **kw: None)
+    monkeypatch.setattr(st, "altair_chart", lambda *a, **kw: None)
+    monkeypatch.setattr(st, "subheader", lambda *a: None)
+    monkeypatch.setattr(st, "bar_chart", lambda *a, **kw: None)
+
+
+class _NullContext:
+    def __enter__(self):
+        return self
+    def __exit__(self, *args):
+        pass
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

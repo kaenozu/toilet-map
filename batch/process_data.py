@@ -20,6 +20,7 @@ from scoring import (
     is_toilet_place,
 )
 from scoring_config import AREA_NAME_RE, DISPLAY_SCORE_OFFSET, DISPLAY_SCORE_MULTIPLIER
+from app_config import POTENTIAL_CATEGORIES
 from utils import load_jsonl, save_json, logger, extract_prefecture
 
 
@@ -32,20 +33,13 @@ def _build_toilet_result(place: PlaceDict, info: ToiletScoreInfo, lat: float, ln
         # カテゴリーがトイレスポット（公園、駅、コンビニ等）であれば救済
         cat = (place.get("category") or "").lower()
         title = (place.get("title") or "").lower()
-        potentials = [
-            "公園", "駅", "道の駅", "サービスエリア", "パーキングエリア",
-            "カフェ", "喫茶", "レストラン", "食堂", "ダイニング", "コーヒー", "パン", "ケーキ",
-            "コンビニ", "スーパー", "ドラッグ", "ストア", "マート", "商店",
-            "ホテル", "旅館", "民宿", "ビジネスホテル",
-            "役場", "市役所", "図書館",
-        ]
-        if not any(p in cat or p in title for p in potentials):
+        if not any(p in cat or p in title for p in POTENTIAL_CATEGORIES):
             return None
 
     display_score = (info["score"] + DISPLAY_SCORE_OFFSET) * DISPLAY_SCORE_MULTIPLIER
 
     # スコアがない地点（口コミなし救済地点）のデフォルト値を調整
-    if info["confidence"] == 0:
+    if info["confidence"] <= 0:
         display_score = 50.0  # デフォルト「普通」
 
     return {
@@ -130,8 +124,8 @@ def load_existing(path: str) -> dict:
         except FileNotFoundError:
             continue
         except json.JSONDecodeError as exc:
-            logger.warning(f"Failed to parse existing toilet data: {candidate} ({exc})")
-            return {"metadata": None, "toilets": []}
+            logger.error(f"Failed to parse existing toilet data: {candidate} ({exc})")
+            raise
     return {"metadata": None, "toilets": []}
 
 

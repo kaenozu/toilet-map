@@ -3,8 +3,9 @@ tests/test_app_config.py
 app_config.py のユニットテスト
 """
 import pytest
+from ui.helpers import get_score_style, esc
 from app_config import (
-    get_score_style, esc, SCORE_RANGES, FILTER_CONFIG,
+    SCORE_RANGES, FILTER_CONFIG,
     TILE_OPTIONS, ERROR_METADATA,
 )
 from app_config_prefectures import PREFECTURE_CENTERS
@@ -131,6 +132,46 @@ class TestErrorMetadata:
         assert ERROR_METADATA["area_name"] == "エラー"
         assert ERROR_METADATA["total"] == 0
         assert ERROR_METADATA["center_lat"] == 36.2231
+
+
+class TestLoadPopupFixJs:
+    def test_loads_content_when_exists(self, tmp_path, monkeypatch):
+        js_file = tmp_path / "popup_fix.js"
+        js_file.write_text("console.log('ok');", encoding="utf-8")
+        from app_config import _load_popup_fix_js
+        monkeypatch.setattr("app_config.POPUP_FIX_PATH", str(js_file))
+        result = _load_popup_fix_js()
+        assert "console.log('ok')" in result
+        assert "<script>" in result
+
+    def test_returns_empty_when_missing(self, tmp_path, monkeypatch):
+        from app_config import _load_popup_fix_js
+        monkeypatch.setattr("app_config.POPUP_FIX_PATH", str(tmp_path / "nonexistent.js"))
+        assert _load_popup_fix_js() == ""
+
+
+class TestGetScoreStyleFallback:
+    def test_below_zero_returns_lowest(self):
+        from ui.helpers import get_score_style
+        color, emoji, label = get_score_style(-5)
+        assert emoji == "💩"
+        assert label == "要注意"
+
+    def test_none_coerces_to_zero(self):
+        from ui.helpers import get_score_style
+        color, emoji, label = get_score_style(0)
+        assert emoji == "💩"
+
+
+class TestSafeHrefEdgeCases:
+    def test_no_netloc_returns_empty(self):
+        from ui.helpers import safe_href
+        assert safe_href("http:///path") == ""
+
+    def test_empty_url_returns_empty(self):
+        from ui.helpers import safe_href
+        assert safe_href("") == ""
+        assert safe_href(None) == ""
 
 
 if __name__ == "__main__":

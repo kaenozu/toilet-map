@@ -13,7 +13,6 @@ Auto-judges toilet cleanliness from Google Maps reviews, displayed on a Streamli
 - Mobile responsive layout
 - Dark mode support
 - Collapsible sidebar
-- User submission form
 
 ## Quick Start
 
@@ -34,11 +33,11 @@ Google Maps Scraper (Docker) → raw JSONL
 
 | Score | Icon | Label        |
 |-------|------|--------------|
-| 0–34  | 💩   | Needs attention |
-| 35–49 | 😨   | Slightly concerning |
-| 50–64 | 😐   | Average      |
-| 65–79 | 😊   | Clean        |
 | 80–100| ✨   | Very clean   |
+| 65–79 | 😊   | Clean        |
+| 50–64 | 😐   | Average      |
+| 35–49 | 😨   | Slightly concerning |
+| 0–34  | 💩   | Needs attention |
 
 Score = (raw_score + 5) × 10 (maps −5…+5 → 0…100).
 
@@ -47,7 +46,7 @@ Score = (raw_score + 5) × 10 (maps −5…+5 → 0…100).
 - **App**: Python 3.11+ / Streamlit / Folium / streamlit-folium / Pandas
 - **Scraping**: Docker / Google Maps Scraper
 - **Data**: JSON / JSONL / SQLite
-- **Testing**: pytest (589 tests)
+- **Testing**: pytest (622 tests)
 - **Lint**: ruff
 
 ## Commands

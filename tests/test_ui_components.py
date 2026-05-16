@@ -89,6 +89,35 @@ class TestBuildToiletCardHtml:
         html = build_toilet_card_html(toilet)
         assert 'href="https://maps.google.com/"' in html
 
+    def test_no_rank_no_meta(self):
+        toilet = {
+            "title": "B", "category": "公園", "address": "東京",
+            "toilet_score": 60.0, "confidence": 0.6, "is_public_toilet": False,
+            "rating": 4.0, "review_count": 20, "sample_reviews": [], "top_keywords": [],
+        }
+        html = build_toilet_card_html(toilet)
+        assert "#" not in html or 'style="color:#999' not in html
+
+    def test_no_link_no_coords_no_dirs(self):
+        toilet = {
+            "title": "C", "category": "駅", "address": "大阪",
+            "toilet_score": 70.0, "confidence": 0.7, "is_public_toilet": True,
+            "rating": 4.0, "review_count": 15, "lat": 34.0, "lng": 135.0,
+            "sample_reviews": [], "top_keywords": [],
+        }
+        html = build_toilet_card_html(toilet)
+        assert "Google Maps" not in html
+
+    def test_no_link_no_latlng_no_maps_links(self):
+        toilet = {
+            "title": "D", "category": "駅", "address": "大阪",
+            "toilet_score": 70.0, "confidence": 0.7, "is_public_toilet": True,
+            "rating": 4.0, "review_count": 15, "sample_reviews": [], "top_keywords": [],
+        }
+        html = build_toilet_card_html(toilet)
+        assert "Google Maps" not in html
+        assert "ルート検索" not in html
+
 
 class TestRenderScoreLegend:
     def test_returns_no_error(self):

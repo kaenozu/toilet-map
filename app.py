@@ -9,6 +9,7 @@ import streamlit as st
 from streamlit_folium import st_folium
 
 from ui.styles import MOBILE_CSS
+from app_config import TILE_OPTIONS
 from ui.components import build_data_freshness_text, build_result_context_text, render_score_legend, render_toilet_card
 from ui.data_loader import load_toilet_data, toilets_to_dataframe, get_prefectures, get_data_cache_token
 from ui.filters import filter_toilets, search_toilets
@@ -24,12 +25,80 @@ from ui.query_params import (
 from ui.sidebar import render_sidebar
 
 
-def main():
-    st.set_page_config(
-        page_title=APP_TITLE,
-        page_icon="🚽",
-        layout="wide",
+def _load_and_prepare():
+    query_params = read_query_params()
+    apply_language_query_param(query_params)
+    current_lang = st.session_state.get("lang_select", DEFAULT_LANGUAGE)
+    t = get_language_strings(current_lang)
+    data = load_toilet_data(get_data_cache_token())
+    meta = data["metadata"]
+    toilets = data["toilets"]
+    prefecture_stats = data.get("pref_stats", {})
+    df = toilets_to_dataframe(toilets)
+    prefectures = get_prefectures(df)
+    return meta, df, prefectures, prefecture_stats, t, query_params, toilets
+
+
+def _process_filters(df, selected_pref, internal_filter, search_query, sort_order, user_location, t):
+    user_lat, user_lng = user_location if user_location else (None, None)
+    filter_started_at = perf_counter()
+    filtered = filter_toilets(df, internal_filter, selected_pref, user_lat, user_lng)
+    filtered = search_toilets(filtered, search_query)
+    if sort_order == t["sort_near"] and user_location:
+        filtered = filtered.sort_values("distance", ascending=True)
+    else:
+        filtered = filtered.sort_values("toilet_score", ascending=False)
+    filter_elapsed_ms = (perf_counter() - filter_started_at) * 1000
+    return filtered, filter_elapsed_ms
+
+
+def _render_main_content(filtered, map_items, meta, t, selected_pref, sort_order, dark_mode, selected_tile, toilets, filter_elapsed_ms, prefecture_stats, internal_filter, search_query):
+    map_lat, map_lng, map_zoom = calc_map_center(selected_pref, meta, prefecture_stats)
+    total_items = len(filtered)
+    init_page_state()
+    page_filter_key = f"{selected_pref}|{internal_filter}|{search_query}"
+    reset_page(page_filter_key)
+    page = st.session_state.get("page", 1)
+    total_pages, start_idx, end_idx, page = calc_pagination(total_items, page)
+    display_items = filtered.iloc[start_idx:end_idx] if total_items > 0 else filtered
+
+    st.markdown(f"**{total_items}{t['showing']}**")
+    render_score_legend()
+
+    map_started_at = perf_counter()
+    m = build_map(map_items, map_lat, map_lng, map_zoom, tile=TILE_OPTIONS[selected_tile])
+    map_elapsed_ms = (perf_counter() - map_started_at) * 1000
+
+    st.caption(
+        build_result_context_text(
+            len(display_items),
+            len(map_items),
+            filter_elapsed_ms,
+            map_elapsed_ms,
+            t,
+        )
     )
+    st_folium(m, height=500, returned_objects=[], use_container_width=True)
+
+    render_stats(meta, map_items, t)
+    render_data_quality(meta, toilets, t)
+
+    if total_items > 0:
+        render_pagination(total_items, page, total_pages, t)
+
+    if len(display_items) == 0:
+        st.info(t["no_results"])
+    else:
+        st.divider()
+        st.markdown('<div role="list">', unsafe_allow_html=True)
+        for i, (_, row) in enumerate(display_items.iterrows()):
+            render_toilet_card(row.to_dict(), rank=i + 1, meta=meta)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    return dark_mode, page, display_items
+
+
+def _inject_html():
     st.markdown(
         """
         <style>
@@ -61,20 +130,30 @@ def main():
         unsafe_allow_html=True,
     )
     st.markdown(MOBILE_CSS, unsafe_allow_html=True)
+    st.markdown(
+        """
+        <style>
+        @keyframes skeleton-pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
+        .skeleton {
+            display:inline-block;height:1em;background:linear-gradient(90deg,#e0e0e0 25%,#f0f0f0 50%,#e0e0e0 75%);
+            background-size:200% 100%;animation:skeleton-pulse 1.5s ease-in-out infinite;
+            border-radius:4px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    query_params = read_query_params()
-    apply_language_query_param(query_params)
 
-    current_lang = st.session_state.get("lang_select", DEFAULT_LANGUAGE)
-    t = get_language_strings(current_lang)
+def main() -> None:
+    st.set_page_config(
+        page_title=APP_TITLE,
+        page_icon="🚽",
+        layout="wide",
+    )
+    _inject_html()
 
-    data = load_toilet_data(get_data_cache_token())
-    meta = data["metadata"]
-    toilets = data["toilets"]
-    prefecture_stats = data.get("pref_stats", {})
-
-    df = toilets_to_dataframe(toilets)
-    prefectures = get_prefectures(df)
+    meta, df, prefectures, prefecture_stats, t, query_params, toilets = _load_and_prepare()
 
     sidebar_result = render_sidebar(t, prefectures, query_params)
     t = sidebar_result.t
@@ -85,72 +164,44 @@ def main():
     sort_order = sidebar_result.sort_order
     user_location = sidebar_result.user_location
     gps_enabled = sidebar_result.gps_enabled
+    dark_mode = sidebar_result.dark_mode
+    selected_tile = sidebar_result.selected_tile
     translated_to_internal = sidebar_result.translated_to_internal
 
     internal_filter = translated_to_internal[filter_type]
-    user_lat, user_lng = user_location if user_location else (None, None)
-    filter_started_at = perf_counter()
-    filtered = filter_toilets(df, internal_filter, selected_pref, user_lat, user_lng)
-    filtered = search_toilets(filtered, search_query)
-
-    if sort_order == t["sort_near"] and user_location:
-        filtered = filtered.sort_values("distance", ascending=True)
-    else:
-        filtered = filtered.sort_values("toilet_score", ascending=False)
-    filter_elapsed_ms = (perf_counter() - filter_started_at) * 1000
+    filtered, filter_elapsed_ms = _process_filters(
+        df, selected_pref, internal_filter, search_query, sort_order, user_location, t
+    )
 
     st.title(t["title"])
     st.caption(build_data_freshness_text(meta, t))
 
-    map_lat, map_lng, map_zoom = calc_map_center(selected_pref, meta, prefecture_stats)
-    total_items = len(filtered)
-
     map_items = filtered.to_dict("records")
 
-    init_page_state()
-    page_filter_key = f"{selected_pref}|{internal_filter}|{search_query}"
-    reset_page(page_filter_key)
-    page = st.session_state.get("page", 1)
-    total_pages, start_idx, end_idx, page = calc_pagination(total_items, page)
-    display_items = filtered.iloc[start_idx:end_idx] if total_items > 0 else filtered
-
-    st.markdown(f"**{total_items}{t['showing']}**")
-    render_score_legend()
-
-    map_started_at = perf_counter()
-    m = build_map(map_items, map_lat, map_lng, map_zoom)
-    map_elapsed_ms = (perf_counter() - map_started_at) * 1000
-
-    st.caption(
-        build_result_context_text(
-            len(display_items),
-            len(map_items),
-            filter_elapsed_ms,
-            map_elapsed_ms,
-            t,
-        )
+    dark_mode, page, display_items = _render_main_content(
+        filtered, map_items, meta, t, selected_pref,
+        sort_order, dark_mode, selected_tile, toilets, filter_elapsed_ms,
+        prefecture_stats, internal_filter, search_query,
     )
-    st_folium(m, height=500, returned_objects=[], use_container_width=True)
 
-    render_stats(meta, map_items, t)
-    render_data_quality(meta, toilets, t)
+    if dark_mode:
+        st.markdown(
+            "<style>.toilet-card{background:#1e1e1e!important;color:#e0e0e0!important;border-color:#333!important;}"
+            ".toilet-card .toilet-card-title,.toilet-card .toilet-card-subtitle,.toilet-card .toilet-card-meta,.toilet-card .toilet-card-arrow{color:inherit!important}</style>",
+            unsafe_allow_html=True,
+        )
 
-    if total_items > 0:
-        render_pagination(total_items, page, total_pages, t)
+    if st.session_state.get("_show_shortcuts", False):
+        st.info(t["shortcut_info"])
 
-    if len(display_items) == 0:
-        st.info(t["no_results"])
-    else:
-        st.divider()
-        st.markdown('<div role="list">', unsafe_allow_html=True)
-        for i, (_, row) in enumerate(display_items.iterrows()):
-            render_toilet_card(row.to_dict(), rank=i + 1, meta=meta)
-        st.markdown('</div>', unsafe_allow_html=True)
+    if len(display_items) > 0:
+        csv_data = filtered.to_csv(index=False).encode("utf-8-sig")
+        st.download_button("📥 CSVダウンロード", csv_data, f"toilets_{selected_pref}.csv", "text/csv", use_container_width=True)
 
     write_query_params(
         build_query_params_from_state(
             lang, selected_pref, internal_filter, search_query,
-            sort_order, gps_enabled, page, t,
+            sort_order, gps_enabled, page, t, dark_mode=dark_mode,
         )
     )
 

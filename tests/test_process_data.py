@@ -335,8 +335,10 @@ class TestLoadExisting:
     def test_returns_empty_on_json_decode_error(self, tmp_path):
         path = tmp_path / "bad.json"
         path.write_text("not valid json", encoding="utf-8")
-        result = pd_module.load_existing(str(path))
-        assert result == {"metadata": None, "toilets": []}
+        import json
+
+        with pytest.raises(json.JSONDecodeError):
+            pd_module.load_existing(str(path))
 
 
 class TestBuildMetadata:
@@ -475,15 +477,18 @@ class TestProcessDataMain:
         assert calls == [("input.json", "output.json", "--incremental")]
 
 
-class TestGetLongitude:
+class TestExtractCoordinatesBasic:
     def test_returns_longitude_when_present(self):
-        assert scoring._get_longitude({"longitude": 139.69}) == 139.69
+        assert scoring._extract_coordinates({"longitude": 139.69})[1] == 139.69
 
     def test_falls_back_to_longtitude(self):
-        assert scoring._get_longitude({"longtitude": 139.69}) == 139.69
+        assert scoring._extract_coordinates({"longtitude": 139.69})[1] == 139.69
 
-    def test_returns_zero_when_both_missing(self):
-        assert scoring._get_longitude({}) == 0.0
+    def test_empty_dict_returns_none(self):
+        lat, lng = scoring._extract_coordinates({})
+        assert lat is None
+        assert lng is None
+
 
 
 class TestAdjustByRatingEdgeCases:

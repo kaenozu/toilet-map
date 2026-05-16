@@ -286,8 +286,8 @@ class TestMergeToDb:
             )
             insert_sql = (
                 "INSERT INTO toilets (title, category, address, lat, lng, rating, review_count, "
-                "is_public_toilet, toilet_score, confidence, toilet_review_count, prefecture, sample_reviews_json) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                "is_public_toilet, toilet_score, confidence, toilet_review_count, prefecture, sample_reviews_json, top_keywords) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             )
             conn.execute(insert_sql, row)
             conn.execute(insert_sql, row)
@@ -462,14 +462,4 @@ class TestFixNullPrefectures:
             conn.close()
 
 
-class TestToiletDbUpdateValues:
-    def test_returns_tuple(self):
-        toilet = {
-            "title": "A", "category": "公園", "address": "東京都",
-            "lat": 35.0, "lng": 139.0, "rating": 3.0, "review_count": 1,
-            "is_public_toilet": False, "toilet_score": 50.0, "confidence": 0.5,
-            "toilet_review_count": 0, "prefecture": "東京都",
-            "sample_reviews": [],
-        }
-        values = db_utils.toilet_db_update_values(toilet)
-        assert len(values) == 10
+

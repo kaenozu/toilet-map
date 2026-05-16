@@ -6,6 +6,7 @@ Nominatim API 使用
 import json
 import os
 import time
+import urllib.error
 import urllib.request
 import urllib.parse
 from typing import Optional
@@ -49,7 +50,7 @@ def get_city_bounds(city: str, prefecture: str = "") -> Optional[dict]:
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             results = json.loads(resp.read().decode("utf-8"))
-    except Exception as e:
+    except (urllib.error.URLError, TimeoutError, OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
         logger.warning(f"Failed to fetch bounds for {key}: {e}")
 
     time.sleep(1.1)  # Nominatim rate limit: 1 req/sec

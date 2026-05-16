@@ -13,8 +13,6 @@ omit = [
     "**/__pycache__/*",
     "app.py",
     "batch/scrape_runner.py",
-    "batch/kanto_phase1.py",
-    "batch/nationwide_runner.py",
     "ui/styles.py",
 ]
 
@@ -24,7 +22,7 @@ exclude_lines = [
     "if __name__ == .__main__.",
     "raise NotImplementedError",
 ]
-fail_under = 50
+fail_under = 80
 
 [tool.ruff]
 target-version = "py311"

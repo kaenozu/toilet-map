@@ -3,11 +3,11 @@ ui/components.py
 Streamlit UI components for toilet map
 """
 import streamlit as st
-from app_config import esc, get_score_style, safe_href
+from .helpers import esc, get_score_style, safe_href
 from .types import ToiletDict
 
 
-def build_data_freshness_text(meta: dict, t: dict) -> str:
+def build_data_freshness_text(meta: dict[str, object], t: dict[str, str]) -> str:
     """生成日時と SQLite 同期日時を短い1行で返す。"""
     generated_at = meta.get("last_updated") or "N/A"
     synced_at = meta.get("db_synced_at") or "N/A"
@@ -19,7 +19,7 @@ def build_result_context_text(
     map_items: int,
     filter_elapsed_ms: float | None = None,
     map_elapsed_ms: float | None = None,
-    t: dict | None = None,
+    t: dict[str, str] | None = None,
 ) -> str:
     """一覧件数と地図件数、簡易計測結果を短い文で返す。"""
     labels = t or {}
@@ -39,7 +39,7 @@ def build_result_context_text(
     return " | ".join(parts)
 
 
-def render_score_legend():
+def render_score_legend() -> None:
     """スコア凡例を表示（レスポンシブ）"""
     st.markdown(
         """
@@ -114,24 +114,24 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
             <div style="font-size:14px;font-weight:700;color:{color};">{t['toilet_score']:.0f}</div>
         </div>
         <div style="flex:1;min-width:0;color:#222222;">
-            <div style="font-size:14px;font-weight:600;color:#222222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            <div class="toilet-card-title" style="font-size:14px;font-weight:600;color:#222222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                 {public_tag} {esc(t['title'])}
             </div>
-            <div style="font-size:11px;color:#666666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            <div class="toilet-card-subtitle" style="font-size:11px;color:#666666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                 &#x1F4CD; {esc(t.get('address', ''))}{freshness_badge}
             </div>
-            <div style="font-size:11px;color:#666666;">
+            <div class="toilet-card-meta" style="font-size:11px;color:#666666;">
                 &#x2B50; {t.get('rating', '-')} &#xB7; 口コミ {t.get('review_count', 0)}件 &#xB7; 信頼度 {confidence_pct}%
             </div>
             <div style="font-size:11px;margin-top:4px;">
                 {links_html}
             </div>
         </div>
-        <div style="font-size:18px;color:#aaaaaa;">&#x203A;</div>
+        <div class="toilet-card-arrow" style="font-size:18px;color:#aaaaaa;">&#x203A;</div>
     </div>
     """.strip()
 
 
-def render_toilet_card(toilet: ToiletDict, rank: int | None = None, meta: dict | None = None):
+def render_toilet_card(toilet: ToiletDict, rank: int | None = None, meta: dict[str, object] | None = None) -> None:
     """ランキングリストのトイレカード（1行）"""
     st.markdown(build_toilet_card_html(toilet, rank, meta), unsafe_allow_html=True)
