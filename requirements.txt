@@ -10,4 +10,4 @@ pytest-cov>=5.0.0
 mypy>=1.14.0
 types-setuptools>=82.0.0.20260508
 fastapi>=0.110.0
-uvicorn>=0.29.0
+uvicorn>=0.47.0
