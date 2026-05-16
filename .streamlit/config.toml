@@ -2,7 +2,7 @@
 maxUploadSize = 5
 
 [deploy]
-pythonVersion = "3.12"
+pythonVersion = "3.11"
 
 [browser]
 gatherUsageStats = false

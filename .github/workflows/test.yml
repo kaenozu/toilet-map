@@ -19,7 +19,7 @@ jobs:
       - name: Lint with ruff
         run: ruff check .
       - name: Run pre-commit
-        run: pre-commit run --all-files --show-diff-on-failure || true
+        run: pre-commit run --all-files --show-diff-on-failure
 
   test:
     strategy:
@@ -62,7 +62,7 @@ jobs:
         run: |
           streamlit run app.py &
           for i in $(seq 1 30); do
-            if curl -s http://localhost:8501 | grep -q "Streamlit"; then
+            if curl -s http://localhost:8501 | grep -q "トイレきれい度マップ"; then
               echo "Streamlit app started successfully"
               exit 0
             fi
@@ -70,3 +70,11 @@ jobs:
           done
           echo "Streamlit app failed to start within 60 seconds" && exit 1
         shell: bash
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build Docker image
+        run: docker build -t toilet-map:ci .

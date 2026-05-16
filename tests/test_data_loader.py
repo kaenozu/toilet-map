@@ -4,9 +4,10 @@ ui/data_loader.py のユニットテスト
 """
 import json
 import sqlite3
-import pytest
-import pandas as pd
 from unittest.mock import MagicMock
+
+import pandas as pd
+import pytest
 
 from app_config import ERROR_METADATA
 

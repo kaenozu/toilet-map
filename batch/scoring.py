@@ -5,28 +5,27 @@ batch/scoring.py
 """
 import re
 from collections import Counter
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 from scoring_config import (
-    SCORE_CLAMP_MIN,
-    SCORE_CLAMP_MAX,
-    CONFIDENCE_REVIEW_FACTOR,
     CONFIDENCE_MIN,
-    RATING_THRESHOLD_HIGH,
-    RATING_THRESHOLD_LOW,
-    POSITIVE_BOOST_HIGH,
-    NEGATIVE_DAMPEN_HIGH,
-    POSITIVE_DAMPEN_LOW,
-    NEGATIVE_BOOST_LOW,
+    CONFIDENCE_REVIEW_FACTOR,
     NEGATION_WINDOW,
     NEGATION_WORDS,
-    POSITIVE_KEYWORDS,
+    NEGATIVE_BOOST_LOW,
+    NEGATIVE_DAMPEN_HIGH,
     NEGATIVE_KEYWORDS,
+    POSITIVE_BOOST_HIGH,
+    POSITIVE_DAMPEN_LOW,
+    POSITIVE_KEYWORDS,
+    RATING_THRESHOLD_HIGH,
+    RATING_THRESHOLD_LOW,
+    SCORE_CLAMP_MAX,
+    SCORE_CLAMP_MIN,
     SENTENCE_SPLIT_RE,
-    TOILET_MENTION_RE,
     TOILET_CATEGORIES,
+    TOILET_MENTION_RE,
 )
-
 
 
 class PlaceDict(TypedDict, total=False):
@@ -102,25 +101,23 @@ def _normalize_identity_text(value: object) -> str:
 def mentions_toilet(text: str) -> bool:
     if not text or not TOILET_MENTION_RE.search(text):
         return False
-    if TOILET_ABSENCE_RE.search(text):
-        return False
-    return True
+    return not TOILET_ABSENCE_RE.search(text)
 
 
 def _get_longitude(place: PlaceDict) -> float | None:
     """経度を取得。longitude がなければ longtitude をフォールバックとして使う。"""
-    lon = place.get("longitude")
+    lon: object = place.get("longitude")
     if not lon:
         lon = place.get("longtitude")
     if not lon:
         return None
     try:
-        return float(lon)
+        return float(lon)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return None
 
 
-def _extract_coordinates(place: PlaceDict) -> tuple[Optional[float], Optional[float]]:
+def _extract_coordinates(place: PlaceDict) -> tuple[float | None, float | None]:
     """place から緯度経度を抽出。_get_longitude 内で longtitude へのフォールバックも行う。"""
     lat = place.get("latitude")
     lon = _get_longitude(place)
@@ -144,10 +141,7 @@ def _apply_scoring_and_negation(target_text: str) -> tuple[float, list[str]]:
     neg_word_positions = [m.start() for m in _NEGATION_PATTERN.finditer(target_text)]
 
     def is_negated(pos: int) -> bool:
-        for np in neg_word_positions:
-            if abs(pos - np) < NEGATION_WINDOW:
-                return True
-        return False
+        return any(abs(pos - np) < NEGATION_WINDOW for np in neg_word_positions)
 
     for m in _POS_PATTERN.finditer(target_text):
         kw = m.group()
@@ -195,9 +189,9 @@ def _adjust_by_rating(score: float, matched: list[str], rating: float) -> tuple[
 
 def _collect_toilet_reviews(
     place: PlaceDict,
-) -> tuple[list[dict], list[str]]:
+) -> tuple[list[ToiletReviewDict], list[str]]:
     reviews = (place.get("user_reviews") or []) + (place.get("user_reviews_extended") or [])
-    toilet_reviews = []
+    toilet_reviews: list[ToiletReviewDict] = []
     all_highlights = []
     seen_descs: set[str] = set()
 
@@ -230,7 +224,7 @@ def _collect_toilet_reviews(
 
 
 def _calculate_final_score(
-    toilet_reviews: list[dict],
+    toilet_reviews: list[ToiletReviewDict],
     place_rating: float,
     total_score: float,
 ) -> tuple[float, float]:

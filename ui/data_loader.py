@@ -2,12 +2,16 @@
 ui/data_loader.py
 データ読み込み・キャッシュ・都道府県別統計計算 (SQLite版)
 """
+import json
 import os
 import sqlite3
-import json
-import streamlit as st
+
 import pandas as pd
+import streamlit as st
+
 from app_config import DB_PATH, ERROR_METADATA
+
+from .types import ToiletDict
 
 
 def get_data_cache_token() -> tuple[int, int]:
@@ -20,10 +24,8 @@ def get_data_cache_token() -> tuple[int, int]:
 
 
 @st.cache_data(ttl=3600, max_entries=1, show_spinner="データを読み込み中...")
-def load_toilet_data(cache_token: tuple[int, int] | None = None):
-    """
-    SQLite から全データを読み込み、アプリ用の辞書形式で返す。
-    """
+def load_toilet_data(cache_token: tuple[int, int] | None = None) -> dict:
+    """SQLite から全データを読み込み、アプリ用の辞書形式で返す。"""
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -91,7 +93,7 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None):
             conn.close()
 
 
-def toilets_to_dataframe(toilets: list) -> pd.DataFrame:
+def toilets_to_dataframe(toilets: list[ToiletDict]) -> pd.DataFrame:
     """ toilets リストを DataFrame に変換（設備フラグカラムを追加）"""
     df = pd.DataFrame(toilets)
     _add_equipment_columns(df)
@@ -110,10 +112,7 @@ def _add_equipment_columns(df: pd.DataFrame) -> None:
     def _check_keywords(kw_list, targets):
         if not kw_list or not isinstance(kw_list, list):
             return False
-        for kw, _ in kw_list:
-            if kw in targets:
-                return True
-        return False
+        return any(kw in targets for kw, _ in kw_list)
 
     df["has_multi"] = df["top_keywords"].apply(
         lambda kws: _check_keywords(kws, EQUIPMENT_KEYWORDS["multi"])

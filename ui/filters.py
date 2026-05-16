@@ -4,11 +4,11 @@ ui/filters.py
 """
 import math
 import re
+
 import numpy as np
 import pandas as pd
-from typing import Optional
-from app_config import THRESHOLD
-from app_config import FILTER_CONFIG, PUBLIC_FILTER_VALUE
+
+from app_config import FILTER_CONFIG, PUBLIC_FILTER_VALUE, THRESHOLD
 
 EARTH_RADIUS_KM = 6371.0
 
@@ -67,8 +67,8 @@ def filter_toilets(
     df: pd.DataFrame,
     filter_type: str,
     prefecture: str = "全て",
-    user_lat: Optional[float] = None,
-    user_lng: Optional[float] = None,
+    user_lat: float | None = None,
+    user_lng: float | None = None,
 ) -> pd.DataFrame:
     """条件に基づいてフィルタリング。現在地があれば距離を計算。"""
     if prefecture != "全て":
@@ -88,7 +88,7 @@ def filter_toilets(
     return df
 
 
-def search_toilets(df: pd.DataFrame, query: Optional[str]) -> pd.DataFrame:
+def search_toilets(df: pd.DataFrame, query: str | None) -> pd.DataFrame:
     """名前・住所・カテゴリで検索（部分単語一致, スコア範囲対応）"""
     if not query:
         return df
@@ -121,7 +121,10 @@ def search_toilets(df: pd.DataFrame, query: Optional[str]) -> pd.DataFrame:
 
 
 def filter_by_viewport(df: pd.DataFrame, bounds: dict) -> pd.DataFrame:
-    """地図の表示範囲（bounds）に基づいてフィルタリング"""
+    """地図の表示範囲（bounds）に基づいてフィルタリング
+
+    DEPRECATED: 現在のUIでは使用されていません。テスト互換性のため維持。
+    """
     if not bounds or not isinstance(bounds, dict):
         return df
 
@@ -159,6 +162,8 @@ def get_underserved_areas_in_viewport(bounds: dict, stats: dict) -> list[dict]:
     """
     表示範囲内の都道府県から不足エリアを特定する。
     複数都道府県が表示範囲内にあれば、中心に近い順に最大5件返す。
+
+    DEPRECATED: 現在のUIでは使用されていません。テスト互換性のため維持。
     """
     if not bounds:
         return []
@@ -171,7 +176,7 @@ def get_underserved_areas_in_viewport(bounds: dict, stats: dict) -> list[dict]:
     center_lat = (sw_lat + ne_lat) / 2
     center_lng = (sw_lng + ne_lng) / 2
 
-    from app_config_prefectures import PREFECTURE_CENTERS
+    from app_config import PREFECTURE_CENTERS
 
     # 表示範囲内にある都道府県を、中心からの距離順にリスト
     visible_prefs = []

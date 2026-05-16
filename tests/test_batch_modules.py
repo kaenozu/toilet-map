@@ -11,10 +11,9 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-
-from docker_exec import scrape_query
+from auto_expand import _build_gap_entry, _load_current_stats, _lookup_city_count, _select_targets
 from city_bounds import _load_cache, _save_cache
-from auto_expand import _load_current_stats, _lookup_city_count, _build_gap_entry, _select_targets
+from docker_exec import scrape_query
 from scrape_filter import fetch_city_bounds
 from scrape_runner import _cleanup_on_success
 

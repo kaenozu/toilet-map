@@ -3,11 +3,16 @@ tests/test_generate_queries.py
 generate_queries.py のユニットテスト
 """
 import json
+
 import pytest
 from generate_queries import (
-    load_prefectures, build_queries, write_batches, _dedupe_queries,
-    PREFECTURE_QUERY_TEMPLATES, BATCH_SIZE,
+    BATCH_SIZE,
+    PREFECTURE_QUERY_TEMPLATES,
+    _dedupe_queries,
+    build_queries,
+    load_prefectures,
     main,
+    write_batches,
 )
 
 
@@ -112,7 +117,7 @@ class TestBatchSizeConstant:
 
 class TestQueryTemplatesAlias:
     def test_is_independent_copy(self):
-        from generate_queries import QUERY_TEMPLATES, CITY_QUERY_TEMPLATES
+        from generate_queries import CITY_QUERY_TEMPLATES, QUERY_TEMPLATES
         original_len = len(QUERY_TEMPLATES)
         QUERY_TEMPLATES.append("__test_dummy__")
         assert len(QUERY_TEMPLATES) == original_len + 1

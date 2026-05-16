@@ -3,11 +3,12 @@ batch/pipeline.py
 スクレイプ完了後のデータ処理パイプライン
 生データ → JSON → SQLite の更新を直列実行
 """
+import os
 import subprocess
 import sys
-import os
-from utils import logger, file_lock
+
 from exceptions import DataError
+from utils import file_lock, logger
 
 SYNC_LOCK_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", ".toilet_sync.lock")
 

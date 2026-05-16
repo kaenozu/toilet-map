@@ -3,6 +3,7 @@ tests/test_stats.py
 ui/stats.py のユニットテスト
 """
 import pytest
+
 from ui.stats import calc_avg_score, calc_score_distribution, render_score_distribution
 
 

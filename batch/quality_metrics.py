@@ -3,26 +3,25 @@ batch/quality_metrics.py
 トイレデータ品質メトリクス収集・検証
 verify_data.py から分離
 """
+import logging
 import os
 import sqlite3
-import logging
 from collections import Counter
-from typing import Iterable
-
+from collections.abc import Iterable
 
 logger = logging.getLogger(__name__)
 
 
 def _coerce_int(value: object) -> int | None:
     try:
-        return int(value)
+        return int(value)  # type: ignore[call-overload]
     except (TypeError, ValueError):
         return None
 
 
 def _coerce_float(value: object) -> float | None:
     try:
-        return float(value)
+        return float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return None
 
@@ -47,7 +46,7 @@ def collect_quality_metrics(toilets: list[dict]) -> dict:
         lat = _coerce_float(toilet.get("lat"))
         lng = _coerce_float(toilet.get("lng"))
         if place_id:
-            key = ("place_id", str(place_id))
+            key: tuple[str, ...] = ("place_id", str(place_id))
         elif data_id:
             key = ("data_id", str(data_id))
         elif lat is not None and lng is not None:

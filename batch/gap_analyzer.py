@@ -11,12 +11,10 @@ import os
 import re
 from collections import Counter
 from functools import lru_cache
-from typing import Any
 
 from utils import extract_prefecture, logger  # noqa: E402
 
 from app_config import THRESHOLD  # noqa: E402
-
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PREFECTURE_CITIES_PATH = os.path.join(SCRIPT_DIR, "prefecture_cities.json")
@@ -37,7 +35,7 @@ def _load_prefecture_catalog() -> dict[str, list[str]]:
     if not os.path.exists(PREFECTURE_CITIES_PATH):
         return {}
     try:
-        with open(PREFECTURE_CITIES_PATH, "r", encoding="utf-8") as f:
+        with open(PREFECTURE_CITIES_PATH, encoding="utf-8") as f:
             raw = json.load(f)
     except (OSError, json.JSONDecodeError):
         return {}
@@ -51,16 +49,16 @@ def _load_prefecture_catalog() -> dict[str, list[str]]:
     return catalog
 
 
-def _normalize_name(value: Any, default: str = "不明") -> str:
+def _normalize_name(value: object, default: str = "不明") -> str:
     text = str(value or "").strip()
     return text or default
 
 
-def _normalize_city_counts(city_counts: dict[Any, Any]) -> dict[str, int]:
+def _normalize_city_counts(city_counts: dict[str, int]) -> dict[str, int]:
     normalized: dict[str, int] = {}
     for city, count in city_counts.items():
         try:
-            normalized[str(city)] = int(count)
+            normalized[str(city)] = int(count)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             continue
     return normalized
@@ -130,7 +128,7 @@ def get_stats(toilets: list[dict]) -> dict:
 
         if score not in (None, ""):
             try:
-                score_sum += float(score)
+                score_sum += float(score)  # type: ignore[arg-type]
                 scored += 1
             except (TypeError, ValueError) as exc:
                 logger.warning(f"Skipping invalid toilet_score value: {score!r} ({exc})")

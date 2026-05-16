@@ -3,9 +3,10 @@ batch/docker_exec.py
 Dockerを使ったスクレイプ実行のユーティリティ
 to_docker_path と scrape_query を提供
 """
-import subprocess
 import os
+import subprocess
 import tempfile
+
 from utils import logger
 
 DOCKER_IMAGE = os.environ.get("SCRAPER_IMAGE", "gosom/google-maps-scraper")
@@ -74,7 +75,7 @@ def scrape_query(query: str, output_path: str, cwd: str = ".") -> bool:
         logger.error("Output file not created")
         return False
 
-    with open(output_path, "r", encoding="utf-8") as f:
+    with open(output_path, encoding="utf-8") as f:
         lines = f.readlines()
     if not lines:
         logger.warning("No results found for this query")

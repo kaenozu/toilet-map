@@ -12,7 +12,7 @@ repos:
       - id: mypy
         additional_dependencies: [types-setuptools]
         args: [--ignore-missing-imports, --follow-imports=silent]
-        exclude: ^(tests/|batch/|\.venv/)
+        exclude: ^(tests/|\.venv/)
 
   - repo: local
     hooks:

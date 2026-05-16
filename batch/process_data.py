@@ -4,27 +4,27 @@ Google Maps Scraper出力(JSONL)のデータ処理スクリプト
 
 使い方: python process_data.py <input.json> <output.json>
 """
-import json
 import gzip
+import json
 import sys
 from datetime import datetime
-from typing import Optional
 
 from scoring import (
     PlaceDict,
-    ToiletScoreInfo,
     ToiletResultDict,
+    ToiletScoreInfo,
     _extract_coordinates,
     _normalize_identity_text,
     compute_toilet_score,
     is_toilet_place,
 )
-from scoring_config import AREA_NAME_RE, DISPLAY_SCORE_OFFSET, DISPLAY_SCORE_MULTIPLIER
+from scoring_config import AREA_NAME_RE, DISPLAY_SCORE_MULTIPLIER, DISPLAY_SCORE_OFFSET
+from utils import extract_prefecture, load_jsonl, logger, save_json
+
 from app_config import POTENTIAL_CATEGORIES
-from utils import load_jsonl, save_json, logger, extract_prefecture
 
 
-def _build_toilet_result(place: PlaceDict, info: ToiletScoreInfo, lat: float, lng: float) -> Optional[ToiletResultDict]:
+def _build_toilet_result(place: PlaceDict, info: ToiletScoreInfo, lat: float, lng: float) -> ToiletResultDict | None:
     """スコア計算結果から表示用辞書を構築。救済対象外で情報もない場合は None を返す。"""
     is_public = is_toilet_place(place)
 
@@ -62,7 +62,7 @@ def _build_toilet_result(place: PlaceDict, info: ToiletScoreInfo, lat: float, ln
     }
 
 
-def process_place(place: PlaceDict) -> Optional[ToiletResultDict]:
+def process_place(place: PlaceDict) -> ToiletResultDict | None:
     """
     スクレイプされた1地点を処理し、アプリ表示用形式に変換。
 
@@ -119,7 +119,7 @@ def load_existing(path: str) -> dict:
             if candidate.endswith(".gz"):
                 with gzip.open(candidate, "rt", encoding="utf-8") as f:
                     return json.load(f)
-            with open(candidate, "r", encoding="utf-8") as f:
+            with open(candidate, encoding="utf-8") as f:
                 return json.load(f)
         except FileNotFoundError:
             continue

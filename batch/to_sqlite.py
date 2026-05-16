@@ -7,21 +7,25 @@ JSON データを SQLite データベースに変換し、検索と読み込み�
   - batch/db_utils.py (共通ユーティリティ)
   - data/toilets.db (出力 DB)
 """
-import sqlite3
 import math
 import os
+import sqlite3
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_JSON_PATH = os.path.join(SCRIPT_DIR, "..", "data", "toilets.json.gz")
 
-from utils import logger  # noqa: E402
 from db_utils import (  # noqa: E402
-    DB_PATH, ensure_schema,
-    dedupe_duplicate_toilets, fix_null_prefectures, update_metadata_from_db,
-    load_json, upsert_metadata, upsert_toilets,
+    DB_PATH,
+    dedupe_duplicate_toilets,
+    ensure_schema,
+    fix_null_prefectures,
+    load_json,
+    update_metadata_from_db,
+    upsert_metadata,
+    upsert_toilets,
 )
-
+from utils import logger  # noqa: E402
 
 REQUIRED_TOILET_FIELDS = {
     "title",
@@ -47,7 +51,7 @@ DEFAULT_TOILET_FIELDS = {
 
 def _coerce_float(value: object, field_name: str, index: int) -> float:
     try:
-        number = float(value)
+        number = float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError) as exc:
         raise ValueError(f"toilets[{index}] has invalid {field_name}: {value!r}") from exc
     if not math.isfinite(number):
@@ -59,7 +63,7 @@ def _coerce_int(value: object, field_name: str, index: int) -> int:
     if isinstance(value, bool):
         raise ValueError(f"toilets[{index}] has invalid {field_name}: {value!r}")
     try:
-        return int(value)
+        return int(value)  # type: ignore[call-overload]
     except (TypeError, ValueError) as exc:
         raise ValueError(f"toilets[{index}] has invalid {field_name}: {value!r}") from exc
 

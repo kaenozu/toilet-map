@@ -3,12 +3,15 @@ tests/test_app_config.py
 app_config.py のユニットテスト
 """
 import pytest
-from ui.helpers import get_score_style, esc
+
 from app_config import (
-    SCORE_RANGES, FILTER_CONFIG,
-    TILE_OPTIONS, ERROR_METADATA,
+    ERROR_METADATA,
+    FILTER_CONFIG,
+    PREFECTURE_CENTERS,
+    SCORE_RANGES,
+    TILE_OPTIONS,
 )
-from app_config_prefectures import PREFECTURE_CENTERS
+from ui.helpers import esc, get_score_style
 
 
 class TestGetScoreStyle:

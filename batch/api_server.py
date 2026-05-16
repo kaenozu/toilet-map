@@ -6,11 +6,10 @@ import os
 import re
 from collections import Counter
 
+from db_utils import load_json
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-
-from db_utils import load_json
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "toilets.json.gz")
 

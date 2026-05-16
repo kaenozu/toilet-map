@@ -3,13 +3,14 @@ kanto_phase1.py
 Phase 1 automated scraper for 7 prefecture capitals.
 Runs batch files sequentially with resume capability.
 """
+import os
 import subprocess
 import sys
-import os
 import time
 from pathlib import Path
-from utils import logger
+
 from expansion_query import find_batch_files
+from utils import logger
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -44,7 +45,7 @@ def load_phase_progress() -> set[str]:
     """完了済みの都道府県リストを読み込む"""
     done = set()
     if os.path.exists(PHASE_PROGRESS):
-        with open(PHASE_PROGRESS, "r", encoding="utf-8") as f:
+        with open(PHASE_PROGRESS, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line:
@@ -66,11 +67,11 @@ def run_scrape(pref: str, city: str, queries_path: Path, dry_run: bool = False) 
 
     # 進捗ファイルが既に100%完了しているかチェック
     if os.path.exists(progress_file):
-        with open(progress_file, "r", encoding="utf-8") as f:
+        with open(progress_file, encoding="utf-8") as f:
             lines = f.readlines()
         if lines:
             last = int(lines[-1].strip())
-            with open(queries_abs, "r", encoding="utf-8") as qf:
+            with open(queries_abs, encoding="utf-8") as qf:
                 total_queries = sum(1 for line in qf if line.strip() and not line.startswith("#"))
             if last >= total_queries:
                 logger.info(f"  [SKIP] {pref} already completed (progress: {last}/{total_queries})")

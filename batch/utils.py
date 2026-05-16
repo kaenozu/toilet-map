@@ -2,18 +2,22 @@
 batch/utils.py
 Common utility functions for batch processing.
 """
+import gzip
 import json
 import logging
-import gzip
 import os
 import platform
 import re
-import time
 import tempfile
+import time
 from contextlib import contextmanager
 from typing import Any
 
 from scoring_config import PREFECTURES
+
+# Platform-specific lock modules
+msvcrt: Any = None
+fcntl: Any = None
 
 # Configure logging
 logging.basicConfig(
@@ -25,21 +29,16 @@ logger = logging.getLogger(__name__)
 
 if platform.system() == "Windows":
     import msvcrt
-    fcntl = None
 elif platform.system() == "Linux":
     import fcntl
-    msvcrt = None
-else:
-    msvcrt = None
-    fcntl = None
 
 
-def load_jsonl(path: str) -> list[dict[str, Any]]:
+def load_jsonl(path: str) -> list[dict[str, object]]:
     """Load JSONL file into a list of dictionaries."""
     if not os.path.exists(path):
         return []
     places = []
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line:
@@ -49,7 +48,7 @@ def load_jsonl(path: str) -> list[dict[str, Any]]:
                     logger.warning(f"Failed to decode JSON line in {path}: {e}")
     return places
 
-def save_json(path: str, data: dict[str, Any], indent: int = 2, compress: bool = False) -> None:
+def save_json(path: str, data: dict[str, object], indent: int = 2, compress: bool = False) -> None:
     """Save dictionary to JSON file (optionally compressed with gzip)."""
     target_path = path
     if compress:
@@ -66,7 +65,7 @@ def count_lines(path: str) -> int:
     """Count non-empty lines in a file (excluding comments)."""
     if not os.path.exists(path):
         return 0
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return sum(1 for line in f if line.strip() and not line.startswith("#"))
 
 def ensure_dir(path: str) -> None:
@@ -80,7 +79,7 @@ def _normalize_address_text(address: str) -> str:
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-EXPANSION_STATUS_PATH = os.path.join(PROJECT_ROOT, "static", "expansion_status.json")
+EXPANSION_STATUS_PATH = os.path.join(SCRIPT_DIR, "expansion_status.json")
 EXPANSION_STATUS_LOCK_PATH = os.path.join(SCRIPT_DIR, ".expansion_status.lock")
 EXPANSION_STATUS_RETENTION_SEC = 300
 
@@ -90,14 +89,14 @@ def read_json_file(path: str, default: Any) -> Any:
     if not os.path.exists(path):
         return default
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError) as exc:
         logger.warning(f"Failed to read JSON file: {path} ({exc})")
         return default
 
 
-def write_json_atomic(path: str, data: Any) -> None:
+def write_json_atomic(path: str, data: object) -> None:
     """Write JSON atomically."""
     directory = os.path.dirname(path)
     if directory:
@@ -115,7 +114,7 @@ def write_json_atomic(path: str, data: Any) -> None:
                 logger.warning(f"Could not remove temporary file {tmp_path}: {exc}")
 
 
-def update_expansion_status(run_id: str, data: dict[str, Any] | None = None, remove: bool = False) -> dict[str, Any]:
+def update_expansion_status(run_id: str, data: dict[str, object] | None = None, remove: bool = False) -> dict[str, object]:
     """Merge one run entry into the shared expansion status file."""
     with file_lock(EXPANSION_STATUS_LOCK_PATH):
         now = time.time()

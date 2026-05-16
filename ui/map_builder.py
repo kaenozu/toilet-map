@@ -7,16 +7,17 @@ import math
 
 import folium
 from folium.plugins import MarkerCluster
+
 from app_config import (
-    PUBLIC_MARKER_RADIUS,
     NORMAL_MARKER_RADIUS,
     POPUP_FIX_JS,
+    PREFECTURE_CENTERS,
+    PUBLIC_MARKER_RADIUS,
 )
+
 from .helpers import get_score_style
-from app_config_prefectures import PREFECTURE_CENTERS
 from .popups import build_popup_html
 from .types import ToiletDict
-
 
 CLUSTER_THRESHOLDS = [(500, 50), (1000, 80), (float("inf"), 100)]
 FIT_BOUNDS_PADDING = (24, 24)

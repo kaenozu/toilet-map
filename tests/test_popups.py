@@ -3,9 +3,13 @@ tests/test_popups.py
 ui/popups.py のユニットテスト
 """
 import pytest
+
 from ui.popups import (
-    build_popup_html, _build_public_badge,
-    _build_keyword_tags, _build_review_html, _build_link_html,
+    _build_keyword_tags,
+    _build_link_html,
+    _build_public_badge,
+    _build_review_html,
+    build_popup_html,
 )
 
 

@@ -1,0 +1,133 @@
+{
+  "updated_at": 1778759011.8753574,
+  "runs": [
+    {
+      "prefecture": "埼玉県",
+      "city": "さいたま市",
+      "status": "running",
+      "message": "レストラン in さいたま市",
+      "pid": 33668,
+      "started_at": 1778554562.0527263,
+      "progress": {
+        "completed_queries": 2,
+        "total_queries": 12,
+        "success_count": 2,
+        "failed_count": 4
+      },
+      "run_id": "埼玉県_さいたま市",
+      "updated_at": 1778557540.8414726
+    },
+    {
+      "prefecture": "東京都",
+      "city": "千代田区",
+      "status": "running",
+      "message": "レストラン in 千代田区",
+      "pid": 17744,
+      "started_at": 1778558282.0887842,
+      "progress": {
+        "completed_queries": 5,
+        "total_queries": 12,
+        "success_count": 5,
+        "failed_count": 1
+      },
+      "run_id": "東京都_千代田区",
+      "updated_at": 1778560007.6785896
+    },
+    {
+      "prefecture": "愛知県",
+      "city": "あま市",
+      "status": "running",
+      "message": "レストラン in 愛知県あま市",
+      "pid": 41992,
+      "started_at": 1778674325.113807,
+      "progress": {
+        "completed_queries": 5,
+        "total_queries": 12,
+        "success_count": 5,
+        "failed_count": 0
+      },
+      "run_id": "愛知県_あま市",
+      "updated_at": 1778675200.4409103
+    },
+    {
+      "prefecture": "愛知県",
+      "city": "みよし市",
+      "status": "running",
+      "message": "started",
+      "pid": 3008,
+      "started_at": 1778739123.5153866,
+      "progress": {
+        "completed_queries": 0,
+        "total_queries": 12,
+        "success_count": 0,
+        "failed_count": 0
+      },
+      "run_id": "愛知県_みよし市",
+      "updated_at": 1778739123.5163877
+    },
+    {
+      "prefecture": "愛知県",
+      "city": "一宮市",
+      "status": "running",
+      "message": "started",
+      "pid": 19648,
+      "started_at": 1778739191.4162703,
+      "progress": {
+        "completed_queries": 0,
+        "total_queries": 12,
+        "success_count": 0,
+        "failed_count": 0
+      },
+      "run_id": "愛知県_一宮市",
+      "updated_at": 1778739191.416812
+    },
+    {
+      "prefecture": "愛知県",
+      "city": "刈谷市",
+      "status": "running",
+      "message": "started",
+      "pid": 23492,
+      "started_at": 1778739338.9036584,
+      "progress": {
+        "completed_queries": 0,
+        "total_queries": 12,
+        "success_count": 0,
+        "failed_count": 0
+      },
+      "run_id": "愛知県_刈谷市",
+      "updated_at": 1778739338.904658
+    },
+    {
+      "prefecture": "愛知県",
+      "city": "北名古屋市",
+      "status": "running",
+      "message": "公衆トイレ in 愛知県",
+      "pid": 27420,
+      "started_at": 1778739531.2887356,
+      "progress": {
+        "completed_queries": 10,
+        "total_queries": 12,
+        "success_count": 10,
+        "failed_count": 0
+      },
+      "run_id": "愛知県_北名古屋市",
+      "updated_at": 1778741279.289606
+    },
+    {
+      "prefecture": "愛知県",
+      "city": "大治町",
+      "status": "running",
+      "message": "公園 トイレ in 愛知県大治町",
+      "pid": 6084,
+      "started_at": 1778757745.8929565,
+      "progress": {
+        "completed_queries": 8,
+        "total_queries": 12,
+        "success_count": 8,
+        "failed_count": 0
+      },
+      "run_id": "愛知県_大治町",
+      "updated_at": 1778759011.8753574
+    }
+  ]
+}

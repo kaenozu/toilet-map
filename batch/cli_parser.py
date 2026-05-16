@@ -2,9 +2,10 @@
 batch/cli_parser.py
 scrape_runner.py の CLI 引数解析とクエリファイルからの都市・県自動検出
 """
-import sys
 import os
 import re
+import sys
+
 from utils import logger
 
 FILTER_CITY = os.environ.get("CITY", "")
@@ -12,7 +13,7 @@ FILTER_PREF = os.environ.get("PREFECTURE", "")
 
 
 def parse_args() -> dict:
-    args = {
+    args: dict[str, str | bool | int | None] = {
         "city": FILTER_CITY,
         "prefecture": FILTER_PREF,
         "progress_file": None,
@@ -47,10 +48,10 @@ def parse_args() -> dict:
 def detect_city_from_queries(queries_path: str) -> tuple[str, str]:
     city = ""
     pref = ""
-    city_counts = {}
+    city_counts: dict[str, int] = {}
 
     try:
-        with open(queries_path, "r", encoding="utf-8") as f:
+        with open(queries_path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line.startswith("# city:"):
@@ -73,6 +74,6 @@ def detect_city_from_queries(queries_path: str) -> tuple[str, str]:
         logger.warning(f"Failed to read query file: {queries_path} ({exc})")
 
     if not city and city_counts:
-        city = max(city_counts, key=city_counts.get)
+        city = max(city_counts, key=lambda k: city_counts[k])
 
     return city, pref

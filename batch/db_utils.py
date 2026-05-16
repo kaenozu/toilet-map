@@ -2,11 +2,12 @@
 batch/db_utils.py
 SQLite 共通ユーティリティ (to_sqlite.py, merge_to_db.py で共用)
 """
-import sqlite3
-import json
 import gzip
+import json
 import os
+import sqlite3
 from datetime import datetime
+
 from utils import extract_prefecture
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "toilets.db")
@@ -157,7 +158,7 @@ def load_json(path: str) -> dict:
     if path.endswith(".gz"):
         with gzip.open(path, "rt", encoding="utf-8") as f:
             return json.load(f)
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 

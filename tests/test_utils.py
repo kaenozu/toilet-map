@@ -2,8 +2,8 @@
 tests/test_utils.py
 batch/utils.py のユニットテスト
 """
-import json
 import gzip
+import json
 import os
 import sys
 from unittest.mock import MagicMock
@@ -64,7 +64,8 @@ class TestSaveJson:
         path = str(tmp_path / "out.json.gz")
         data = {"key": "value"}
         batch_utils.save_json(path, data, compress=True)
-        assert json.loads(gzip.open(tmp_path / "out.json.gz", "rt").read()) == data
+        with gzip.open(tmp_path / "out.json.gz", "rt") as f:
+            assert json.loads(f.read()) == data
 
 
 class TestCountLines:
@@ -185,9 +186,8 @@ class TestRuntimeError:
     def test_file_lock_runtime_error(self, monkeypatch):
         monkeypatch.setattr("utils.msvcrt", None)
         monkeypatch.setattr("utils.fcntl", None)
-        with pytest.raises(RuntimeError, match="File locking is not supported"):
-            with batch_utils.file_lock("/tmp/nonexistent/test.lock"):
-                pass
+        with pytest.raises(RuntimeError, match="File locking is not supported"), batch_utils.file_lock("/tmp/nonexistent/test.lock"):
+            pass
 
 
 class TestFileLock:
@@ -202,9 +202,8 @@ class TestFileLock:
 
         fcntl_mod.flock = _block_flock
         try:
-            with pytest.raises(TimeoutError):
-                with batch_utils.file_lock(lock_path, timeout=0.1, poll_interval=0.05):
-                    pass
+            with pytest.raises(TimeoutError), batch_utils.file_lock(lock_path, timeout=0.1, poll_interval=0.05):
+                pass
         finally:
             fcntl_mod.flock = original_flock
 

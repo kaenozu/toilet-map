@@ -3,6 +3,7 @@ ui/components.py
 Streamlit UI components for toilet map
 """
 import streamlit as st
+
 from .helpers import esc, get_score_style, safe_href
 from .types import ToiletDict
 

@@ -1,6 +1,5 @@
 """
 tests/test_map_builder.py
-from app_config_prefectures import PREFECTURE_CENTERS
 ui/map_builder.py の回帰テスト
 """
 
@@ -105,7 +104,7 @@ class TestCalcMapCenter:
         assert zoom == 11
 
     def test_prefecture_center_fallback_when_stats_low(self, monkeypatch):
-        from ui.map_builder import calc_map_center, PREFECTURE_CENTERS
+        from ui.map_builder import PREFECTURE_CENTERS, calc_map_center
 
         monkeypatch.setitem(PREFECTURE_CENTERS, "東京都", (35.5, 139.5))
         stats = {"東京都": {"count": 2, "center_lat": 0, "center_lng": 0}}

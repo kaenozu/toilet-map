@@ -2,12 +2,17 @@
 tests/test_filters.py
 ui/filters.py のユニットテスト
 """
-import pytest
 import pandas as pd
+import pytest
+
 from ui.filters import (
-    filter_toilets, search_toilets, haversine_distance,
-    filter_by_viewport, get_underserved_areas_in_viewport,
-    _extract_bounds_coordinates, _apply_equipment_filter,
+    _apply_equipment_filter,
+    _extract_bounds_coordinates,
+    filter_by_viewport,
+    filter_toilets,
+    get_underserved_areas_in_viewport,
+    haversine_distance,
+    search_toilets,
 )
 
 

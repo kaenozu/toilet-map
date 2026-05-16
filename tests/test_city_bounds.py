@@ -3,7 +3,8 @@ tests/test_city_bounds.py
 batch/city_bounds.py のユニットテスト
 """
 import json
-from city_bounds import is_in_bounds, filter_raw_data
+
+from city_bounds import filter_raw_data, is_in_bounds
 
 
 class TestIsInBounds:

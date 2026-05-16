@@ -8,13 +8,18 @@ import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from utils import logger
+
 from generate_queries import (
     CITY_QUERY_TEMPLATES as GENERATE_CITY_QUERY_TEMPLATES,
+)
+from generate_queries import (
     PREFECTURE_QUERY_TEMPLATES as GENERATE_PREFECTURE_QUERY_TEMPLATES,
+)
+from generate_queries import (
     build_queries,
     write_batches,
 )
+from utils import logger
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 QUERIES_DIR = os.path.join(SCRIPT_DIR, "queries.d")

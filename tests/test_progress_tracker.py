@@ -3,7 +3,10 @@ tests/test_progress_tracker.py
 progress_tracker.py のユニットテスト（ファイルI/O）
 """
 from progress_tracker import (
-    load_progress, save_progress, publish_expansion_status, merge_part_files,
+    load_progress,
+    merge_part_files,
+    publish_expansion_status,
+    save_progress,
 )
 
 

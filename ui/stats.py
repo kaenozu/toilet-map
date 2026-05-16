@@ -3,20 +3,23 @@ ui/stats.py
 統計ダッシュボード表示（Altair グラフ）
 app.py から分離
 """
-import streamlit as st
-import pandas as pd
 import altair as alt
+import pandas as pd
+import streamlit as st
+
 from app_config import SCORE_DISTRIBUTION_RANGES
 
+from .types import ToiletDict
 
-def calc_avg_score(toilets: list) -> float:
+
+def calc_avg_score(toilets: list[ToiletDict]) -> float:
     scored = [t for t in toilets if t.get("toilet_score") is not None and t.get("toilet_score", 0) > 0]
     if not scored:
         return 0.0
     return sum(t["toilet_score"] for t in scored) / len(scored)
 
 
-def calc_score_distribution(toilets: list) -> list[dict]:
+def calc_score_distribution(toilets: list[ToiletDict]) -> list[dict[str, object]]:
     scored = [t for t in toilets if t.get("toilet_score", 0) > 0]
     if not scored:
         return []
@@ -35,7 +38,7 @@ def calc_score_distribution(toilets: list) -> list[dict]:
     return result
 
 
-def render_score_distribution(toilets: list):
+def render_score_distribution(toilets: list[ToiletDict]) -> None:
     dist = calc_score_distribution(toilets)
     if not dist:
         return
@@ -49,7 +52,7 @@ def render_score_distribution(toilets: list):
     st.altair_chart(chart, use_container_width=True)
 
 
-def render_stats(meta: dict, toilets: list, t: dict):
+def render_stats(meta: dict, toilets: list[ToiletDict], t: dict) -> None:
     with st.expander(f"{t['stats']}（{t.get('stats_all', '全体')}）"):
         col1, col2, col3, col4 = st.columns(4)
         with col1:

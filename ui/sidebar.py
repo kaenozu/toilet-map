@@ -6,12 +6,14 @@ StreamlitのサイドバーUIを描画する
 関連ファイル: app.py, ui/i18n.py, ui/query_params.py, ui/data_loader.py
 """
 
+import time
 from typing import NamedTuple
 
 import streamlit as st
 from streamlit_js_eval import streamlit_js_eval
+
 from app_config import FILTER_CONFIG, FILTER_I18N_KEYS, TILE_OPTIONS
-from ui.i18n import LANGUAGES, LANGUAGE_OPTIONS, get_language_strings
+from ui.i18n import LANGUAGE_OPTIONS, LANGUAGES, get_language_strings
 from ui.query_params import resolve_ui_state_from_query_params
 
 
@@ -29,7 +31,7 @@ class SidebarResult(NamedTuple):
     translated_to_internal: dict
 
 
-def get_translated_filters(lang: str) -> tuple[dict, dict]:
+def get_translated_filters(lang: str) -> tuple[dict[str, str], dict[str, str]]:
     """
     フィルタ表示名と内部値のマッピングを生成する
     """
@@ -43,9 +45,7 @@ def get_translated_filters(lang: str) -> tuple[dict, dict]:
 
 
 def build_geolocation_js() -> str:
-    """
-    位置情報取得のJavaScript式を生成する
-    """
+    """位置情報取得のJavaScript式を生成する"""
     return (
         "new Promise(resolve => navigator.geolocation.getCurrentPosition("
         "pos => resolve({latitude: pos.coords.latitude, longitude: pos.coords.longitude}), "
@@ -61,10 +61,25 @@ def _handle_gps_section(t: dict) -> tuple[tuple | None, bool]:
     if not gps_enabled:
         st.session_state.pop("_user_location", None)
         st.session_state.pop("_gps_error", None)
+        st.session_state.pop("_gps_attempt", None)
     elif "_user_location" not in st.session_state and "_gps_error" not in st.session_state:
-        loc = streamlit_js_eval(
-            js_expressions=build_geolocation_js(), key="location"
-        )
+        max_attempts = 2
+        attempt = st.session_state.get("_gps_attempt", 0)
+        loc = None
+        while attempt < max_attempts:
+            loc = streamlit_js_eval(
+                js_expressions=build_geolocation_js(), key=f"location_{attempt}"
+            )
+            if isinstance(loc, dict):
+                if "latitude" in loc and "longitude" in loc:
+                    break
+                if "error" in loc:
+                    attempt += 1
+                    st.session_state["_gps_attempt"] = attempt
+                    if attempt < max_attempts:
+                        time.sleep(2 ** attempt)
+                    continue
+            break
         if isinstance(loc, dict):
             if "latitude" in loc and "longitude" in loc:
                 st.session_state["_user_location"] = (
@@ -86,7 +101,7 @@ def _handle_gps_section(t: dict) -> tuple[tuple | None, bool]:
     return user_location, gps_enabled
 
 
-def _render_query_state_section(query_params: dict, prefectures: list[str], translated_to_internal: dict, t: dict) -> None:
+def _render_query_state_section(query_params: dict, prefectures: list[str], translated_to_internal: dict[str, str], t: dict) -> None:
     ui_state = resolve_ui_state_from_query_params(
         query_params, prefectures, translated_to_internal, t
     )
@@ -95,7 +110,7 @@ def _render_query_state_section(query_params: dict, prefectures: list[str], tran
             st.session_state[key] = value
 
 
-def _render_filter_section(t: dict, prefectures: list[str], translated_filters: dict) -> tuple[str, str, str]:
+def _render_filter_section(t: dict, prefectures: list[str], translated_filters: dict[str, str]) -> tuple[str, str, str, str]:
     selected_pref = st.selectbox(
         t["prefecture"], prefectures, key="pref_select"
     )

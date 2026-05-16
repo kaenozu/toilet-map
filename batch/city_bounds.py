@@ -7,9 +7,8 @@ import json
 import os
 import time
 import urllib.error
-import urllib.request
 import urllib.parse
-from typing import Optional
+import urllib.request
 
 from utils import logger  # noqa: E402
 
@@ -21,7 +20,7 @@ def _load_cache() -> dict:
     if not os.path.exists(CACHE_FILE):
         return {}
     try:
-        with open(CACHE_FILE, "r", encoding="utf-8") as f:
+        with open(CACHE_FILE, encoding="utf-8") as f:
             return json.load(f)
     except (json.JSONDecodeError, OSError):
         return {}
@@ -32,7 +31,7 @@ def _save_cache(cache: dict):
         json.dump(cache, f, ensure_ascii=False, indent=2)
 
 
-def get_city_bounds(city: str, prefecture: str = "") -> Optional[dict]:
+def get_city_bounds(city: str, prefecture: str = "") -> dict | None:
     cache = _load_cache()
     key = f"{prefecture}{city}"
     if key in cache:
@@ -78,10 +77,10 @@ def is_in_bounds(lat: float, lng: float, bounds: dict) -> bool:
     return bounds["south"] <= lat <= bounds["north"] and bounds["west"] <= lng <= bounds["east"]
 
 
-def filter_raw_data(input_path: str, output_path: str, city_name: str, bounds: Optional[dict] = None) -> tuple[int, int]:
+def filter_raw_data(input_path: str, output_path: str, city_name: str, bounds: dict | None = None) -> tuple[int, int]:
     kept = 0
     total = 0
-    with open(input_path, "r", encoding="utf-8") as inf, open(output_path, "w", encoding="utf-8") as outf:
+    with open(input_path, encoding="utf-8") as inf, open(output_path, "w", encoding="utf-8") as outf:
         for line in inf:
             total += 1
             stripped = line.strip()

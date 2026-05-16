@@ -5,27 +5,30 @@ Streamlit版トイレきれい度マップ
 
 from time import perf_counter
 
+import pandas as pd
 import streamlit as st
 from streamlit_folium import st_folium
 
-from ui.styles import MOBILE_CSS
 from app_config import TILE_OPTIONS
 from ui.components import build_data_freshness_text, build_result_context_text, render_score_legend, render_toilet_card
-from ui.data_loader import load_toilet_data, toilets_to_dataframe, get_prefectures, get_data_cache_token
-from ui.filters import filter_toilets, search_toilets
-from ui.stats import render_stats
+from ui.data_loader import get_data_cache_token, get_prefectures, load_toilet_data, toilets_to_dataframe
 from ui.data_quality import render_data_quality
-from ui.map_builder import build_map, calc_map_center
+from ui.filters import filter_toilets, search_toilets
 from ui.i18n import APP_TITLE, DEFAULT_LANGUAGE, get_language_strings
-from ui.pagination import init_page_state, reset_page, calc_pagination, render_pagination
+from ui.map_builder import build_map, calc_map_center
+from ui.pagination import calc_pagination, init_page_state, render_pagination, reset_page
 from ui.query_params import (
-    read_query_params, write_query_params, apply_language_query_param,
+    apply_language_query_param,
     build_query_params_from_state,
+    read_query_params,
+    write_query_params,
 )
 from ui.sidebar import render_sidebar
+from ui.stats import render_stats
+from ui.styles import MOBILE_CSS
 
 
-def _load_and_prepare():
+def _load_and_prepare() -> tuple[dict, pd.DataFrame, list[str], dict, dict, dict, list]:
     query_params = read_query_params()
     apply_language_query_param(query_params)
     current_lang = st.session_state.get("lang_select", DEFAULT_LANGUAGE)
@@ -39,7 +42,7 @@ def _load_and_prepare():
     return meta, df, prefectures, prefecture_stats, t, query_params, toilets
 
 
-def _process_filters(df, selected_pref, internal_filter, search_query, sort_order, user_location, t):
+def _process_filters(df: pd.DataFrame, selected_pref: str, internal_filter: str, search_query: str, sort_order: str, user_location: tuple | None, t: dict) -> tuple[pd.DataFrame, float]:
     user_lat, user_lng = user_location if user_location else (None, None)
     filter_started_at = perf_counter()
     filtered = filter_toilets(df, internal_filter, selected_pref, user_lat, user_lng)
@@ -52,7 +55,7 @@ def _process_filters(df, selected_pref, internal_filter, search_query, sort_orde
     return filtered, filter_elapsed_ms
 
 
-def _render_main_content(filtered, map_items, meta, t, selected_pref, sort_order, dark_mode, selected_tile, toilets, filter_elapsed_ms, prefecture_stats, internal_filter, search_query):
+def _render_main_content(filtered: pd.DataFrame, map_items: list[dict], meta: dict, t: dict, selected_pref: str, sort_order: str, dark_mode: bool, selected_tile: str, toilets: list, filter_elapsed_ms: float, prefecture_stats: dict, internal_filter: str, search_query: str) -> tuple[bool, int, pd.DataFrame]:
     map_lat, map_lng, map_zoom = calc_map_center(selected_pref, meta, prefecture_stats)
     total_items = len(filtered)
     init_page_state()
@@ -78,7 +81,10 @@ def _render_main_content(filtered, map_items, meta, t, selected_pref, sort_order
             t,
         )
     )
-    st_folium(m, height=500, returned_objects=[], use_container_width=True)
+    try:
+        st_folium(m, height=500, returned_objects=[], use_container_width=True)
+    except Exception as e:
+        st.error(f"Map rendering failed: {e}")
 
     render_stats(meta, map_items, t)
     render_data_quality(meta, toilets, t)
@@ -98,7 +104,7 @@ def _render_main_content(filtered, map_items, meta, t, selected_pref, sort_order
     return dark_mode, page, display_items
 
 
-def _inject_html():
+def _inject_html() -> None:
     st.markdown(
         """
         <style>
@@ -130,19 +136,6 @@ def _inject_html():
         unsafe_allow_html=True,
     )
     st.markdown(MOBILE_CSS, unsafe_allow_html=True)
-    st.markdown(
-        """
-        <style>
-        @keyframes skeleton-pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
-        .skeleton {
-            display:inline-block;height:1em;background:linear-gradient(90deg,#e0e0e0 25%,#f0f0f0 50%,#e0e0e0 75%);
-            background-size:200% 100%;animation:skeleton-pulse 1.5s ease-in-out infinite;
-            border-radius:4px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
 
 
 def main() -> None:
@@ -186,8 +179,7 @@ def main() -> None:
 
     if dark_mode:
         st.markdown(
-            "<style>.toilet-card{background:#1e1e1e!important;color:#e0e0e0!important;border-color:#333!important;}"
-            ".toilet-card .toilet-card-title,.toilet-card .toilet-card-subtitle,.toilet-card .toilet-card-meta,.toilet-card .toilet-card-arrow{color:inherit!important}</style>",
+            '<link rel="stylesheet" href="/static/dark_mode.css">',
             unsafe_allow_html=True,
         )
 

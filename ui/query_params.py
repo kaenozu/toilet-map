@@ -3,6 +3,7 @@ ui/query_params.py
 URL query parameter handling for Streamlit app.
 """
 import streamlit as st
+
 from ui.i18n import LANGUAGE_CODE_TO_LABEL
 
 

@@ -2,10 +2,11 @@
 tests/test_sidebar.py
 ui/sidebar.py のユニットテスト
 """
-import streamlit as st
 from unittest.mock import MagicMock
 
-from ui.sidebar import get_translated_filters, build_geolocation_js, render_sidebar, SidebarResult
+import streamlit as st
+
+from ui.sidebar import SidebarResult, build_geolocation_js, get_translated_filters, render_sidebar
 
 
 class TestGetTranslatedFilters:
