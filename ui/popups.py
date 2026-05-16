@@ -7,10 +7,9 @@ from .types import ToiletDict
 
 
 def clean(s: str | None) -> str:
-    """文字列をサニタイズしてシングルクォートをエスケープ"""
     if not s:
         return ""
-    return esc(str(s)).replace("'", "\\'").replace("\n", " ").replace("\r", " ")
+    return esc(str(s)).replace("\n", " ").replace("\r", " ")
 
 
 def _build_public_badge(is_public: bool) -> str:
