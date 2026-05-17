@@ -1,0 +1,26 @@
+name: Load Test
+on:
+  schedule:
+    - cron: '0 8 * * 1'  # Monday 08:00 UTC
+  workflow_dispatch:
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt locust
+      - name: Start Streamlit and run load test
+        run: |
+          streamlit run app.py --server.port 18503 --server.headless true &
+          sleep 10
+          locust -f tests/load/locustfile.py --host http://localhost:18503 \
+            --headless -u 10 -r 2 --run-time 30s \
+            --csv=load-test-report
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-report
+          path: load-test-report*.csv

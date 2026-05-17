@@ -18,6 +18,10 @@ jobs:
         run: pip install ruff pre-commit
       - name: Lint with ruff
         run: ruff check .
+      - name: Security audit (pip-audit)
+        run: pip install pip-audit && pip-audit -r requirements.txt
+      - name: Safety check
+        run: pip install safety && safety check -r requirements.txt
       - name: Run pre-commit
         run: pre-commit run --all-files --show-diff-on-failure
 

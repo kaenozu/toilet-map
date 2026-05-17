@@ -1,0 +1,20 @@
+name: A11Y Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  a11y:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: python -m playwright install chromium --with-deps
+      - run: pytest tests/e2e/test_a11y.py -v --tb=short
+        timeout-minutes: 5

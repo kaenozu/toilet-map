@@ -227,6 +227,7 @@ LANGUAGES = {
         "shortcuts": "⌨️ 快捷键",
         "shortcut_info": "G: GPS切换 | /: 搜索聚焦",
         "tile_select": "地图瓦片",
+        "csv_download": "📥 CSV 下载",
     },
 }
 

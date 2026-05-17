@@ -2,3 +2,7 @@ pytest>=9.0.3
 pytest-cov>=7.1.0
 mypy>=2.1.0
 types-setuptools>=82.0.0.20260508
+playwright~=1.50
+locust~=2.30
+packaging~=24.0
+safety~=3.0

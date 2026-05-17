@@ -22,6 +22,7 @@ from ui.i18n import APP_TITLE, DEFAULT_LANGUAGE, get_language_strings
 from ui.map_builder import build_map, calc_map_center
 from ui.metrics import get_metrics, render_metrics_dashboard
 from ui.pagination import calc_pagination, init_page_state, render_pagination, reset_page
+from ui.pipeline_status import render_pipeline_status
 from ui.quality_dashboard import render_quality_dashboard
 from ui.query_params import (
     apply_language_query_param,
@@ -106,6 +107,7 @@ def _render_main_content(filtered: pd.DataFrame, map_items: list[dict], meta: di
     render_metrics_dashboard()
     render_stats(meta, map_items, t)
     render_quality_dashboard(meta, toilets, t)
+    render_pipeline_status()
 
     if total_items > 0:
         render_pagination(total_items, page, total_pages, t)

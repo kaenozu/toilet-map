@@ -52,6 +52,9 @@ batch/expansion_status.json
 # IDE
 .idea/
 
+# DB backups
+data/backups/
+
 # Coverage & dev artifacts
 .coverage
 Modelfile
