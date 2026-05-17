@@ -77,7 +77,7 @@ def _build_links_html(t: ToiletDict) -> str:
     return "".join(parts)
 
 
-def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: dict | None = None) -> str:
+def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: dict | None = None, compact: bool = False) -> str:
     """トイレカードのHTMLを返す"""
     t = toilet
     color, emoji, _ = get_score_style(t["toilet_score"])
@@ -99,6 +99,33 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
         if t.get("is_public_toilet")
         else ""
     )
+
+    if compact:
+        aria_label = f"{esc(t['title'])} - {t['toilet_score']:.0f}点"
+        return f"""
+        <div class="toilet-card" role="listitem" aria-label="{aria_label}"
+            style="display:flex;align-items:center;gap:6px;padding:4px 8px;
+            background:#ffffff;color:#222222;border-radius:6px;margin-bottom:2px;
+            border:1px solid #e0e0e0;min-height:40px;
+            -webkit-tap-highlight-color:transparent;">
+            {rank_html}
+            <div style="min-width:36px;text-align:center;">
+                <div aria-hidden="true" style="font-size:18px;font-weight:700;color:{color};line-height:1;">{emoji}</div>
+                <div style="font-size:11px;font-weight:600;color:{color};">{t['toilet_score']:.0f}</div>
+            </div>
+            <div style="flex:1;min-width:0;color:#222222;">
+                <div style="font-size:12px;font-weight:600;color:#222222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    {esc(t['title'])}
+                </div>
+                <div style="font-size:10px;color:#666666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    &#x1F4CD; {esc(t.get('address', ''))}
+                </div>
+                <div style="font-size:10px;color:#666666;">
+                    口コミ {t.get('review_count', 0)}件
+                </div>
+            </div>
+        </div>
+        """.strip()
 
     links_html = _build_links_html(t)
 
@@ -133,6 +160,6 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
     """.strip()
 
 
-def render_toilet_card(toilet: ToiletDict, rank: int | None = None, meta: dict[str, object] | None = None) -> None:
+def render_toilet_card(toilet: ToiletDict, rank: int | None = None, meta: dict[str, object] | None = None, compact: bool = False) -> None:
     """ランキングリストのトイレカード（1行）"""
-    st.markdown(build_toilet_card_html(toilet, rank, meta), unsafe_allow_html=True)
+    st.markdown(build_toilet_card_html(toilet, rank, meta, compact=compact), unsafe_allow_html=True)

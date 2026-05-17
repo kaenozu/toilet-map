@@ -129,6 +129,28 @@ def _render_filter_section(t: dict, prefectures: list[str], translated_filters: 
         horizontal=True,
         key="sort_select",
     )
+
+    st.checkbox(t.get("compact_mode", "コンパクト表示"), key="compact_mode")
+
+    with st.expander(t.get("display_settings", "表示設定")):
+        font_size_labels = {"small": t.get("font_small", "小"), "medium": t.get("font_medium", "中"), "large": t.get("font_large", "大")}
+        size_key = st.selectbox(
+            t.get("font_size", "フォントサイズ"),
+            list(font_size_labels.values()),
+            index=1,
+            key="font_size_select",
+        )
+        size_map = {v: k for k, v in font_size_labels.items()}
+        if size_key in size_map:
+            st.session_state["font_size"] = size_map[size_key]
+        font_family = st.selectbox(
+            t.get("font_family", "フォント"),
+            ["sans-serif", "serif", "monospace"],
+            index=0,
+            key="font_family_select",
+        )
+        if font_family:
+            st.session_state["font_family"] = font_family
     return selected_pref, filter_type, search_query, sort_order
 
 

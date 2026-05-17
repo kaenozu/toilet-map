@@ -3,6 +3,8 @@ ui/data_loader.py
 データ読み込み・キャッシュ・都道府県別統計計算 (SQLite版)
 """
 import json
+import logging
+import math
 import os
 import sqlite3
 
@@ -12,6 +14,8 @@ import streamlit as st
 from app_config import DB_PATH, ERROR_METADATA
 
 from .types import ToiletDict
+
+logger = logging.getLogger(__name__)
 
 
 def get_data_cache_token() -> tuple[int, int]:
@@ -23,12 +27,17 @@ def get_data_cache_token() -> tuple[int, int]:
     return stat.st_mtime_ns, stat.st_size
 
 
+@st.cache_resource
+def get_db_connection() -> sqlite3.Connection:
+    """SQLite接続をキャッシュして返す（@st.cache_resource で管理）。"""
+    return sqlite3.connect(DB_PATH)
+
+
 @st.cache_data(ttl=3600, max_entries=1, show_spinner="データを読み込み中...")
 def load_toilet_data(cache_token: tuple[int, int] | None = None) -> dict:
     """SQLite から全データを読み込み、アプリ用の辞書形式で返す。"""
-    conn = None
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_db_connection()
         # トイレデータ読み込み
         df = pd.read_sql("SELECT * FROM toilets", conn)
         # メタデータ読み込み
@@ -70,27 +79,25 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None) -> dict:
         pref_stats = {}
         for t in toilets:
             pref = t.get("prefecture")
-            if not pref:
+            if not pref or (isinstance(pref, float) and math.isnan(pref)):
                 continue
             if pref not in pref_stats:
-                pref_stats[pref] = {"count": 0, "lats": [], "lngs": []}
+                pref_stats[pref] = {"count": 0, "lat_sum": 0.0, "lng_sum": 0.0}
             pref_stats[pref]["count"] += 1
-            pref_stats[pref]["lats"].append(t["lat"])
-            pref_stats[pref]["lngs"].append(t["lng"])
+            pref_stats[pref]["lat_sum"] += t["lat"] or 0
+            pref_stats[pref]["lng_sum"] += t["lng"] or 0
 
-        for pref, data in pref_stats.items():
-            data["center_lat"] = sum(data["lats"]) / len(data["lats"]) if data["lats"] else 0
-            data["center_lng"] = sum(data["lngs"]) / len(data["lngs"]) if data["lngs"] else 0
-            del data["lats"]
-            del data["lngs"]
+        for data in pref_stats.values():
+            c = data.pop("count")
+            data["center_lat"] = data.pop("lat_sum") / c if c else 0
+            data["center_lng"] = data.pop("lng_sum") / c if c else 0
 
         return {"metadata": metadata, "toilets": toilets, "pref_stats": pref_stats}
     except sqlite3.Error as e:
         st.error(f"データベース読み込みエラー: {e}")
+        logger.exception("データベース読み込みエラー")
+        st.session_state["_data_error"] = True
         return {"metadata": ERROR_METADATA, "toilets": [], "pref_stats": {}}
-    finally:
-        if conn is not None:
-            conn.close()
 
 
 def toilets_to_dataframe(toilets: list[ToiletDict]) -> pd.DataFrame:

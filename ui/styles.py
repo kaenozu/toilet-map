@@ -4,6 +4,24 @@ Mobile CSS styles for Streamlit app
 CSS inlined directly; no file I/O at import time.
 """
 
+import streamlit as st
+
+
+def inject_theme_styles() -> None:
+    """Font/theme customization CSS based on session state (B8)."""
+    font_size_map = {"small": "14px", "medium": "16px", "large": "18px"}
+    size = st.session_state.get("font_size", "medium")
+    family = st.session_state.get("font_family", "sans-serif")
+    px = font_size_map.get(size, "16px")
+    st.markdown(
+        f"<style>"
+        f":root {{ font-size: {px}; --font-family: {family}; }}"
+        f"body, .stApp {{ font-family: {family} !important; }}"
+        f"</style>",
+        unsafe_allow_html=True,
+    )
+
+
 MOBILE_CSS = """<style>
 /* ===== モバイル / サイドバー最適化 ===== */
 
@@ -74,7 +92,11 @@ section[data-testid="stSidebar"][aria-expanded="false"] + div .block-container {
     /* トイレカードのタッチ操作改善 */
     .toilet-card {
         -webkit-tap-highlight-color: transparent !important;
-        transition: background 0.15s !important;
+        transition: opacity 0.3s ease, transform 0.3s ease, background 0.15s !important;
+    }
+    .toilet-card.entering {
+        opacity: 0;
+        transform: translateY(10px);
     }
     .toilet-card:active {
         background: #f5f5f5 !important;

@@ -157,10 +157,12 @@ class TestLoadToiletData:
     def test_returns_error_metadata_on_exception(self, monkeypatch):
         import ui.data_loader as dl
 
-        monkeypatch.setattr(sqlite3, "connect", lambda _: (_ for _ in ()).throw(sqlite3.OperationalError("DB error")))
+        dl.load_toilet_data.clear()
+        monkeypatch.setattr(dl, "get_db_connection", lambda: (_ for _ in ()).throw(sqlite3.OperationalError("DB error")))
         monkeypatch.setattr(dl.st, "error", lambda msg: None)
+        monkeypatch.setattr(dl.st, "session_state", {})
 
-        result = dl.load_toilet_data()
+        result = dl.load_toilet_data(cache_token=(999, 0))
         assert result["metadata"] == ERROR_METADATA
         assert result["toilets"] == []
         assert result["pref_stats"] == {}
@@ -168,8 +170,9 @@ class TestLoadToiletData:
     def test_prefecture_stats_ignores_empty_prefecture(self, monkeypatch):
         import ui.data_loader as dl
 
+        dl.load_toilet_data.clear()
         mock_conn = MagicMock()
-        monkeypatch.setattr(sqlite3, "connect", lambda _: mock_conn)
+        monkeypatch.setattr(dl, "get_db_connection", lambda: mock_conn)
         toilets_df, meta_df = self.make_mock_df(
             [
                 {"title": "A", "prefecture": "東京都", "lat": 35.0, "lng": 139.0, "sample_reviews_json": "[]"},

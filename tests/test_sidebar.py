@@ -130,6 +130,8 @@ _SELECTBOX_VALUES = {
     "filter_select": "すべて",
     "sort_select": "きれい度順",
     "tile_select": "OpenStreetMap（標準）",
+    "font_size_select": "中",
+    "font_family_select": "sans-serif",
 }
 
 
@@ -144,6 +146,7 @@ def _mock_streamlit(monkeypatch):
     monkeypatch.setattr(st, "info", lambda *a: None)
     monkeypatch.setattr(st, "warning", lambda *a: None)
     monkeypatch.setattr(st, "markdown", lambda *a, **kw: None)
+    monkeypatch.setattr(st, "expander", lambda *a, **kw: MagicMock())
     monkeypatch.setattr("streamlit.session_state", {"lang_select": "日本語"})
 
 
