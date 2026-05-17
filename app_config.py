@@ -5,14 +5,19 @@ Includes prefecture center coordinates (merged from app_config_prefectures.py).
 """
 import os
 
+from app_settings import settings
+
 DATA_PATH = "data/toilets.json.gz"
-DB_PATH = "data/toilets.db"
+DB_PATH = settings.db_path
 
 ERROR_METADATA = {
     "total": 0, "scored": 0, "public_toilets": 0,
     "center_lat": 36.2231, "center_lng": 139.3772,
     "zoom": 13, "area_name": "エラー",
 }
+
+SCORE_MIN = settings.score_min
+SCORE_MAX = settings.score_max
 
 SCORE_RANGES = [
     (80, "#27ae60", "✨", "とてもきれい"),
@@ -71,16 +76,14 @@ PUBLIC_MARKER_RADIUS = 14
 NORMAL_MARKER_RADIUS = 10
 
 TILE_OPTIONS = {
-    "OpenStreetMap（標準）": "OpenStreetMap",
-    "モノクロ（Cartodb）": "CartoDB positron",
-    "ナビゲーション（CartoDB）": "CartoDB voyager",
-    "地形図（OpenTopoMap）": "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+    "OpenStreetMap（標準）": settings.tile_openstreetmap,
+    "OpenStreetMap（ダーク）": settings.tile_cartodb_dark,
 }
 
 THRESHOLD = 10
 
-MAX_SAMPLE_REVIEWS = 2
-REVIEW_TEXT_MAX_LENGTH = 120
+MAX_SAMPLE_REVIEWS = settings.max_sample_reviews
+REVIEW_TEXT_MAX_LENGTH = settings.review_text_max_length
 MAX_KEYWORD_TAGS = 5
 
 # スコア未計算でも救済するカテゴリ（口コミ0件でも表示対象とする）

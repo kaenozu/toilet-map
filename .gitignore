@@ -72,3 +72,6 @@ __pycache__/
 Thumbs.db
 nul
 *.py,cover
+
+# Logs
+logs/

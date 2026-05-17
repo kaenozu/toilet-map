@@ -6,6 +6,7 @@ StreamlitのサイドバーUIを描画する
 関連ファイル: app.py, ui/i18n.py, ui/query_params.py, ui/data_loader.py
 """
 
+import logging
 import time
 from typing import NamedTuple
 
@@ -15,6 +16,8 @@ from streamlit_js_eval import streamlit_js_eval
 from app_config import FILTER_CONFIG, FILTER_I18N_KEYS, TILE_OPTIONS
 from ui.i18n import LANGUAGE_OPTIONS, LANGUAGES, get_language_strings
 from ui.query_params import resolve_ui_state_from_query_params
+
+logger = logging.getLogger(__name__)
 
 
 class SidebarResult(NamedTuple):
@@ -167,30 +170,41 @@ def render_sidebar(
     prefectures: list[str],
     query_params: dict,
 ) -> SidebarResult:
-    with st.sidebar:
-        lang = st.selectbox(t["language_label"], LANGUAGE_OPTIONS, key="lang_select")
-        t = get_language_strings(lang)
-        translated_filters, translated_to_internal = get_translated_filters(lang)
+    try:
+        with st.sidebar:
+            lang = st.selectbox(t["language_label"], LANGUAGE_OPTIONS, key="lang_select")
+            t = get_language_strings(lang)
+            translated_filters, translated_to_internal = get_translated_filters(lang)
 
-        st.divider()
-        _render_query_state_section(query_params, prefectures, translated_to_internal, t)
+            st.divider()
+            _render_query_state_section(query_params, prefectures, translated_to_internal, t)
 
-        st.divider()
-        user_location, gps_enabled = _handle_gps_section(t)
+            st.divider()
+            user_location, gps_enabled = _handle_gps_section(t)
 
-        st.divider()
-        selected_pref, filter_type, search_query, sort_order = _render_filter_section(t, prefectures, translated_filters)
+            st.divider()
+            selected_pref, filter_type, search_query, sort_order = _render_filter_section(t, prefectures, translated_filters)
 
-        st.divider()
-        dark_mode, selected_tile = _render_settings_section(t)
+            st.divider()
+            dark_mode, selected_tile = _render_settings_section(t)
 
-        st.caption(t["shortcut_info"])
+            st.caption(t["shortcut_info"])
 
-    return SidebarResult(
-        t=t, lang=lang,
-        selected_pref=selected_pref, filter_type=filter_type,
-        search_query=search_query, sort_order=sort_order,
-        user_location=user_location, gps_enabled=gps_enabled,
-        dark_mode=dark_mode, selected_tile=selected_tile,
-        translated_to_internal=translated_to_internal,
-    )
+        return SidebarResult(
+            t=t, lang=lang,
+            selected_pref=selected_pref, filter_type=filter_type,
+            search_query=search_query, sort_order=sort_order,
+            user_location=user_location, gps_enabled=gps_enabled,
+            dark_mode=dark_mode, selected_tile=selected_tile,
+            translated_to_internal=translated_to_internal,
+        )
+    except Exception:
+        logger.exception("render_sidebar failed")
+        return SidebarResult(
+            t=t, lang=t.get("language_label", "ja"),
+            selected_pref="全て", filter_type="すべて",
+            search_query="", sort_order="",
+            user_location=None, gps_enabled=False,
+            dark_mode=False, selected_tile="OpenStreetMap（標準）",
+            translated_to_internal={},
+        )

@@ -122,9 +122,9 @@ class TestScoreRanges:
 
 class TestTileOptions:
     def test_defined(self):
-        assert len(TILE_OPTIONS) >= 2
+        assert len(TILE_OPTIONS) == 2
         assert "OpenStreetMap（標準）" in TILE_OPTIONS
-        assert TILE_OPTIONS["OpenStreetMap（標準）"] == "OpenStreetMap"
+        assert TILE_OPTIONS["OpenStreetMap（標準）"].startswith("https://")
     def test_keys_strings(self):
         for name, tile in TILE_OPTIONS.items():
             assert isinstance(name, str) and isinstance(tile, str)

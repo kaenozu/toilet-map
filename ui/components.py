@@ -163,3 +163,6 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
 def render_toilet_card(toilet: ToiletDict, rank: int | None = None, meta: dict[str, object] | None = None, compact: bool = False) -> None:
     """ランキングリストのトイレカード（1行）"""
     st.markdown(build_toilet_card_html(toilet, rank, meta, compact=compact), unsafe_allow_html=True)
+    from ui.reviews import render_review_form
+    if toilet.get("place_id") and not compact:
+        render_review_form(toilet["place_id"], toilet.get("title", ""))

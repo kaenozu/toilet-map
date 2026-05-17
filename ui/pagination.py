@@ -4,9 +4,12 @@ ui/pagination.py
 app.py から分離
 """
 import json
+import logging
 
 import streamlit as st
 import streamlit.components.v1 as components
+
+logger = logging.getLogger(__name__)
 
 PER_PAGE = 20
 
@@ -69,26 +72,30 @@ def _render_swipe_handler(t: dict[str, str]) -> None:
 
 
 def render_pagination(total: int, page: int, total_pages: int, t: dict[str, str]) -> None:
-    if total <= 0:
-        return
-    if total_pages <= 1:
-        st.caption(f"{t['page']} 1/1")
-        return
+    try:
+        if total <= 0:
+            return
+        if total_pages <= 1:
+            st.caption(f"{t['page']} 1/1")
+            return
 
-    _render_swipe_handler(t)
+        _render_swipe_handler(t)
 
-    prev_col, info_col, next_col = st.columns([1, 2, 1])
-    with prev_col:
-        if st.button(t["prev"], disabled=page <= 1, key="pagination_prev", use_container_width=True):
-            st.session_state.page = max(1, page - 1)
-            st.rerun()
-    with info_col:
-        st.markdown(
-            f"<div style='text-align:center; padding-top:0.45rem; font-weight:600;'>{t['page']} {page}/{total_pages}</div>",
-            unsafe_allow_html=True,
-        )
-    with next_col:
-        if st.button(t["next"], disabled=page >= total_pages, key="pagination_next", use_container_width=True):
-            st.session_state.page = min(total_pages, page + 1)
-            st.rerun()
+        prev_col, info_col, next_col = st.columns([1, 2, 1])
+        with prev_col:
+            if st.button(t["prev"], disabled=page <= 1, key="pagination_prev", use_container_width=True):
+                st.session_state.page = max(1, page - 1)
+                st.rerun()
+        with info_col:
+            st.markdown(
+                f"<div style='text-align:center; padding-top:0.45rem; font-weight:600;'>{t['page']} {page}/{total_pages}</div>",
+                unsafe_allow_html=True,
+            )
+        with next_col:
+            if st.button(t["next"], disabled=page >= total_pages, key="pagination_next", use_container_width=True):
+                st.session_state.page = min(total_pages, page + 1)
+                st.rerun()
+    except Exception as e:
+        logger.warning("render_pagination failed: %s", e)
+        st.caption(f"{t.get('page', 'Page')} {total}/{max(1, total // 20)}")
 

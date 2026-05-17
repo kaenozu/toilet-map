@@ -2,10 +2,14 @@
 ui/popups.py
 Popup HTML builders for toilet map markers
 """
+import logging
+
 from app_config import MAX_SAMPLE_REVIEWS, REVIEW_TEXT_MAX_LENGTH
 
 from .helpers import esc, get_score_style, safe_href
 from .types import ToiletDict
+
+logger = logging.getLogger(__name__)
 
 
 def clean(s: str | None) -> str:
@@ -87,6 +91,12 @@ def _build_link_html(link: str) -> str:
     )
 
 
+def _build_review_link_html(t: ToiletDict) -> str:
+    if not t.get("place_id"):
+        return ""
+    return '<div style="margin-top:4px;font-size:10px;"><a href="#" onclick="alert(\'レビュー機能は地図画面でご利用ください\')" style="color:#888;">\U0001f4ac レビューを書く</a></div>'
+
+
 def _build_confidence_note(confidence: float, toilet_review_count: int) -> str:
     if confidence >= 0.4 and toilet_review_count >= 3:
         return ""
@@ -101,54 +111,58 @@ def _build_confidence_note(confidence: float, toilet_review_count: int) -> str:
 
 def build_popup_html(t: ToiletDict) -> str:
     """1トイレ地点のポップアップHTMLを構築（コンパクト・スクロール対応）"""
-    color, emoji, label = get_score_style(t["toilet_score"])
-    badge = _build_public_badge(t["is_public_toilet"])
-    confidence_pct = int(t["confidence"] * 100)
-    phone_html = f'<span style="margin-right:6px;"><span aria-label="phone" role="img">📞</span>{esc(t["phone"])}</span>' if t.get("phone") else ""
-    kw_html = _build_keyword_tags(t.get("top_keywords", []))
-    rev_html = _build_review_html(t.get("sample_reviews", []))
-    link_html = _build_link_html(t.get("link", ""))
-    confidence_note_html = _build_confidence_note(t.get("confidence", 0), t.get("toilet_review_count", 0))
+    try:
+        color, emoji, label = get_score_style(t["toilet_score"])
+        badge = _build_public_badge(t["is_public_toilet"])
+        confidence_pct = int(t["confidence"] * 100)
+        phone_html = f'<span style="margin-right:6px;"><span aria-label="phone" role="img">📞</span>{esc(t["phone"])}</span>' if t.get("phone") else ""
+        kw_html = _build_keyword_tags(t.get("top_keywords", []))
+        rev_html = _build_review_html(t.get("sample_reviews", []))
+        link_html = _build_link_html(t.get("link", ""))
+        confidence_note_html = _build_confidence_note(t.get("confidence", 0), t.get("toilet_review_count", 0))
 
-    review_section = ""
-    if rev_html:
-        review_section = (
-            '<hr style="margin:4px 0;border:none;border-top:1px dashed #ccc;">'
-            '<div style="font-size:10px;font-weight:600;margin-bottom:2px;">🚽 口コミ:</div>'
-            + rev_html
-        )
+        review_section = ""
+        if rev_html:
+            review_section = (
+                '<hr style="margin:4px 0;border:none;border-top:1px dashed #ccc;">'
+                '<div style="font-size:10px;font-weight:600;margin-bottom:2px;">🚽 口コミ:</div>'
+                + rev_html
+            )
 
-    title_esc = clean(t['title'])
-    addr_esc = clean(t.get('address', ''))
-    cat_esc = clean(t.get('category', ''))
+        title_esc = clean(t['title'])
+        addr_esc = clean(t.get('address', ''))
+        cat_esc = clean(t.get('category', ''))
 
-    return f"""
-    <div style="font-family:'Segoe UI','Hiragino Sans','Noto Sans JP',sans-serif;padding:4px;
-        max-width:100%;overflow-wrap:break-word;word-break:break-word;
-        max-height:45vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
-      <div style="font-size:14px;font-weight:700;margin-bottom:2px;line-height:1.3;">
-        {badge}{title_esc}
-      </div>
-      <div style="font-size:10px;color:#888;margin-bottom:4px;">{cat_esc}</div>
+        return f"""
+        <div style="font-family:'Segoe UI','Hiragino Sans','Noto Sans JP',sans-serif;padding:4px;
+            max-width:100%;overflow-wrap:break-word;word-break:break-word;
+            max-height:45vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+          <div style="font-size:14px;font-weight:700;margin-bottom:2px;line-height:1.3;">
+            {badge}{title_esc}
+          </div>
+          <div style="font-size:10px;color:#888;margin-bottom:4px;">{cat_esc}</div>
 
 
-      <div style="text-align:center;margin:4px 0;">
-        <span style="font-size:24px;font-weight:800;color:{color};">{emoji} {t['toilet_score']:.0f}点</span>
-        <span style="font-size:11px;color:#888;">（{label}）</span>
-      </div>
+          <div style="text-align:center;margin:4px 0;">
+            <span style="font-size:24px;font-weight:800;color:{color};">{emoji} {t['toilet_score']:.0f}点</span>
+            <span style="font-size:11px;color:#888;">（{label}）</span>
+          </div>
 
-      <div style="text-align:center;font-size:10px;color:#888;margin-bottom:2px;">
-        信頼度 {confidence_pct}% | {t['toilet_review_count']}件
-      </div>
-      <div style="height:3px;border-radius:2px;background:#e0e0e0;margin-bottom:4px;overflow:hidden;">
-        <div style="height:100%;width:{confidence_pct}%;background:{color};border-radius:2px;"></div>
-      </div>
+          <div style="text-align:center;font-size:10px;color:#888;margin-bottom:2px;">
+            信頼度 {confidence_pct}% | {t['toilet_review_count']}件
+          </div>
+          <div style="height:3px;border-radius:2px;background:#e0e0e0;margin-bottom:4px;overflow:hidden;">
+            <div style="height:100%;width:{confidence_pct}%;background:{color};border-radius:2px;"></div>
+          </div>
 
-      <div style="font-size:10px;color:#555;margin-bottom:1px;">📍 {addr_esc}</div>
-      <div style="font-size:10px;color:#555;"><span aria-label="rating" role="img">⭐</span>{t.get('rating', '-')} ({t.get('review_count', 0)}件) {phone_html}</div>
-    {confidence_note_html}
-      {kw_html}
-      {review_section}
-      {link_html}
-    </div>
-    """
+          <div style="font-size:10px;color:#555;margin-bottom:1px;">📍 {addr_esc}</div>
+          <div style="font-size:10px;color:#555;"><span aria-label="rating" role="img">⭐</span>{t.get('rating', '-')} ({t.get('review_count', 0)}件) {phone_html}</div>
+        {confidence_note_html}
+          {kw_html}
+          {review_section}
+          {link_html}
+        </div>
+        """
+    except Exception as e:
+        logger.exception("Popup HTML build failed")
+        return f"<div style='padding:8px;color:#c62828;'>{esc(str(e))}</div>"

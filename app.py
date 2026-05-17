@@ -15,8 +15,10 @@ from streamlit_folium import st_folium
 
 from app_config import TILE_OPTIONS
 from batch.logging_config import configure_logging
+from ui.analytics import inject_analytics
 from ui.components import build_data_freshness_text, build_result_context_text, render_score_legend, render_toilet_card
 from ui.data_loader import get_data_cache_token, get_prefectures, load_toilet_data, toilets_to_dataframe
+from ui.exporter import to_geojson, to_gpx, to_kml
 from ui.filters import filter_toilets, search_toilets
 from ui.i18n import APP_TITLE, DEFAULT_LANGUAGE, get_language_strings
 from ui.map_builder import build_map, calc_map_center
@@ -72,7 +74,7 @@ def _process_filters(df: pd.DataFrame, selected_pref: str, internal_filter: str,
     return filtered, filter_elapsed_ms
 
 
-def _render_main_content(filtered: pd.DataFrame, map_items: list[dict], meta: dict, t: dict, selected_pref: str, sort_order: str, dark_mode: bool, selected_tile: str, toilets: list, filter_elapsed_ms: float, prefecture_stats: dict, internal_filter: str, search_query: str, compact: bool = False) -> tuple[bool, int, pd.DataFrame]:
+def _render_main_content(filtered: pd.DataFrame, map_items: list[dict], meta: dict, t: dict, selected_pref: str, sort_order: str, dark_mode: bool, selected_tile: str, toilets: list, filter_elapsed_ms: float, prefecture_stats: dict, internal_filter: str, search_query: str, compact: bool = False, show_heatmap: bool = False) -> tuple[bool, int, pd.DataFrame]:
     map_lat, map_lng, map_zoom = calc_map_center(selected_pref, meta, prefecture_stats)
     total_items = len(filtered)
     init_page_state()
@@ -86,7 +88,7 @@ def _render_main_content(filtered: pd.DataFrame, map_items: list[dict], meta: di
     render_score_legend()
 
     map_started_at = perf_counter()
-    m = build_map(map_items, map_lat, map_lng, map_zoom, tile=TILE_OPTIONS[selected_tile])
+    m = build_map(map_items, map_lat, map_lng, map_zoom, tile=TILE_OPTIONS[selected_tile], show_heatmap=show_heatmap)
     map_elapsed_ms = (perf_counter() - map_started_at) * 1000
     get_metrics().record("map", map_elapsed_ms)
 
@@ -156,6 +158,8 @@ def _inject_html() -> None:
         unsafe_allow_html=True,
     )
     st.markdown(MOBILE_CSS, unsafe_allow_html=True)
+
+    inject_analytics()
 
     # PWA: Service Worker registration
     st.markdown("""<script>
@@ -239,11 +243,13 @@ def main() -> None:
         map_items = filtered.to_dict("records")
 
         compact = st.session_state.get("compact_mode", False)
+        show_heatmap = st.session_state.get("show_heatmap", False)
         dark_mode, page, display_items = _render_main_content(
             filtered, map_items, meta, t, selected_pref,
             sort_order, dark_mode, selected_tile, toilets, filter_elapsed_ms,
             prefecture_stats, internal_filter, search_query,
             compact=compact,
+            show_heatmap=show_heatmap,
         )
 
         if dark_mode:
@@ -256,8 +262,34 @@ def main() -> None:
             st.info(t["shortcut_info"])
 
         if len(display_items) > 0:
-            csv_data = filtered.to_csv(index=False).encode("utf-8-sig")
-            st.download_button(t.get("csv_download", "📥 CSVダウンロード"), csv_data, f"toilets_{selected_pref}.csv", "text/csv", use_container_width=True)
+            export_format = st.selectbox(
+                "エクスポート形式",
+                ["CSV", "GeoJSON", "KML", "GPX"],
+                key="export_format",
+            )
+            if export_format == "CSV":
+                data = filtered.to_csv(index=False).encode("utf-8-sig")
+                mime = "text/csv"
+                ext = "csv"
+            elif export_format == "GeoJSON":
+                data = to_geojson(map_items).encode("utf-8")
+                mime = "application/geo+json"
+                ext = "geojson"
+            elif export_format == "KML":
+                data = to_kml(map_items).encode("utf-8")
+                mime = "application/vnd.google-earth.kml+xml"
+                ext = "kml"
+            else:
+                data = to_gpx(map_items).encode("utf-8")
+                mime = "application/gpx+xml"
+                ext = "gpx"
+            st.download_button(
+                f"\U0001f4e5 {export_format}ダウンロード",
+                data,
+                f"toilets_{selected_pref}.{ext}",
+                mime,
+                use_container_width=True,
+            )
 
         if toilets:
             cache_data = json.dumps([

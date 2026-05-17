@@ -1,52 +1,38 @@
-# Contributing
+# Contributing to Toilet Map
 
-## Setup
+## 開発の流れ
 
-```bash
-git clone <repo>
-cd toilet-map
-pip install -r requirements.txt
-pre-commit install
-```
+1. Issue で提案 / 既存 Issue を確認
+2. `main` から feature ブランチを作成 (`git checkout -b feat/your-feature`)
+3. 変更を加える
+4. テストを実行: `pytest tests/ -v --tb=short`
+5. Lint: `ruff check .`
+6. PR を作成（テンプレートに従う）
 
-## Development
+## コード規約
 
-```bash
-# Run app
-streamlit run app.py
+- **1ファイル1責務、300行以内**
+- 全ファイルにヘッダーコメント必須（パス、目的、存在理由、関連ファイル）
+- 複雑なロジックにはコメントを入れる
+- Type hints を書く
+- シンプル最優先、不要な抽象化禁止
 
-# Run tests
-pytest tests/ -v
+## テスト
 
-# Run lint
-ruff check .
+- 新機能にはテストを追加（カバレッジ90%以上維持）
+- `pytest tests/ -v` ですべてパスすること
+- E2E テストは `tests/e2e/` に Playwright で記述
 
-# Run type check
-mypy app.py app_config.py ui/ --ignore-missing-imports --follow-imports=silent
+## データ
 
-# Run pre-commit hooks
-pre-commit run --all-files
-```
+- `data/toilets.json.gz` が canonical データ
+- スクレイピング結果は `batch/auto_expand_pipeline.bat` で自動処理
+- DB変更は提案のみ、実行は人間が行う
 
-## Project Structure
+## PR 作成前に確認
 
-- `app.py` — Streamlit entry point
-- `ui/` — UI components (sidebar, map, filters, i18n, etc.)
-- `batch/` — Data processing pipeline (scraping, scoring, SQLite sync)
-- `data/` — Canonical JSON + SQLite cache
-- `tests/` — pytest test suite
-
-## Pull Request Guidelines
-
-1. Create a feature branch from `main`
-2. Add tests for new functionality
-3. Ensure all tests pass: `pytest tests/ -v`
-4. Ensure ruff is clean: `ruff check .`
-5. Open PR against `main`
-
-## Code Style
-
-- 1 file, 1 responsibility, max ~300 lines
-- Type hints on all public functions
-- Docstrings on all modules and public functions
-- No unnecessary abstraction (YAGNI)
+- [ ] 既存テストがすべてパスする (`pytest tests/ -v`)
+- [ ] Lint が通る (`ruff check .`)
+- [ ] 必要ならテストを追加した
+- [ ] ヘッダーコメントを書いた
+- [ ] 変更理由をPRに書いた

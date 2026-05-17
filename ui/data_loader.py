@@ -94,7 +94,7 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None) -> dict:
 
         return {"metadata": metadata, "toilets": toilets, "pref_stats": pref_stats}
     except sqlite3.Error as e:
-        st.error(f"データベース読み込みエラー: {e}")
+        st.error(f"データベース読み込みエラー: {e}。ページを更新して再試行してください。")
         logger.exception("データベース読み込みエラー")
         st.session_state["_data_error"] = True
         return {"metadata": ERROR_METADATA, "toilets": [], "pref_stats": {}}
@@ -138,3 +138,11 @@ def get_prefectures(df: pd.DataFrame) -> list[str]:
         prefs = df["prefecture"].dropna().unique().tolist()
         return ["全て"] + sorted([p for p in prefs if p])
     return ["全て"]
+
+
+def render_data_retry() -> None:
+    """データ読み込みエラー時に再試行ボタンを表示する。app.py から呼び出し可能。"""
+    if st.session_state.get("_data_error") and st.button("🔄 データを再読み込み", key="retry_db_load", use_container_width=True):
+        load_toilet_data.clear()
+        st.session_state.pop("_data_error", None)
+        st.rerun()

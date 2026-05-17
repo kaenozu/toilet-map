@@ -21,3 +21,4 @@ def init_session_state() -> None:
     st.session_state.setdefault("compact_mode", False)
     st.session_state.setdefault("font_size", "medium")
     st.session_state.setdefault("font_family", "sans-serif")
+    st.session_state.setdefault("show_heatmap", False)

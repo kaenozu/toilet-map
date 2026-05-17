@@ -1,29 +1,58 @@
 """
 batch/api_server.py
-FastAPI server for toilet-map data API with OpenAPI documentation.
-Related: db_utils.py, batch/schema.py
+FastAPI server with CORS and rate limiting.
+Related: app_settings.py, data/toilets.db
 """
 import os
 import re
+import sqlite3
 from collections import Counter
+from contextlib import asynccontextmanager
 
 from db_utils import load_json
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
+from app_config import DB_PATH
+from app_settings import settings
+from batch import schema as db_schema
+
+limiter = Limiter(key_func=get_remote_address)
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "toilets.json.gz")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+
 
 app = FastAPI(
     title="Toilet Map API",
     description="API for toilet cleanliness map data",
     version="1.0.0",
+    lifespan=lifespan,
+)
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
 def _custom_openapi():
-    """Custom OpenAPI schema with extended metadata."""
     if app.openapi_schema:
         return app.openapi_schema
     openapi_schema = get_openapi(
@@ -32,40 +61,39 @@ def _custom_openapi():
         description="API for toilet cleanliness map data",
         routes=app.routes,
     )
-    openapi_schema["info"]["x-logo"] = {
-        "url": "https://toilet-map.example.com/icon.png"
-    }
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
 
 app.openapi = _custom_openapi
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["https://toilet-map.streamlit.app"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-
-@app.get("/api/health", tags=["System"])
-def health_check():
-    """Return system health status including data file availability and toilet count."""
+@app.get("/health", tags=["System"])
+@limiter.limit(settings.api_rate_limit)
+def health_check(request: Request):
+    """Return system health status."""
     try:
-        data = load_json(DATA_PATH)
-        toilets = data.get("toilets", [])
+        conn = sqlite3.connect(DB_PATH)
+        count = conn.execute("SELECT COUNT(*) FROM toilets").fetchone()[0]
+        row = conn.execute("SELECT value FROM metadata WHERE key='last_updated'").fetchone()
+        last_updated = row[0] if row else None
+        schema_version = db_schema.get_schema_version(conn) if hasattr(db_schema, 'get_schema_version') else "unknown"
+        conn.close()
         return {
             "status": "ok",
-            "toilet_count": len(toilets),
-            "data_path": os.path.basename(DATA_PATH),
+            "db_connected": True,
+            "toilet_count": count,
+            "last_updated": last_updated,
+            "schema_version": schema_version,
         }
     except Exception as e:
         return {"status": "error", "detail": str(e)}
 
 
 @app.get("/api/toilets", tags=["toilets"], summary="トイレ一覧を取得", response_model=dict)
+@limiter.limit(settings.api_rate_limit)
 def list_toilets(
+    request: Request,
     prefecture: str = Query(None, description="Filter by prefecture name"),
     min_score: float = Query(0.0, description="Minimum toilet score filter"),
     max_score: float = Query(100.0, description="Maximum toilet score filter"),
@@ -92,7 +120,8 @@ def list_toilets(
 
 
 @app.get("/api/toilets/{toilet_id}", tags=["toilets"], summary="個別トイレを取得", response_model=dict)
-def get_toilet(toilet_id: int):
+@limiter.limit(settings.api_rate_limit)
+def get_toilet(request: Request, toilet_id: int = None):
     """Return a single toilet by its index (0-based position in the dataset)."""
     data = load_json(DATA_PATH)
     toilets = data.get("toilets", [])
@@ -102,7 +131,8 @@ def get_toilet(toilet_id: int):
 
 
 @app.get("/api/stats", tags=["stats"], summary="全体統計を取得", response_model=dict)
-def stats():
+@limiter.limit(settings.api_rate_limit)
+def stats(request: Request):
     """Return aggregate statistics: total toilets, scored count, average score, and per-prefecture breakdown."""
     data = load_json(DATA_PATH)
     toilets = data.get("toilets", [])
@@ -118,7 +148,8 @@ def stats():
 
 
 @app.get("/api/stats/distribution", tags=["stats"], summary="スコア分布を取得", response_model=dict)
-def score_distribution():
+@limiter.limit(settings.api_rate_limit)
+def score_distribution(request: Request):
     """Return score distribution across predefined buckets (0-34, 35-49, 50-64, 65-79, 80-100)."""
     data = load_json(DATA_PATH)
     toilets = data.get("toilets", [])

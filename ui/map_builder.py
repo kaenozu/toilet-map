@@ -3,10 +3,12 @@ ui/map_builder.py
 Folium 地図構築・マーカー配置
 app.py から分離
 """
+import logging
 import math
 
 import folium
-from folium.plugins import MarkerCluster
+import streamlit as st
+from folium.plugins import HeatMap, MarkerCluster
 
 from app_config import (
     NORMAL_MARKER_RADIUS,
@@ -18,6 +20,8 @@ from app_config import (
 from .helpers import get_score_style
 from .popups import build_popup_html
 from .types import ToiletDict
+
+logger = logging.getLogger(__name__)
 
 CLUSTER_THRESHOLDS = [(500, 50), (1000, 80), (float("inf"), 100)]
 FIT_BOUNDS_PADDING = (24, 24)
@@ -112,52 +116,78 @@ def _calc_fit_bounds(toilets: list[ToiletDict]) -> list[list[float]] | None:
     return [[south, west], [north, east]]
 
 
+def add_heatmap(m: folium.Map, toilets: list[ToiletDict]) -> None:
+    """Add an optional heatmap layer showing toilet density."""
+    locations = [
+        [t["lat"], t["lng"]]
+        for t in toilets
+        if t.get("lat") and t.get("lng")
+    ]
+    if locations:
+        HeatMap(
+            locations,
+            radius=15,
+            blur=10,
+            max_zoom=12,
+            min_opacity=0.3,
+        ).add_to(m)
+
+
 def build_map(
     toilets: list[ToiletDict],
     center_lat: float,
     center_lng: float,
     zoom: int,
     tile: str = "OpenStreetMap",
+    show_heatmap: bool = False,
 ) -> folium.Map:
-    m = folium.Map(
-        location=[center_lat, center_lng],
-        zoom_start=zoom,
-        tiles=tile,
-        control_scale=True,
-        prefer_canvas=True,  # large datasets: use Canvas renderer for performance
-    )
-    m.get_root().html.add_child(folium.Element(POPUP_FIX_JS))
+    try:
+        m = folium.Map(
+            location=[center_lat, center_lng],
+            zoom_start=zoom,
+            tiles=tile,
+            control_scale=True,
+            prefer_canvas=True,
+        )
+        m.get_root().html.add_child(folium.Element(POPUP_FIX_JS))
 
-    valid_toilets = _collect_valid_toilets(toilets)
+        valid_toilets = _collect_valid_toilets(toilets)
 
-    cluster = MarkerCluster(
-        options={
-            "maxClusterRadius": calc_cluster_radius(len(valid_toilets)),
-            "spiderfyOnMaxZoom": True,
-            "disableClusteringAtZoom": 15,
-        },
-        name="トイレ",
-    ).add_to(m)
+        cluster = MarkerCluster(
+            options={
+                "maxClusterRadius": calc_cluster_radius(len(valid_toilets)),
+                "spiderfyOnMaxZoom": True,
+                "disableClusteringAtZoom": 15,
+            },
+            name="トイレ",
+        ).add_to(m)
 
-    for t, lat, lng in valid_toilets:
-        color, emoji, _ = get_score_style(t["toilet_score"])
-        radius = PUBLIC_MARKER_RADIUS if t["is_public_toilet"] else NORMAL_MARKER_RADIUS
+        for t, lat, lng in valid_toilets:
+            color, emoji, _ = get_score_style(t["toilet_score"])
+            radius = PUBLIC_MARKER_RADIUS if t["is_public_toilet"] else NORMAL_MARKER_RADIUS
 
-        popup_html = build_popup_html(t)
-        folium.CircleMarker(
-            location=[lat, lng],
-            radius=radius,
-            color="white",
-            weight=2,
-            fill=True,
-            fill_color=color,
-            fill_opacity=0.9,
-            popup=folium.Popup(popup_html, max_width=320, auto_pan=True),
-            tooltip=f"{emoji} {t['title']}",
-        ).add_to(cluster)
+            popup_html = build_popup_html(t)
+            folium.CircleMarker(
+                location=[lat, lng],
+                radius=radius,
+                color="white",
+                weight=2,
+                fill=True,
+                fill_color=color,
+                fill_opacity=0.9,
+                popup=folium.Popup(popup_html, max_width=320, auto_pan=True),
+                tooltip=f"{emoji} {t['title']}",
+            ).add_to(cluster)
 
-    bounds = _calc_fit_bounds(toilets)
-    if bounds:
-        m.fit_bounds(bounds, padding=FIT_BOUNDS_PADDING)
+        if show_heatmap:
+            add_heatmap(m, toilets)
 
-    return m
+        bounds = _calc_fit_bounds(toilets)
+        if bounds:
+            m.fit_bounds(bounds, padding=FIT_BOUNDS_PADDING)
+
+        return m
+    except Exception:
+        logger.exception("Map build failed")
+        st.warning("地図の生成に失敗しました。デフォルト地図を表示します。")
+        return folium.Map(location=[35.68, 139.69], zoom_start=5)
