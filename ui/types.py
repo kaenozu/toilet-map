@@ -25,4 +25,8 @@ class ToiletDict(TypedDict, total=False):
     sample_reviews: list[dict[str, object]]
     prefecture: str
     distance: float | None
+    ai_sentiment_score: float | None
+    ai_cleanliness_summary: str | None
+    ai_keywords: list[str]
+    ai_confidence: float
 

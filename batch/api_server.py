@@ -1,7 +1,7 @@
 """
 batch/api_server.py
-FastAPI server with CORS and rate limiting.
-Related: app_settings.py, data/toilets.db
+FastAPI server with CORS, rate limiting, API key auth, and GraphQL.
+Related: app_settings.py, data/toilets.db, batch/graphql_schema.py
 """
 import os
 import re
@@ -10,19 +10,35 @@ from collections import Counter
 from contextlib import asynccontextmanager
 
 from db_utils import load_json
-from fastapi import FastAPI, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
+from fastapi.security import APIKeyHeader
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
+from strawberry.fastapi import GraphQLRouter
 
 from app_config import DB_PATH
 from app_settings import settings
 from batch import schema as db_schema
+from batch.graphql_schema import schema as graphql_schema
 
 limiter = Limiter(key_func=get_remote_address)
+
+API_KEY = os.environ.get("TOILET_MAP_API_KEY", "")
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def verify_api_key(api_key: str = Security(api_key_header)):
+    """Verify API key if configured. If no key set, allow all requests."""
+    if not API_KEY:
+        return True
+    if api_key == API_KEY:
+        return True
+    raise HTTPException(status_code=403, detail="Invalid API key")
+
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "toilets.json.gz")
 
@@ -49,6 +65,15 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# GraphQL
+graphql_app = GraphQLRouter(graphql_schema)
+app.include_router(
+    graphql_app,
+    prefix="/graphql",
+    tags=["GraphQL"],
+    dependencies=[Depends(verify_api_key)],
 )
 
 

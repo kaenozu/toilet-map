@@ -97,6 +97,25 @@ def _build_review_link_html(t: ToiletDict) -> str:
     return '<div style="margin-top:4px;font-size:10px;"><a href="#" onclick="alert(\'レビュー機能は地図画面でご利用ください\')" style="color:#888;">\U0001f4ac レビューを書く</a></div>'
 
 
+def _build_ai_summary_html(t: ToiletDict) -> str:
+    summary = t.get("ai_cleanliness_summary")
+    score = t.get("ai_sentiment_score")
+    if not summary and score is None:
+        return ""
+    color = "#2e7d32" if (score or 50) >= 60 else "#e65100"
+    bg = "#e8f5e9" if (score or 50) >= 60 else "#fff3e0"
+    border = "#a5d6a7" if (score or 50) >= 60 else "#ffe0b2"
+    score_html = f'<span style="font-weight:600;">{score:.0f}</span>' if score is not None else ""
+    return (
+        f'<div style="margin-top:6px;padding:6px 8px;border-radius:6px;'
+        f'background:{bg};color:{color};border:1px solid {border};'
+        f'font-size:11px;line-height:1.5;">'
+        f'<span style="font-weight:600;">🤖 AI分析:</span>'
+        f'{score_html} {esc(summary or "")}'
+        f'</div>'
+    )
+
+
 def _build_confidence_note(confidence: float, toilet_review_count: int) -> str:
     if confidence >= 0.4 and toilet_review_count >= 3:
         return ""
@@ -158,6 +177,7 @@ def build_popup_html(t: ToiletDict) -> str:
           <div style="font-size:10px;color:#555;margin-bottom:1px;">📍 {addr_esc}</div>
           <div style="font-size:10px;color:#555;"><span aria-label="rating" role="img">⭐</span>{t.get('rating', '-')} ({t.get('review_count', 0)}件) {phone_html}</div>
         {confidence_note_html}
+          {_build_ai_summary_html(t)}
           {kw_html}
           {review_section}
           {link_html}

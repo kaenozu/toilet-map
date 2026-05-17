@@ -194,7 +194,7 @@ class TestApplyLanguageQueryParam:
         from ui.query_params import apply_language_query_param
         session_state = {}
         monkeypatch.setattr("streamlit.session_state", session_state)
-        apply_language_query_param({"lang": "fr"})
+        apply_language_query_param({"lang": "xx"})
         assert "lang_select" not in session_state
 
     def test_ignores_missing_lang(self, monkeypatch):

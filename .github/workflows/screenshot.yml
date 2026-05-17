@@ -1,0 +1,26 @@
+name: Screenshot Regression
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: python -m playwright install chromium --with-deps
+      - run: pytest tests/e2e/test_screenshots.py -v --tb=short --headed
+        timeout-minutes: 5
+      - name: Upload screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: tests/e2e/screenshots/

@@ -14,6 +14,8 @@ import streamlit as st
 from streamlit_folium import st_folium
 
 from app_config import TILE_OPTIONS
+from batch.ai_scoring import analyze_reviews
+from batch.ai_scoring import is_available as ai_available
 from batch.logging_config import configure_logging
 from ui.analytics import inject_analytics
 from ui.components import build_data_freshness_text, build_result_context_text, render_score_legend, render_toilet_card
@@ -25,6 +27,7 @@ from ui.map_builder import build_map, calc_map_center
 from ui.metrics import get_metrics, render_metrics_dashboard
 from ui.pagination import calc_pagination, init_page_state, render_pagination, reset_page
 from ui.pipeline_status import render_pipeline_status
+from ui.plugin_api import render_plugins
 from ui.quality_dashboard import render_quality_dashboard
 from ui.query_params import (
     apply_language_query_param,
@@ -110,6 +113,7 @@ def _render_main_content(filtered: pd.DataFrame, map_items: list[dict], meta: di
     render_stats(meta, map_items, t)
     render_quality_dashboard(meta, toilets, t)
     render_pipeline_status()
+    render_plugins(toilets, t)
 
     if total_items > 0:
         render_pagination(total_items, page, total_pages, t)
@@ -233,6 +237,24 @@ def main() -> None:
         translated_to_internal = sidebar_result.translated_to_internal
 
         internal_filter = translated_to_internal[filter_type]
+
+        # AI enhancement: analyze reviews with Gemini
+        if st.session_state.get("ai_enhance", False) and "ai_scores" not in st.session_state:
+            ai_scores = {}
+            if ai_available():
+                candidates = [
+                    t for t in toilets
+                    if t.get("toilet_review_count", 0) >= 3
+                    and (t.get("confidence", 0) or 0) < 0.5
+                ]
+                with st.spinner(t.get("ai_analyzing", "🤖 AI分析中...")):
+                    for toilet in candidates:
+                        reviews = toilet.get("sample_reviews", [])
+                        result = analyze_reviews(reviews, toilet.get("title", ""))
+                        if result.get("sentiment_score") is not None:
+                            ai_scores[toilet.get("place_id")] = result
+            st.session_state["ai_scores"] = ai_scores
+
         filtered, filter_elapsed_ms = _process_filters(
             df, selected_pref, internal_filter, search_query, sort_order, user_location, t
         )
@@ -241,6 +263,14 @@ def main() -> None:
         st.caption(build_data_freshness_text(meta, t))
 
         map_items = filtered.to_dict("records")
+
+        # Merge AI scores into map_items for popup display
+        if "ai_scores" in st.session_state:
+            ai_scores = st.session_state["ai_scores"]
+            for item in map_items:
+                pid = item.get("place_id")
+                if pid in ai_scores:
+                    item.update({f"ai_{k}": v for k, v in ai_scores[pid].items()})
 
         compact = st.session_state.get("compact_mode", False)
         show_heatmap = st.session_state.get("show_heatmap", False)

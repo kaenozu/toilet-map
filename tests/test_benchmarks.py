@@ -39,6 +39,13 @@ class TestBenchmarks:
         assert len(result) > 0
 
 
+class TestFastPath:
+    def test_get_toilets_fast_speed(self, benchmark):
+        from ui.data_loader import get_toilets_fast
+        result = benchmark(get_toilets_fast)
+        assert len(result) > 0
+
+
 class TestBenchmarkBudget:
     def test_pref_stats_within_budget(self, benchmark):
         import sqlite3

@@ -15,6 +15,7 @@ from streamlit_js_eval import streamlit_js_eval
 
 from app_config import FILTER_CONFIG, FILTER_I18N_KEYS, TILE_OPTIONS
 from ui.i18n import LANGUAGE_OPTIONS, LANGUAGES, get_language_strings
+from ui.plugin_api import render_plugin_manager
 from ui.query_params import resolve_ui_state_from_query_params
 
 logger = logging.getLogger(__name__)
@@ -159,6 +160,7 @@ def _render_filter_section(t: dict, prefectures: list[str], translated_filters: 
 
 def _render_settings_section(t: dict) -> tuple[bool, str]:
     dark_mode = st.checkbox(t["dark_mode"], key="dark_mode")
+    st.checkbox(t.get("ai_enhance", "🤖 AI分析を試す"), key="ai_enhance")
     selected_tile = st.selectbox(
         t["tile_select"], list(TILE_OPTIONS.keys()), key="tile_select"
     )
@@ -187,6 +189,9 @@ def render_sidebar(
 
             st.divider()
             dark_mode, selected_tile = _render_settings_section(t)
+
+            st.divider()
+            render_plugin_manager(t)
 
             st.caption(t["shortcut_info"])
 

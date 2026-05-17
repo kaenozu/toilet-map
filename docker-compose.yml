@@ -1,15 +1,36 @@
+version: "3.9"
 services:
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
     ports:
       - "8501:8501"
-    environment:
-      - STREAMLIT_SERVER_MAXUPLOADSIZE=5
     volumes:
       - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - TOILET_MAP_DB_PATH=/app/data/toilets.db
+      - TOILET_MAP_SENTRY_ENVIRONMENT=production
+    command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      test: python -c "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health').read()"
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 5s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - TOILET_MAP_DB_PATH=/app/data/toilets.db
+    command: python batch/api_server.py
+    depends_on:
+      - app

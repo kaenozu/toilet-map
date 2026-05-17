@@ -18,6 +18,14 @@ from .types import ToiletDict
 logger = logging.getLogger(__name__)
 
 
+def get_toilets_fast() -> list[dict]:
+    """Lightweight toilet loader using sqlite3 row_factory (no pandas)."""
+    conn = get_db_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.execute("SELECT * FROM toilets")
+    return [dict(row) for row in cursor.fetchall()]
+
+
 def get_data_cache_token() -> tuple[int, int]:
     """DB更新時にキャッシュを自動無効化するためのトークンを返す。"""
     try:

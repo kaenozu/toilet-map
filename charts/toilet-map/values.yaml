@@ -1,0 +1,32 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/kaenozu/toilet-map
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8501
+
+ingress:
+  enabled: false
+  host: toilet-map.example.com
+  tls: false
+
+env:
+  TOILET_MAP_SENTRY_ENVIRONMENT: production
+  TOILET_MAP_DB_PATH: /data/toilets.db
+
+persistence:
+  enabled: true
+  size: 1Gi
+  path: /data
+
+resources:
+  requests:
+    memory: 512Mi
+    cpu: 250m
+  limits:
+    memory: 1Gi
+    cpu: 500m

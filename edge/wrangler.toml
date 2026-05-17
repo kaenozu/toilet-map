@@ -1,0 +1,13 @@
+name = "toilet-map-api"
+main = "worker.js"
+compatibility_date = "2025-04-01"
+
+[env.production]
+name = "toilet-map-api-prod"
+
+[env.staging]
+name = "toilet-map-api-staging"
+
+[[routes]]
+pattern = "api.toilet-map.example.com/*"
+zone_id = ""
