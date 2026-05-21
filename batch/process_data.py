@@ -7,6 +7,7 @@ Google Maps Scraper出力(JSONL)のデータ処理スクリプト
 import gzip
 import json
 import sys
+from collections import Counter
 from datetime import datetime
 
 from scoring import (
@@ -21,7 +22,26 @@ from scoring import (
 from scoring_config import AREA_NAME_RE, DISPLAY_SCORE_MULTIPLIER, DISPLAY_SCORE_OFFSET
 from utils import extract_prefecture, load_jsonl, logger, save_json
 
-from app_config import POTENTIAL_CATEGORIES
+from app_config import POTENTIAL_CATEGORIES, PREFECTURE_CENTERS
+
+
+def _extract_equipment(place: PlaceDict) -> list[str]:
+    """Extract equipment/amenity tags from raw scraper 'about' field."""
+    about = place.get("about") or []
+    if not isinstance(about, list):
+        return []
+    tags = []
+    for item in about:
+        name = str(item.get("name", "")).strip()
+        if name:
+            tags.append(name)
+        options = item.get("options") or []
+        if isinstance(options, list):
+            for opt in options:
+                opt_name = str(opt.get("name", "")).strip()
+                if opt_name:
+                    tags.append(opt_name)
+    return tags
 
 
 def _build_toilet_result(place: PlaceDict, info: ToiletScoreInfo, lat: float, lng: float) -> ToiletResultDict | None:
@@ -61,6 +81,7 @@ def _build_toilet_result(place: PlaceDict, info: ToiletScoreInfo, lat: float, ln
         "top_keywords": info["top_keywords"],
         "sample_reviews": info["toilet_reviews"][:5],
         "prefecture": extract_prefecture(place.get("address", "")),
+        "equipment": _extract_equipment(place),
     }
 
 
@@ -170,10 +191,29 @@ def calc_dynamic_zoom(results: list[ToiletResultDict]) -> int:
     return 15
 
 
+def _calc_center(results: list[ToiletResultDict]) -> tuple[float, float]:
+    """Prefecture-weighted center avoiding density bias."""
+    pref_counts: Counter[str] = Counter()
+    for r in results:
+        pref_counts[r.get("prefecture", "")] += 1
+    lat_sum = lng_sum = weight_sum = 0.0
+    for pref, count in pref_counts.items():
+        if pref in PREFECTURE_CENTERS:
+            lat, lng = PREFECTURE_CENTERS[pref]
+            lat_sum += lat * count
+            lng_sum += lng * count
+            weight_sum += count
+    if weight_sum > 0:
+        return lat_sum / weight_sum, lng_sum / weight_sum
+    # Fallback: simple average
+    return sum(r["lat"] for r in results) / len(results), sum(r["lng"] for r in results) / len(results)
+
+
 def build_metadata(results: list[ToiletResultDict]) -> dict:
     if results:
-        center_lat = sum(r["lat"] for r in results) / len(results)
-        center_lng = sum(r["lng"] for r in results) / len(results)
+        center_lat, center_lng = _calc_center(results)
+        center_lat = round(center_lat, 4)
+        center_lng = round(center_lng, 4)
     else:
         center_lat, center_lng = 36.2231, 139.3772
 

@@ -160,11 +160,13 @@ class TestCollectSqliteMetrics:
                 "lat": 35.68, "lng": 139.69, "rating": 4.0, "review_count": 10,
                 "is_public_toilet": True, "toilet_score": 80, "confidence": 0.8,
                 "toilet_review_count": 2, "prefecture": "東京都", "sample_reviews": [],
+                "top_keywords": [], "equipment": [],
             })
             insert_sql = (
                 "INSERT INTO toilets (title, category, address, lat, lng, rating, review_count, "
-                "is_public_toilet, toilet_score, confidence, toilet_review_count, prefecture, sample_reviews_json, top_keywords) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                "is_public_toilet, toilet_score, confidence, toilet_review_count, prefecture, "
+                "sample_reviews_json, top_keywords, equipment) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             )
             conn.execute(insert_sql, row)
             conn.execute("INSERT INTO metadata (key, value) VALUES (?, ?)", ("area_name", "テスト"))

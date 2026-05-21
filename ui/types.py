@@ -25,6 +25,7 @@ class ToiletDict(TypedDict, total=False):
     top_keywords: list[tuple[str, int]]
     sample_reviews: list[dict[str, object]]
     prefecture: str
+    equipment: list[str]
     distance: float | None
     ai_sentiment_score: float | None
     ai_cleanliness_summary: str | None

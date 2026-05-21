@@ -82,6 +82,7 @@ class ToiletResultDict(TypedDict):
     top_keywords: list[tuple[str, int]]
     sample_reviews: list[ToiletReviewDict]
     prefecture: str
+    equipment: list[str]
 
 
 TOILET_ABSENCE_PATTERNS = [

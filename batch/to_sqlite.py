@@ -46,6 +46,7 @@ DEFAULT_TOILET_FIELDS = {
     "link": "",
     "sample_reviews": [],
     "top_keywords": [],
+    "equipment": [],
 }
 
 
@@ -105,6 +106,8 @@ def _validate_toilet_record(toilet: dict, index: int) -> dict:
         raise ValueError(f"toilets[{index}] has invalid sample_reviews: expected list")
     if not isinstance(normalized["top_keywords"], list):
         raise ValueError(f"toilets[{index}] has invalid top_keywords: expected list")
+    if not isinstance(normalized["equipment"], list):
+        raise ValueError(f"toilets[{index}] has invalid equipment: expected list")
 
     return normalized
 

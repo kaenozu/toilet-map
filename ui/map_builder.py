@@ -90,6 +90,17 @@ def calc_map_center(
             )
         lat, lng = PREFECTURE_CENTERS[selected_pref]
         return lat, lng, 11
+    # "全て": use prefecture-weighted center instead of raw average
+    if prefecture_stats:
+        lat_sum = lng_sum = weight_sum = 0.0
+        for pref_name, s in prefecture_stats.items():
+            w = s.get("count", 0)
+            if w > 0:
+                lat_sum += s.get("center_lat", 0) * w
+                lng_sum += s.get("center_lng", 0) * w
+                weight_sum += w
+        if weight_sum > 0:
+            return round(lat_sum / weight_sum, 4), round(lng_sum / weight_sum, 4), meta.get("zoom", 9)
     return meta["center_lat"], meta["center_lng"], meta["zoom"]
 
 

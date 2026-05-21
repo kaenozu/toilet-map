@@ -155,7 +155,7 @@ class TestToiletDbValues:
             "sample_reviews": [],
         }
         values = db_utils.toilet_db_values(toilet)
-        assert len(values) == 14
+        assert len(values) == 15
 
 
     def test_prefecture_from_address_when_missing(self):
@@ -174,7 +174,7 @@ class TestToiletDbValues:
 
     def test_missing_fields_use_defaults(self):
         values = db_utils.toilet_db_values({})
-        assert len(values) == 14
+        assert len(values) == 15
         assert values[0] == ""
         assert values[3] is None
 

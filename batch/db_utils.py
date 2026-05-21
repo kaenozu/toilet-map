@@ -29,7 +29,8 @@ TOILET_TABLE_SCHEMA = """
         toilet_review_count INTEGER,
         prefecture TEXT,
         sample_reviews_json TEXT,
-        top_keywords TEXT
+        top_keywords TEXT,
+        equipment TEXT
     )
 """
 
@@ -48,8 +49,8 @@ TOILET_UPSERT_SQL = """
     INSERT INTO toilets (
         title, category, address, lat, lng, rating, review_count,
         is_public_toilet, toilet_score, confidence, toilet_review_count,
-        prefecture, sample_reviews_json, top_keywords
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        prefecture, sample_reviews_json, top_keywords, equipment
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(lat, lng) DO UPDATE SET
         title = excluded.title,
         category = excluded.category,
@@ -62,7 +63,8 @@ TOILET_UPSERT_SQL = """
         toilet_review_count = excluded.toilet_review_count,
         prefecture = excluded.prefecture,
         sample_reviews_json = excluded.sample_reviews_json,
-        top_keywords = excluded.top_keywords
+        top_keywords = excluded.top_keywords,
+        equipment = excluded.equipment
 """
 
 
@@ -91,11 +93,20 @@ def dedupe_duplicate_toilets(cur: sqlite3.Cursor) -> int:
     return before - after
 
 
+def _migrate_schema(cur: sqlite3.Cursor) -> None:
+    """Add missing columns from schema upgrades."""
+    existing = {row[1] for row in cur.execute("PRAGMA table_info(toilets)")}
+    for col_name, col_type in [("top_keywords", "TEXT"), ("equipment", "TEXT")]:
+        if col_name not in existing:
+            cur.execute(f"ALTER TABLE toilets ADD COLUMN {col_name} {col_type}")
+
+
 def ensure_schema(cur: sqlite3.Cursor) -> None:
     for sql in (TOILET_TABLE_SCHEMA, METADATA_TABLE_SCHEMA):
         cur.execute(sql)
     for sql in INDEXES:
         cur.execute(sql)
+    _migrate_schema(cur)
     for _ in range(3):
         try:
             cur.execute(TOILET_UNIQUE_INDEX)
@@ -176,7 +187,7 @@ def upsert_toilets(cur: sqlite3.Cursor, toilets: list[dict]) -> None:
 
 
 def toilet_db_values(toilet: dict) -> tuple:
-    """toilets テーブルに書き込む 14 列分の値をまとめて返す"""
+    """toilets テーブルに書き込む列の値をまとめて返す"""
     address = toilet.get("address", "")
     prefecture = toilet.get("prefecture") or extract_prefecture(address)
     return (
@@ -194,4 +205,5 @@ def toilet_db_values(toilet: dict) -> tuple:
         prefecture,
         reviews_to_json(toilet.get("sample_reviews", [])),
         keywords_to_json(toilet.get("top_keywords", [])),
+        keywords_to_json(toilet.get("equipment", [])),
     )

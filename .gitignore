@@ -55,6 +55,9 @@ batch/expansion_status.json
 # DB backups
 data/backups/
 
+# Merged intermediates
+batch/_merged_raw.jsonl
+
 # Coverage & dev artifacts
 .coverage
 Modelfile
