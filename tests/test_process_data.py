@@ -242,6 +242,19 @@ class TestBuildToiletResult:
                 "toilet_reviews": [], "top_keywords": []}
         assert _build_toilet_result(place, info, 35.0, 139.0) is None
 
+    def test_includes_source_ids_when_present(self):
+        from batch.process_data import _build_toilet_result
+
+        place = {"title": "駅前トイレ", "category": "駅", "place_id": "ChIJ123", "data_id": "0xabc"}
+        info = {"score": 0.0, "confidence": 0.1, "toilet_review_count": 1,
+                "toilet_reviews": [], "top_keywords": []}
+
+        result = _build_toilet_result(place, info, 35.0, 139.0)
+
+        assert result is not None
+        assert result["place_id"] == "ChIJ123"
+        assert result["data_id"] == "0xabc"
+
     def test_rescued_when_eligible_category(self):
         from batch.process_data import _build_toilet_result
         place = {"title": "上野公園", "category": "公園"}
@@ -296,6 +309,20 @@ class TestMakePlaceKey:
         assert result.startswith("title_address:")
         assert "test" in result
         assert "東京" in result
+
+
+class TestMakeResultKey:
+    def test_place_id_used_when_present(self):
+        result = {"place_id": "ChIJ123", "data_id": "0xabc", "lat": 35.0, "lng": 139.0}
+        assert pd_module.make_result_key(result) == "place_id:ChIJ123"
+
+    def test_data_id_fallback(self):
+        result = {"data_id": "0xabc", "lat": 35.0, "lng": 139.0}
+        assert pd_module.make_result_key(result) == "data_id:0xabc"
+
+    def test_coordinates_fallback(self):
+        result = {"lat": 35.0, "lng": 139.0}
+        assert pd_module.make_result_key(result) == "coords:35.000000,139.000000"
 
 
 class TestLoadExisting:

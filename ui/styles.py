@@ -6,6 +6,8 @@ CSS inlined directly; no file I/O at import time.
 
 import streamlit as st
 
+from ui.analytics import inject_analytics
+
 
 def inject_theme_styles() -> None:
     """Font/theme customization CSS based on session state (B8)."""
@@ -162,3 +164,77 @@ section[data-testid="stSidebar"][aria-expanded="false"] + div .block-container {
     }
 }
 </style>"""
+
+
+def inject_pwa_assets() -> None:
+    """Inject PWA assets, manifest, service worker, CSS, offline support, and install prompts."""
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebarNav"] {
+            display: none !important;
+        }
+        </style>
+        <link rel="manifest" href="/static/manifest.json">
+        <meta name="theme-color" content="#1a73e8">
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        """
+        <script>
+        document.addEventListener('keydown', function(e) {
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+          if (e.key === 'g' && !e.ctrlKey && !e.metaKey) {
+            var gps = document.querySelector('input[aria-label*="GPS" i]');
+            if (gps) { gps.click(); e.preventDefault(); }
+          }
+          if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+            var search = document.querySelector('input[aria-label*="検索" i]');
+            if (search) { search.focus(); e.preventDefault(); }
+          }
+        });
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(MOBILE_CSS, unsafe_allow_html=True)
+
+    inject_analytics()
+
+    # PWA: Service Worker registration
+    st.markdown(
+        """<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/sw.js');
+}
+</script>""",
+        unsafe_allow_html=True,
+    )
+
+    # PWA: Install prompt handler
+    st.markdown('<script src="/static/install.js"></script>', unsafe_allow_html=True)
+    # PWA: Offline IndexedDB cache
+    st.markdown('<script src="/static/offline.js"></script>', unsafe_allow_html=True)
+
+    # PWA install button (shown via JS when beforeinstallprompt fires)
+    st.markdown(
+        """<div id="pwa-install-container" style="display:none;position:fixed;bottom:16px;right:16px;z-index:9999;">
+<button onclick="window.installPwa()" style="padding:10px 20px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+📲 インストール
+</button>
+</div>
+<script>
+(function(){
+  var checkInstall = function(){
+    var c = document.getElementById('pwa-install-container');
+    if(c && document.body.dataset.installAvailable === 'true'){
+      c.style.display = 'block';
+    }
+  };
+  checkInstall();
+  setInterval(checkInstall, 2000);
+})();
+</script>""",
+        unsafe_allow_html=True,
+    )

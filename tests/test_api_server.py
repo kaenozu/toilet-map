@@ -2,6 +2,8 @@
 tests/test_api_server.py
 batch/api_server.py の FastAPI エンドポイントテスト
 """
+import sqlite3
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -128,3 +130,39 @@ class TestScoreDistribution:
         resp = c.get("/api/stats/distribution")
         assert resp.status_code == 200
         assert resp.json()["total"] == 0
+
+
+class TestHealthCheck:
+    def test_health_ok(self, tmp_path, monkeypatch):
+        import api_server
+
+        db_path = tmp_path / "toilets.db"
+        conn = sqlite3.connect(db_path)
+        conn.execute("CREATE TABLE toilets (id INTEGER PRIMARY KEY)")
+        conn.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT)")
+        conn.execute("INSERT INTO metadata (key, value) VALUES ('last_updated', '2026-05-18 00:00:00')")
+        conn.commit()
+        conn.close()
+
+        monkeypatch.setattr(api_server, "DB_PATH", str(db_path))
+        monkeypatch.setattr(api_server.db_schema, "get_schema_version", lambda conn: "test-schema", raising=False)
+
+        resp = TestClient(api_server.app).get("/health")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert body["db_connected"] is True
+        assert body["toilet_count"] == 0
+        assert body["schema_version"] == "test-schema"
+
+    def test_health_failure_returns_503(self, monkeypatch):
+        import api_server
+
+        def fake_connect(*args, **kwargs):
+            raise sqlite3.OperationalError("boom")
+
+        monkeypatch.setattr(api_server.sqlite3, "connect", fake_connect)
+
+        resp = TestClient(api_server.app).get("/health")
+        assert resp.status_code == 503
+        assert resp.json()["status"] == "error"

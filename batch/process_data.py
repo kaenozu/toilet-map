@@ -43,6 +43,8 @@ def _build_toilet_result(place: PlaceDict, info: ToiletScoreInfo, lat: float, ln
         display_score = 50.0  # デフォルト「普通」
 
     return {
+        "place_id": str(place.get("place_id") or "").strip(),
+        "data_id": str(place.get("data_id") or "").strip(),
         "title": place.get("title", ""),
         "category": place.get("category", ""),
         "address": place.get("address", ""),
@@ -99,7 +101,7 @@ def make_place_key(place: PlaceDict) -> str:
 
     lat, lng = _extract_coordinates(place)
     if lat is not None and lng is not None:
-        return f"coords:{lat:.6f},{lng:.6f}"
+        return f"coords:{round(lat, 6):.6f},{round(lng, 6):.6f}"
 
     title = _normalize_identity_text(place.get("title"))
     address = _normalize_identity_text(place.get("address"))
@@ -107,7 +109,22 @@ def make_place_key(place: PlaceDict) -> str:
 
 
 def make_result_key(result: ToiletResultDict) -> str:
-    return f"coords:{float(result['lat']):.6f},{float(result['lng']):.6f}"
+    place_id = str(result.get("place_id") or "").strip()
+    if place_id:
+        return f"place_id:{place_id}"
+
+    data_id = str(result.get("data_id") or "").strip()
+    if data_id:
+        return f"data_id:{data_id}"
+
+    lat = result.get("lat")
+    lng = result.get("lng")
+    if lat is not None and lng is not None:
+        return f"coords:{round(float(lat), 6):.6f},{round(float(lng), 6):.6f}"
+
+    title = _normalize_identity_text(result.get("title"))
+    address = _normalize_identity_text(result.get("address"))
+    return f"title_address:{title}|{address}"
 
 
 def load_existing(path: str) -> dict:

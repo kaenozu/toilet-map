@@ -3,6 +3,7 @@ batch/api_server.py
 FastAPI server with CORS, rate limiting, API key auth, and GraphQL.
 Related: app_settings.py, data/toilets.db, batch/graphql_schema.py
 """
+import logging
 import os
 import re
 import sqlite3
@@ -18,12 +19,21 @@ from fastapi.security import APIKeyHeader
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
-from strawberry.fastapi import GraphQLRouter
 
 from app_config import DB_PATH
 from app_settings import settings
 from batch import schema as db_schema
-from batch.graphql_schema import schema as graphql_schema
+
+logger = logging.getLogger(__name__)
+
+try:
+    from strawberry.fastapi import GraphQLRouter
+
+    from batch.graphql_schema import schema as graphql_schema
+except Exception as exc:  # pragma: no cover - optional dependency fallback
+    GraphQLRouter = None
+    graphql_schema = None
+    logger.warning("GraphQL disabled: %s", exc)
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -68,13 +78,14 @@ app.add_middleware(
 )
 
 # GraphQL
-graphql_app = GraphQLRouter(graphql_schema)
-app.include_router(
-    graphql_app,
-    prefix="/graphql",
-    tags=["GraphQL"],
-    dependencies=[Depends(verify_api_key)],
-)
+if GraphQLRouter and graphql_schema:
+    graphql_app = GraphQLRouter(graphql_schema)
+    app.include_router(
+        graphql_app,
+        prefix="/graphql",
+        tags=["GraphQL"],
+        dependencies=[Depends(verify_api_key)],
+    )
 
 
 def _custom_openapi():
@@ -98,12 +109,11 @@ app.openapi = _custom_openapi
 def health_check(request: Request):
     """Return system health status."""
     try:
-        conn = sqlite3.connect(DB_PATH)
-        count = conn.execute("SELECT COUNT(*) FROM toilets").fetchone()[0]
-        row = conn.execute("SELECT value FROM metadata WHERE key='last_updated'").fetchone()
-        last_updated = row[0] if row else None
-        schema_version = db_schema.get_schema_version(conn) if hasattr(db_schema, 'get_schema_version') else "unknown"
-        conn.close()
+        with sqlite3.connect(DB_PATH) as conn:
+            count = conn.execute("SELECT COUNT(*) FROM toilets").fetchone()[0]
+            row = conn.execute("SELECT value FROM metadata WHERE key='last_updated'").fetchone()
+            last_updated = row[0] if row else None
+            schema_version = db_schema.get_schema_version(conn) if hasattr(db_schema, 'get_schema_version') else "unknown"
         return {
             "status": "ok",
             "db_connected": True,
@@ -112,7 +122,7 @@ def health_check(request: Request):
             "schema_version": schema_version,
         }
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        return JSONResponse(status_code=503, content={"status": "error", "detail": str(e)})
 
 
 @app.get("/api/toilets", tags=["toilets"], summary="トイレ一覧を取得", response_model=dict)

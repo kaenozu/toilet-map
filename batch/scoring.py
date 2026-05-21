@@ -3,9 +3,10 @@ batch/scoring.py
 スコアリングロジック（process_data.py から抽出）
 レビューからのトイレスコア計算・信頼度算出・キーワード抽出
 """
+import bisect
 import re
 from collections import Counter
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from scoring_config import (
     CONFIDENCE_MIN,
@@ -34,6 +35,8 @@ class PlaceDict(TypedDict, total=False):
     address: str
     latitude: float
     longitude: float
+    place_id: str
+    data_id: str
     phone: str
     review_rating: float
     review_count: int
@@ -61,6 +64,8 @@ class ToiletScoreInfo(TypedDict):
 
 
 class ToiletResultDict(TypedDict):
+    place_id: NotRequired[str]
+    data_id: NotRequired[str]
     title: str
     category: str
     address: str
@@ -141,7 +146,15 @@ def _apply_scoring_and_negation(target_text: str) -> tuple[float, list[str]]:
     neg_word_positions = [m.start() for m in _NEGATION_PATTERN.finditer(target_text)]
 
     def is_negated(pos: int) -> bool:
-        return any(abs(pos - np) < NEGATION_WINDOW for np in neg_word_positions)
+        if not neg_word_positions:
+            return False
+        idx = bisect.bisect_left(neg_word_positions, pos)
+        candidates = []
+        if idx < len(neg_word_positions):
+            candidates.append(neg_word_positions[idx])
+        if idx > 0:
+            candidates.append(neg_word_positions[idx - 1])
+        return any(abs(pos - np) < NEGATION_WINDOW for np in candidates)
 
     for m in _POS_PATTERN.finditer(target_text):
         kw = m.group()

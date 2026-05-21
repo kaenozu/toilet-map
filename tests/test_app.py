@@ -85,6 +85,29 @@ class TestGetScoreStyle:
         assert emoji == "💩"
 
 
+class TestToiletIdentityKey:
+    def test_prefers_place_id(self):
+        from ui.helpers import get_toilet_identity_key
+
+        toilet = {
+            "place_id": "ChIJ123",
+            "data_id": "0xabc",
+            "lat": 35.0,
+            "lng": 139.0,
+            "title": "A",
+            "address": "東京都",
+        }
+
+        assert get_toilet_identity_key(toilet) == "place_id:ChIJ123"
+
+    def test_coordinates_fallback(self):
+        from ui.helpers import get_toilet_identity_key
+
+        toilet = {"lat": 35.0, "lng": 139.0, "title": "A", "address": "東京都"}
+
+        assert get_toilet_identity_key(toilet) == "coords:35.000000,139.000000"
+
+
 class TestEscaping:
     def test_esc(self):
         from ui.helpers import esc

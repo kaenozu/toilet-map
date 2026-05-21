@@ -4,7 +4,7 @@ Streamlit UI components for toilet map
 """
 import streamlit as st
 
-from .helpers import esc, get_score_style, safe_href
+from .helpers import esc, get_score_style, get_toilet_identity_key, safe_href
 from .types import ToiletDict
 
 
@@ -164,5 +164,5 @@ def render_toilet_card(toilet: ToiletDict, rank: int | None = None, meta: dict[s
     """ランキングリストのトイレカード（1行）"""
     st.markdown(build_toilet_card_html(toilet, rank, meta, compact=compact), unsafe_allow_html=True)
     from ui.reviews import render_review_form
-    if toilet.get("place_id") and not compact:
-        render_review_form(toilet["place_id"], toilet.get("title", ""))
+    if not compact:
+        render_review_form(get_toilet_identity_key(toilet), toilet.get("title", ""))

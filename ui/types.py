@@ -18,6 +18,7 @@ class ToiletDict(TypedDict, total=False):
     link: str
     is_public_toilet: bool
     place_id: str
+    data_id: str
     toilet_score: float
     confidence: float
     toilet_review_count: int

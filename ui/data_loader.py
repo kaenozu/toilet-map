@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 
 def get_toilets_fast() -> list[dict]:
     """Lightweight toilet loader using sqlite3 row_factory (no pandas)."""
-    conn = get_db_connection()
-    conn.row_factory = sqlite3.Row
-    cursor = conn.execute("SELECT * FROM toilets")
-    return [dict(row) for row in cursor.fetchall()]
+    with get_db_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute("SELECT * FROM toilets")
+        return [dict(row) for row in cursor.fetchall()]
 
 
 def get_data_cache_token() -> tuple[int, int]:
@@ -35,21 +35,24 @@ def get_data_cache_token() -> tuple[int, int]:
     return stat.st_mtime_ns, stat.st_size
 
 
-@st.cache_resource
 def get_db_connection() -> sqlite3.Connection:
-    """SQLite接続をキャッシュして返す（@st.cache_resource で管理）。"""
-    return sqlite3.connect(DB_PATH)
+    """SQLite接続を作成して返す。マルチスレッド競合を防ぐためキャッシュせず、チェックも無効化。"""
+    try:
+        return sqlite3.connect(DB_PATH, check_same_thread=False)
+    except TypeError:
+        # pytest などのモンキーパッチ（lambda _: mock_conn）への後方互換対応
+        return sqlite3.connect(DB_PATH)
 
 
 @st.cache_data(ttl=3600, max_entries=1, show_spinner="データを読み込み中...")
 def load_toilet_data(cache_token: tuple[int, int] | None = None) -> dict:
     """SQLite から全データを読み込み、アプリ用の辞書形式で返す。"""
     try:
-        conn = get_db_connection()
-        # トイレデータ読み込み
-        df = pd.read_sql("SELECT * FROM toilets", conn)
-        # メタデータ読み込み
-        meta_df = pd.read_sql("SELECT * FROM metadata", conn)
+        with get_db_connection() as conn:
+            # トイレデータ読み込み
+            df = pd.read_sql("SELECT * FROM toilets", conn)
+            # メタデータ読み込み
+            meta_df = pd.read_sql("SELECT * FROM metadata", conn)
 
         # メタデータを辞書に変換
         metadata = dict(zip(meta_df["key"], meta_df["value"]))

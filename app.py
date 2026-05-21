@@ -17,11 +17,11 @@ from app_config import TILE_OPTIONS
 from batch.ai_scoring import analyze_reviews
 from batch.ai_scoring import is_available as ai_available
 from batch.logging_config import configure_logging
-from ui.analytics import inject_analytics
 from ui.components import build_data_freshness_text, build_result_context_text, render_score_legend, render_toilet_card
 from ui.data_loader import get_data_cache_token, get_prefectures, load_toilet_data, toilets_to_dataframe
-from ui.exporter import to_geojson, to_gpx, to_kml
+from ui.exporter import render_export_ui
 from ui.filters import filter_toilets, search_toilets
+from ui.helpers import get_toilet_identity_key
 from ui.i18n import APP_TITLE, DEFAULT_LANGUAGE, get_language_strings
 from ui.map_builder import build_map, calc_map_center
 from ui.metrics import get_metrics, render_metrics_dashboard
@@ -37,7 +37,7 @@ from ui.query_params import (
 )
 from ui.sidebar import render_sidebar
 from ui.stats import render_stats
-from ui.styles import MOBILE_CSS, inject_theme_styles
+from ui.styles import inject_pwa_assets, inject_theme_styles
 
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN", ""),
@@ -130,97 +130,19 @@ def _render_main_content(filtered: pd.DataFrame, map_items: list[dict], meta: di
     return dark_mode, page, display_items
 
 
-def _inject_html() -> None:
-    st.markdown(
-        """
-        <style>
-        [data-testid="stSidebarNav"] {
-            display: none !important;
-        }
-        </style>
-        <link rel="manifest" href="/static/manifest.json">
-        <meta name="theme-color" content="#1a73e8">
-        """,
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        """
-        <script>
-        document.addEventListener('keydown', function(e) {
-          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-          if (e.key === 'g' && !e.ctrlKey && !e.metaKey) {
-            var gps = document.querySelector('input[aria-label*="GPS" i]');
-            if (gps) { gps.click(); e.preventDefault(); }
-          }
-          if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
-            var search = document.querySelector('input[aria-label*="検索" i]');
-            if (search) { search.focus(); e.preventDefault(); }
-          }
-        });
-        </script>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.markdown(MOBILE_CSS, unsafe_allow_html=True)
-
-    inject_analytics()
-
-    # PWA: Service Worker registration
-    st.markdown("""<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/static/sw.js');
-}
-</script>""", unsafe_allow_html=True)
-
-    # PWA: Install prompt handler
-    st.markdown('<script src="/static/install.js"></script>', unsafe_allow_html=True)
-    # PWA: Offline IndexedDB cache
-    st.markdown('<script src="/static/offline.js"></script>', unsafe_allow_html=True)
-
-    # PWA install button (shown via JS when beforeinstallprompt fires)
-    st.markdown("""<div id="pwa-install-container" style="display:none;position:fixed;bottom:16px;right:16px;z-index:9999;">
-<button onclick="window.installPwa()" style="padding:10px 20px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
-📲 インストール
-</button>
-</div>
-<script>
-(function(){
-  var checkInstall = function(){
-    var c = document.getElementById('pwa-install-container');
-    if(c && document.body.dataset.installAvailable === 'true'){
-      c.style.display = 'block';
-    }
-  };
-  checkInstall();
-  setInterval(checkInstall, 2000);
-})();
-</script>""", unsafe_allow_html=True)
-
-
 def main() -> None:
     st.set_page_config(
         page_title=APP_TITLE,
         page_icon="🚽",
         layout="wide",
     )
-    _inject_html()
+    inject_pwa_assets()
     inject_theme_styles()
     configure_logging()
 
-    if "data_loaded" not in st.session_state:
-        st.markdown("""
-        <div style="text-align:center;padding:4rem;">
-            <div style="width:60%;height:20px;background:#e0e0e0;border-radius:4px;margin:1rem auto;animation:pulse 1.5s infinite;"></div>
-            <div style="width:40%;height:20px;background:#e0e0e0;border-radius:4px;margin:1rem auto;animation:pulse 1.5s infinite 0.2s;"></div>
-        </div>
-        <style>
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-        </style>
-        """, unsafe_allow_html=True)
-        st.stop()
-
     try:
-        meta, df, prefectures, prefecture_stats, t, query_params, toilets = _load_and_prepare()
+        with st.spinner("データを読み込み中..."):
+            meta, df, prefectures, prefecture_stats, t, query_params, toilets = _load_and_prepare()
         st.session_state["data_loaded"] = True
 
         sidebar_result = render_sidebar(t, prefectures, query_params)
@@ -252,7 +174,7 @@ def main() -> None:
                         reviews = toilet.get("sample_reviews", [])
                         result = analyze_reviews(reviews, toilet.get("title", ""))
                         if result.get("sentiment_score") is not None:
-                            ai_scores[toilet.get("place_id")] = result
+                            ai_scores[get_toilet_identity_key(toilet)] = result
             st.session_state["ai_scores"] = ai_scores
 
         filtered, filter_elapsed_ms = _process_filters(
@@ -268,9 +190,9 @@ def main() -> None:
         if "ai_scores" in st.session_state:
             ai_scores = st.session_state["ai_scores"]
             for item in map_items:
-                pid = item.get("place_id")
-                if pid in ai_scores:
-                    item.update({f"ai_{k}": v for k, v in ai_scores[pid].items()})
+                identity_key = get_toilet_identity_key(item)
+                if identity_key in ai_scores:
+                    item.update({f"ai_{k}": v for k, v in ai_scores[identity_key].items()})
 
         compact = st.session_state.get("compact_mode", False)
         show_heatmap = st.session_state.get("show_heatmap", False)
@@ -291,35 +213,7 @@ def main() -> None:
         if st.session_state.get("_show_shortcuts", False):
             st.info(t["shortcut_info"])
 
-        if len(display_items) > 0:
-            export_format = st.selectbox(
-                "エクスポート形式",
-                ["CSV", "GeoJSON", "KML", "GPX"],
-                key="export_format",
-            )
-            if export_format == "CSV":
-                data = filtered.to_csv(index=False).encode("utf-8-sig")
-                mime = "text/csv"
-                ext = "csv"
-            elif export_format == "GeoJSON":
-                data = to_geojson(map_items).encode("utf-8")
-                mime = "application/geo+json"
-                ext = "geojson"
-            elif export_format == "KML":
-                data = to_kml(map_items).encode("utf-8")
-                mime = "application/vnd.google-earth.kml+xml"
-                ext = "kml"
-            else:
-                data = to_gpx(map_items).encode("utf-8")
-                mime = "application/gpx+xml"
-                ext = "gpx"
-            st.download_button(
-                f"\U0001f4e5 {export_format}ダウンロード",
-                data,
-                f"toilets_{selected_pref}.{ext}",
-                mime,
-                use_container_width=True,
-            )
+        render_export_ui(filtered, map_items, selected_pref, t)
 
         if toilets:
             cache_data = json.dumps([

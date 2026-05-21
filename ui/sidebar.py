@@ -7,7 +7,6 @@ StreamlitのサイドバーUIを描画する
 """
 
 import logging
-import time
 from typing import NamedTuple
 
 import streamlit as st
@@ -49,13 +48,29 @@ def get_translated_filters(lang: str) -> tuple[dict[str, str], dict[str, str]]:
 
 
 def build_geolocation_js() -> str:
-    """位置情報取得のJavaScript式を生成する"""
-    return (
-        "new Promise(resolve => navigator.geolocation.getCurrentPosition("
-        "pos => resolve({latitude: pos.coords.latitude, longitude: pos.coords.longitude}), "
-        "err => resolve({error: err.message})"
-        "))"
-    )
+    """位置情報取得のJavaScript式。JS側でタイムアウトと最大3回のリトライを行う"""
+    return """
+    new Promise(resolve => {
+        let attempts = 0;
+        const maxAttempts = 3;
+
+        const getPos = () => {
+            navigator.geolocation.getCurrentPosition(
+                pos => resolve({latitude: pos.coords.latitude, longitude: pos.coords.longitude}),
+                err => {
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        setTimeout(getPos, 1000 * Math.pow(2, attempts));
+                    } else {
+                        resolve({error: err.message});
+                    }
+                },
+                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+            );
+        };
+        getPos();
+    })
+    """
 
 
 def _handle_gps_section(t: dict) -> tuple[tuple | None, bool]:
@@ -65,25 +80,10 @@ def _handle_gps_section(t: dict) -> tuple[tuple | None, bool]:
     if not gps_enabled:
         st.session_state.pop("_user_location", None)
         st.session_state.pop("_gps_error", None)
-        st.session_state.pop("_gps_attempt", None)
     elif "_user_location" not in st.session_state and "_gps_error" not in st.session_state:
-        max_attempts = 2
-        attempt = st.session_state.get("_gps_attempt", 0)
-        loc = None
-        while attempt < max_attempts:
-            loc = streamlit_js_eval(
-                js_expressions=build_geolocation_js(), key=f"location_{attempt}"
-            )
-            if isinstance(loc, dict):
-                if "latitude" in loc and "longitude" in loc:
-                    break
-                if "error" in loc:
-                    attempt += 1
-                    st.session_state["_gps_attempt"] = attempt
-                    if attempt < max_attempts:
-                        time.sleep(2 ** attempt)
-                    continue
-            break
+        loc = streamlit_js_eval(
+            js_expressions=build_geolocation_js(), key="gps_eval_single"
+        )
         if isinstance(loc, dict):
             if "latitude" in loc and "longitude" in loc:
                 st.session_state["_user_location"] = (
