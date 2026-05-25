@@ -23,5 +23,8 @@ docker run -p 8501:8501 toilet-map
 ```bash
 pip install -r requirements-dev.txt
 pytest tests/ -v
+pytest tests/e2e tests/visual -q
+python scripts/update_screenshot_baselines.py
+python -m playwright install chromium
 ruff check .
 ```

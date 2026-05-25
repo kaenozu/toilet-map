@@ -18,6 +18,7 @@ Google Mapsのレビューからトイレのきれい度を自動判定して地
 - **スクレイピング**: Docker / Google Maps Scraper
 - **データ処理**: JSON / JSONL / SQLite
 - **テスト**: pytest
+- **回帰テスト**: Playwright による E2E / a11y / スクリーンショット検証
 
 ## クイックスタート
 

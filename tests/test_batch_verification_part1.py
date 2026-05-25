@@ -58,10 +58,14 @@ class TestQualityMetricsUtilities:
 
 class TestVerificationAlignment:
     def test_sqlite_metric_mismatch_becomes_error(self):
-        meta = {"total": 10, "scored": 8, "public_toilets": 3}
-        sqlite_metrics = {"total": 9, "scored": 8, "public_toilets": 3, "metadata": {}}
+        from batch.quality_metrics_dto import SQLiteMetrics
 
-        errors, warnings = verify_data.compare_sqlite_metrics(meta, sqlite_metrics)
+        meta = {"total": 10, "scored": 8, "public_toilets": 3}
+        sqlite_metrics = SQLiteMetrics(total=9, scored=8, public_toilets=3, prefecture_counts={}, metadata={})
+
+        result = verify_data.compare_sqlite_metrics(meta, sqlite_metrics)
+        errors = result.errors
+        warnings = result.warnings
 
         assert any("SQLite total mismatch" in error for error in errors)
         assert any("SQLite db_synced_at missing" in warning for warning in warnings)
@@ -112,12 +116,12 @@ class TestVerificationGate:
 
         metrics = verify_data.collect_quality_metrics(toilets)
 
-        assert metrics["total"] == 3
-        assert metrics["missing_score"] == 1
-        assert metrics["missing_prefecture"] == 1
-        assert metrics["missing_address"] == 1
-        assert len(metrics["duplicates"]) == 1
-        assert metrics["prefecture_counts"]["東京都"] == 2
+        assert metrics.total == 3
+        assert metrics.missing_score == 1
+        assert metrics.missing_prefecture == 1
+        assert metrics.missing_address == 1
+        assert len(metrics.duplicates) == 1
+        assert metrics.prefecture_counts["東京都"] == 2
 
     def test_collect_quality_metrics_prefers_place_ids(self):
         toilets = [
@@ -143,8 +147,8 @@ class TestVerificationGate:
 
         metrics = verify_data.collect_quality_metrics(toilets)
 
-        assert len(metrics["duplicates"]) == 1
-        assert metrics["duplicates"][0]["key"] == ("place_id", "ChIJA")
+        assert len(metrics.duplicates) == 1
+        assert metrics.duplicates[0]["key"] == ("place_id", "ChIJA")
 
     def test_collect_quality_metrics_detects_coordinate_duplicates(self):
         toilets = [
@@ -170,8 +174,8 @@ class TestVerificationGate:
 
         metrics = verify_data.collect_quality_metrics(toilets)
 
-        assert len(metrics["duplicates"]) == 1
-        assert metrics["duplicates"][0]["key"][0] == "coordinates"
+        assert len(metrics.duplicates) == 1
+        assert metrics.duplicates[0]["key"][0] == "coordinates"
 
     def test_collect_sqlite_metrics_reads_summary(self, tmp_path):
         db_path = tmp_path / "toilets.db"
@@ -213,59 +217,67 @@ class TestVerificationGate:
         summary = verify_data.collect_sqlite_metrics(str(db_path))
 
         assert summary is not None
-        assert summary["total"] == 1
-        assert summary["scored"] == 1
-        assert summary["public_toilets"] == 1
-        assert summary["prefecture_counts"]["東京都"] == 1
-        assert summary["metadata"]["area_name"] == "テスト"
+        assert summary.total == 1
+        assert summary.scored == 1
+        assert summary.public_toilets == 1
+        assert summary.prefecture_counts["東京都"] == 1
+        assert summary.metadata["area_name"] == "テスト"
 
     def test_compare_sqlite_metrics_detects_prefecture_mismatch(self):
+        from batch.quality_metrics_dto import SQLiteMetrics
+
         meta = {
             "total": 2,
             "scored": 2,
             "public_toilets": 1,
             "prefecture_counts": {"東京都": 2},
         }
-        sqlite_metrics = {
-            "total": 2,
-            "scored": 2,
-            "public_toilets": 1,
-            "metadata": {"db_synced_at": "2026-05-11 00:00:00"},
-            "prefecture_counts": {"東京都": 1},
-        }
+        sqlite_metrics = SQLiteMetrics(
+            total=2, scored=2, public_toilets=1, prefecture_counts={"東京都": 1}, metadata={"db_synced_at": "2026-05-11 00:00:00"}
+        )
 
-        errors, warnings = verify_data.compare_sqlite_metrics(meta, sqlite_metrics)
+        result = verify_data.compare_sqlite_metrics(meta, sqlite_metrics)
+        errors = result.errors
+        warnings = result.warnings
 
         assert any("prefecture count mismatch" in message for message in errors)
         assert warnings == []
 
     def test_evaluate_quality_gate_fails_on_large_missing_rate(self):
-        metrics = {
-            "total": 10,
-            "missing_score": 3,
-            "missing_prefecture": 0,
-            "missing_address": 0,
-            "duplicates": [],
-            "prefecture_counts": {"東京都": 10},
-        }
+        from batch.quality_metrics_dto import QualityMetrics
 
-        errors, warnings = verify_data.evaluate_quality_gate(metrics, expected_prefectures=["東京都"])
+        metrics = QualityMetrics(
+            total=10,
+            missing_score=3,
+            missing_prefecture=0,
+            missing_address=0,
+            duplicates=[],
+            prefecture_counts={"東京都": 10},
+        )
+
+        result = verify_data.evaluate_quality_gate(metrics, expected_prefectures=["東京都"])
+        errors = result.errors
+        warnings = result.warnings
 
         assert errors
         assert any("Missing score rate" in message for message in errors)
         assert warnings == []
 
     def test_evaluate_quality_gate_warns_on_missing_prefecture_coverage(self):
-        metrics = {
-            "total": 5,
-            "missing_score": 0,
-            "missing_prefecture": 0,
-            "missing_address": 0,
-            "duplicates": [],
-            "prefecture_counts": {"東京都": 5},
-        }
+        from batch.quality_metrics_dto import QualityMetrics
 
-        errors, warnings = verify_data.evaluate_quality_gate(metrics, expected_prefectures=["東京都", "神奈川県"])
+        metrics = QualityMetrics(
+            total=5,
+            missing_score=0,
+            missing_prefecture=0,
+            missing_address=0,
+            duplicates=[],
+            prefecture_counts={"東京都": 5},
+        )
+
+        result = verify_data.evaluate_quality_gate(metrics, expected_prefectures=["東京都", "神奈川県"])
+        errors = result.errors
+        warnings = result.warnings
 
         assert errors == []
         assert any("No records found for 神奈川県" in message for message in warnings)

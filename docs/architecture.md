@@ -24,4 +24,4 @@
 - `ui/` — UI logic (sidebar, map, popups, pagination, filters, etc.)
 - `batch/` — Data processing pipeline + API server
 - `static/` — CSS, JS, PWA assets
-- `tests/` — Unit, E2E, benchmark, i18n, a11y tests
+- `tests/` — Unit, E2E, visual, benchmark, i18n, a11y tests

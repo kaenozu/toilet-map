@@ -550,6 +550,97 @@ class TestCalculateFinalScore:
         assert confidence == 0.0
 
 
+class TestExtractEquipment:
+    def test_empty_about_returns_empty_list(self):
+        place = {"title": "test", "category": "公園"}
+        from batch.process_data import _extract_equipment
+        assert _extract_equipment(place) == []
+
+    def test_none_about_returns_empty_list(self):
+        place = {"title": "test", "about": None}
+        from batch.process_data import _extract_equipment
+        assert _extract_equipment(place) == []
+
+    def test_non_list_about_returns_empty_list(self):
+        place = {"title": "test", "about": "string"}
+        from batch.process_data import _extract_equipment
+        assert _extract_equipment(place) == []
+
+    def test_extracts_amenity_names_from_about(self):
+        place = {
+            "title": "test",
+            "about": [
+                {"name": "🚻 トイレ", "options": []},
+                {"name": "車椅子対応", "options": []},
+            ],
+        }
+        from batch.process_data import _extract_equipment
+        result = _extract_equipment(place)
+        assert "🚻 トイレ" in result
+        assert "車椅子対応" in result
+
+    def test_extracts_option_names(self):
+        place = {
+            "title": "test",
+            "about": [
+                {
+                    "name": "設備",
+                    "options": [
+                        {"name": "おむつ替え台"},
+                        {"name": "多目的トイレ"},
+                    ],
+                },
+            ],
+        }
+        from batch.process_data import _extract_equipment
+        result = _extract_equipment(place)
+        assert "おむつ替え台" in result
+        assert "多目的トイレ" in result
+
+    def test_extracts_both_name_and_options(self):
+        place = {
+            "title": "test",
+            "about": [
+                {
+                    "name": "設備カテゴリ",
+                    "options": [{"name": "オプションA"}, {"name": "オプションB"}],
+                },
+                {"name": "単体タグ", "options": []},
+            ],
+        }
+        from batch.process_data import _extract_equipment
+        result = _extract_equipment(place)
+        assert len(result) == 4
+        assert "単体タグ" in result
+        assert "オプションA" in result
+
+    def test_skips_empty_name(self):
+        place = {
+            "title": "test",
+            "about": [
+                {"name": "  ", "options": []},
+                {"name": "有効なタグ", "options": []},
+            ],
+        }
+        from batch.process_data import _extract_equipment
+        result = _extract_equipment(place)
+        assert "有効なタグ" in result
+        assert "" not in result
+
+    def test_equipment_in_build_toilet_result(self):
+        from batch.process_data import _build_toilet_result
+        place = {
+            "title": "公園トイレ",
+            "category": "公園",
+            "about": [{"name": "多目的トイレ", "options": []}],
+        }
+        info = {"score": 0.0, "confidence": 0.1, "toilet_review_count": 1,
+                "toilet_reviews": [], "top_keywords": []}
+        result = _build_toilet_result(place, info, 35.0, 139.0)
+        assert result is not None
+        assert "多目的トイレ" in result["equipment"]
+
+
 class TestExtractCoordinates:
     def test_longitude_zero_falls_back_to_longtitude(self):
         place = {"latitude": 35.0, "longitude": 0, "longtitude": 139.69}

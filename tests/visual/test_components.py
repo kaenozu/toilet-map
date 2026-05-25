@@ -5,7 +5,6 @@ Related: ui/components.py, ui/popups.py, tests/e2e/test_screenshots.py
 """
 from pathlib import Path
 
-import pytest
 from playwright.sync_api import Page
 
 SCREENSHOT_DIR = Path("tests/visual/screenshots")
@@ -15,7 +14,6 @@ SCREENSHOT_DIR.mkdir(exist_ok=True)
 class TestComponentPreviews:
     """Render individual components and capture screenshots."""
 
-    @pytest.mark.skip(reason="Requires running Streamlit app with component test page")
     def test_toilet_card_preview(self, page: Page):
         page.set_content("""
         <html><body>
@@ -38,7 +36,6 @@ class TestComponentPreviews:
         card = page.locator(".toilet-card")
         card.screenshot(path=str(SCREENSHOT_DIR / "toilet-card.png"))
 
-    @pytest.mark.skip(reason="Requires running Streamlit app with component test page")
     def test_score_legend_preview(self, page: Page):
         page.set_content("""
         <html><body style="font-family:sans-serif;">
@@ -53,7 +50,6 @@ class TestComponentPreviews:
         legend = page.locator("div[style*='display:flex']")
         legend.screenshot(path=str(SCREENSHOT_DIR / "score-legend.png"))
 
-    @pytest.mark.skip(reason="Requires running Streamlit app with component test page")
     def test_pagination_preview(self, page: Page):
         page.set_content("""
         <html><body style="font-family:sans-serif;">

@@ -13,6 +13,14 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
+## 测试
+
+```bash
+pip install -r requirements-dev.txt
+python -m playwright install chromium
+pytest tests/e2e tests/visual -q
+```
+
 ## 许可证
 
 MIT

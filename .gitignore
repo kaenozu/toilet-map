@@ -54,6 +54,7 @@ batch/expansion_status.json
 
 # DB backups
 data/backups/
+data/reviews.db
 
 # Merged intermediates
 batch/_merged_raw.jsonl
@@ -61,6 +62,9 @@ batch/_merged_raw.jsonl
 # Coverage & dev artifacts
 .coverage
 Modelfile
+fix_metrics_backup.py
+fix_test_final.py
+site/
 
 # Python
 __pycache__/

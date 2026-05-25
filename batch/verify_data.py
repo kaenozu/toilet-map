@@ -86,23 +86,25 @@ def main():
 
     metrics = collect_quality_metrics(toilets)
     sqlite_metrics = collect_sqlite_metrics(DB_PATH)
-    errors, warnings = evaluate_quality_gate(metrics, expected_prefectures)
+    gate_result = evaluate_quality_gate(metrics, expected_prefectures)
+    errors = gate_result.errors
+    warnings = gate_result.warnings
 
     if sqlite_metrics:
         compare_meta = dict(meta)
-        compare_meta.setdefault("prefecture_counts", metrics["prefecture_counts"])
-        sqlite_errors, sqlite_warnings = compare_sqlite_metrics(compare_meta, sqlite_metrics)
-        errors.extend(sqlite_errors)
-        warnings.extend(sqlite_warnings)
+        compare_meta.setdefault("prefecture_counts", metrics.prefecture_counts)
+        compare_result = compare_sqlite_metrics(compare_meta, sqlite_metrics)
+        errors.extend(compare_result.errors)
+        warnings.extend(compare_result.warnings)
 
     print("[SUMMARY]")
-    print(f"  Total toilets    : {metrics['total']}")
+    print(f"  Total toilets    : {metrics.total}")
     print(f"  With reviews     : {meta.get('scored', 'N/A')}")
     print(f"  Public toilets   : {meta.get('public_toilets', 'N/A')}")
     print(f"  Last updated     : {meta.get('last_updated', 'N/A')}")
     print()
 
-    pref_counts = metrics["prefecture_counts"]
+    pref_counts = metrics.prefecture_counts
     print("[PREFECTURE DISTRIBUTION]")
     for pref in expected_prefectures:
         cnt = pref_counts.get(pref, 0)
@@ -115,21 +117,21 @@ def main():
     print()
 
     print("[COMPLETENESS]")
-    print(f"  Missing score     : {metrics['missing_score']}/{metrics['total']}")
-    print(f"  Missing prefecture: {metrics['missing_prefecture']}/{metrics['total']}")
-    print(f"  Missing address   : {metrics['missing_address']}/{metrics['total']}")
+    print(f"  Missing score     : {metrics.missing_score}/{metrics.total}")
+    print(f"  Missing prefecture: {metrics.missing_prefecture}/{metrics.total}")
+    print(f"  Missing address   : {metrics.missing_address}/{metrics.total}")
     print()
 
     if sqlite_metrics:
         print("[SQLITE]")
-        print(f"  Total toilets    : {sqlite_metrics['total']}")
-        print(f"  With reviews     : {sqlite_metrics['scored']}")
-        print(f"  Public toilets   : {sqlite_metrics['public_toilets']}")
-        print(f"  Last updated     : {sqlite_metrics['metadata'].get('last_updated', 'N/A')}")
-        print(f"  DB synced at     : {sqlite_metrics['metadata'].get('db_synced_at', 'N/A')}")
+        print(f"  Total toilets    : {sqlite_metrics.total}")
+        print(f"  With reviews     : {sqlite_metrics.scored}")
+        print(f"  Public toilets   : {sqlite_metrics.public_toilets}")
+        print(f"  Last updated     : {sqlite_metrics.metadata.get('last_updated', 'N/A')}")
+        print(f"  DB synced at     : {sqlite_metrics.metadata.get('db_synced_at', 'N/A')}")
         print()
 
-    duplicates = metrics["duplicates"]
+    duplicates = metrics.duplicates
     if duplicates:
         print(f"[DUPLICATES] {len(duplicates)} duplicate records found:")
         for duplicate in duplicates[:5]:

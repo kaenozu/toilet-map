@@ -26,6 +26,7 @@ streamlit run app.py
 - **Data Export** (CSV, GeoJSON, KML, GPX)
 - **PWA** with offline cache
 - **Accessibility** (keyboard nav, ARIA, a11y audited)
+- **Regression Tests** with Playwright E2E, accessibility, and screenshot coverage
 
 ## Documentation
 

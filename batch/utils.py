@@ -171,7 +171,7 @@ def file_lock(path: str, timeout: float = 600.0, poll_interval: float = 0.5):
                 break
             except OSError:
                 if time.time() - start >= timeout:
-                    raise TimeoutError(f"Timed out waiting for lock: {path}")
+                    raise TimeoutError(f"Timed out waiting for lock: {path}") from None
                 time.sleep(poll_interval)
 
         try:

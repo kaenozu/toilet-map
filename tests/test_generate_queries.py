@@ -60,7 +60,7 @@ class TestWriteBatches:
         assert n == 3  # 25 queries / 12 per batch = 3 files
         files = sorted(tmp_path.iterdir())
         assert len(files) == 3
-        for i, f in enumerate(files):
+        for _i, f in enumerate(files):
             content = f.read_text(encoding="utf-8")
             assert "# city: 東京" in content
             assert "# prefecture: 東京都" in content

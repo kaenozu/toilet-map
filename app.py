@@ -18,6 +18,7 @@ from batch.ai_scoring import analyze_reviews
 from batch.ai_scoring import is_available as ai_available
 from batch.logging_config import configure_logging
 from ui.components import build_data_freshness_text, build_result_context_text, render_score_legend, render_toilet_card
+from ui.data_classes import PreparedData, RenderConfig, SidebarUIState
 from ui.data_loader import get_data_cache_token, get_prefectures, load_toilet_data, toilets_to_dataframe
 from ui.exporter import render_export_ui
 from ui.filters import filter_toilets, search_toilets
@@ -41,15 +42,16 @@ from ui.styles import inject_pwa_assets, inject_theme_styles
 
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN", ""),
-    enable_tracing=True,
     traces_sample_rate=0.1,
     environment=os.environ.get("SENTRY_ENVIRONMENT", "development"),
 )
 
 logger = logging.getLogger(__name__)
 
+INLINE_REVIEW_FORM_LIMIT = 3
 
-def _load_and_prepare() -> tuple[dict, pd.DataFrame, list[str], dict, dict, dict, list]:
+
+def _load_and_prepare() -> PreparedData:
     query_params = read_query_params()
     apply_language_query_param(query_params)
     current_lang = st.session_state.get("lang_select", DEFAULT_LANGUAGE)
@@ -60,7 +62,7 @@ def _load_and_prepare() -> tuple[dict, pd.DataFrame, list[str], dict, dict, dict
     prefecture_stats = data.get("pref_stats", {})
     df = toilets_to_dataframe(toilets)
     prefectures = get_prefectures(df)
-    return meta, df, prefectures, prefecture_stats, t, query_params, toilets
+    return PreparedData(meta, df, prefectures, prefecture_stats, t, query_params, toilets)
 
 
 def _process_filters(df: pd.DataFrame, selected_pref: str, internal_filter: str, search_query: str, sort_order: str, user_location: tuple | None, t: dict) -> tuple[pd.DataFrame, float]:
@@ -77,11 +79,11 @@ def _process_filters(df: pd.DataFrame, selected_pref: str, internal_filter: str,
     return filtered, filter_elapsed_ms
 
 
-def _render_main_content(filtered: pd.DataFrame, map_items: list[dict], meta: dict, t: dict, selected_pref: str, sort_order: str, dark_mode: bool, selected_tile: str, toilets: list, filter_elapsed_ms: float, prefecture_stats: dict, internal_filter: str, search_query: str, compact: bool = False, show_heatmap: bool = False) -> tuple[bool, int, pd.DataFrame]:
-    map_lat, map_lng, map_zoom = calc_map_center(selected_pref, meta, prefecture_stats)
+def _render_main_content(filtered: pd.DataFrame, map_items: list[dict], meta: dict, t: dict, render_config: RenderConfig, toilets: list, filter_elapsed_ms: float, prefecture_stats: dict) -> tuple[bool, int, pd.DataFrame]:
+    map_lat, map_lng, map_zoom = calc_map_center(render_config.selected_pref, meta, prefecture_stats)
     total_items = len(filtered)
     init_page_state()
-    page_filter_key = f"{selected_pref}|{internal_filter}|{search_query}"
+    page_filter_key = f"{render_config.selected_pref}|{render_config.sort_order}|{st.session_state.get('search_query', '')}"
     reset_page(page_filter_key)
     page = st.session_state.get("page", 1)
     total_pages, start_idx, end_idx, page = calc_pagination(total_items, page)
@@ -91,7 +93,7 @@ def _render_main_content(filtered: pd.DataFrame, map_items: list[dict], meta: di
     render_score_legend()
 
     map_started_at = perf_counter()
-    m = build_map(map_items, map_lat, map_lng, map_zoom, tile=TILE_OPTIONS[selected_tile], show_heatmap=show_heatmap)
+    m = build_map(map_items, map_lat, map_lng, map_zoom, tile=TILE_OPTIONS[render_config.selected_tile], show_heatmap=render_config.show_heatmap)
     map_elapsed_ms = (perf_counter() - map_started_at) * 1000
     get_metrics().record("map", map_elapsed_ms)
 
@@ -122,12 +124,23 @@ def _render_main_content(filtered: pd.DataFrame, map_items: list[dict], meta: di
         st.info(t["no_results"])
     else:
         st.divider()
-        st.markdown('<div role="list">', unsafe_allow_html=True)
+        st.caption(
+            t.get(
+                "review_form_limit_hint",
+                "投稿フォームは上位3件のみ表示しています。ほかの地点は地図マーカーから確認してください。",
+            )
+        )
         for i, (_, row) in enumerate(display_items.iterrows()):
-            render_toilet_card(row.to_dict(), rank=i + 1, meta=meta, compact=compact)
-        st.markdown('</div>', unsafe_allow_html=True)
+            show_inline_review = i < INLINE_REVIEW_FORM_LIMIT
+            render_toilet_card(
+                row.to_dict(),
+                rank=i + 1,
+                meta=meta,
+                compact=render_config.compact_mode,
+                include_review_form=show_inline_review,
+            )
 
-    return dark_mode, page, display_items
+    return render_config.dark_mode, page, display_items
 
 
 def main() -> None:
@@ -142,34 +155,36 @@ def main() -> None:
 
     try:
         with st.spinner("データを読み込み中..."):
-            meta, df, prefectures, prefecture_stats, t, query_params, toilets = _load_and_prepare()
-        st.session_state["data_loaded"] = True
+            prepared_data = _load_and_prepare()
+            st.session_state["data_loaded"] = True
 
-        sidebar_result = render_sidebar(t, prefectures, query_params)
-        t = sidebar_result.t
-        lang = sidebar_result.lang
-        selected_pref = sidebar_result.selected_pref
-        filter_type = sidebar_result.filter_type
-        search_query = sidebar_result.search_query
-        sort_order = sidebar_result.sort_order
-        user_location = sidebar_result.user_location
-        gps_enabled = sidebar_result.gps_enabled
-        dark_mode = sidebar_result.dark_mode
-        selected_tile = sidebar_result.selected_tile
-        translated_to_internal = sidebar_result.translated_to_internal
+        sidebar_result = render_sidebar(prepared_data.language_strings, prepared_data.prefectures, prepared_data.query_params)
+        sidebar_state = SidebarUIState(
+            sidebar_result.t,
+            sidebar_result.lang,
+            sidebar_result.selected_pref,
+            sidebar_result.filter_type,
+            sidebar_result.search_query,
+            sidebar_result.sort_order,
+            sidebar_result.user_location,
+            sidebar_result.gps_enabled,
+            sidebar_result.dark_mode,
+            sidebar_result.selected_tile,
+            sidebar_result.translated_to_internal
+        )
 
-        internal_filter = translated_to_internal[filter_type]
+        internal_filter = sidebar_state.translated_to_internal[sidebar_state.filter_type]
 
         # AI enhancement: analyze reviews with Gemini
         if st.session_state.get("ai_enhance", False) and "ai_scores" not in st.session_state:
             ai_scores = {}
             if ai_available():
                 candidates = [
-                    t for t in toilets
+                    t for t in prepared_data.toilets
                     if t.get("toilet_review_count", 0) >= 3
                     and (t.get("confidence", 0) or 0) < 0.5
                 ]
-                with st.spinner(t.get("ai_analyzing", "🤖 AI分析中...")):
+                with st.spinner(sidebar_state.language_strings.get("ai_analyzing", "🤖 AI分析中...")):
                     for toilet in candidates:
                         reviews = toilet.get("sample_reviews", [])
                         result = analyze_reviews(reviews, toilet.get("title", ""))
@@ -178,11 +193,17 @@ def main() -> None:
             st.session_state["ai_scores"] = ai_scores
 
         filtered, filter_elapsed_ms = _process_filters(
-            df, selected_pref, internal_filter, search_query, sort_order, user_location, t
+            prepared_data.dataframe,
+            sidebar_state.selected_pref,
+            internal_filter,
+            sidebar_state.search_query,
+            sidebar_state.sort_order,
+            sidebar_state.user_location,
+            sidebar_state.language_strings
         )
 
-        st.title(t["title"])
-        st.caption(build_data_freshness_text(meta, t))
+        st.title(sidebar_state.language_strings["title"])
+        st.caption(build_data_freshness_text(prepared_data.metadata, sidebar_state.language_strings))
 
         map_items = filtered.to_dict("records")
 
@@ -194,33 +215,43 @@ def main() -> None:
                 if identity_key in ai_scores:
                     item.update({f"ai_{k}": v for k, v in ai_scores[identity_key].items()})
 
-        compact = st.session_state.get("compact_mode", False)
-        show_heatmap = st.session_state.get("show_heatmap", False)
-        dark_mode, page, display_items = _render_main_content(
-            filtered, map_items, meta, t, selected_pref,
-            sort_order, dark_mode, selected_tile, toilets, filter_elapsed_ms,
-            prefecture_stats, internal_filter, search_query,
-            compact=compact,
-            show_heatmap=show_heatmap,
+        render_config = RenderConfig(
+            sidebar_state.selected_pref,
+            sidebar_state.sort_order,
+            sidebar_state.dark_mode,
+            sidebar_state.selected_tile,
+            st.session_state.get("compact_mode", False),
+            st.session_state.get("show_heatmap", False)
         )
 
-        if dark_mode:
+        _, page, display_items = _render_main_content(
+            filtered,
+            map_items,
+            prepared_data.metadata,
+            sidebar_state.language_strings,
+            render_config,
+            prepared_data.toilets,
+            filter_elapsed_ms,
+            prepared_data.prefecture_stats,
+        )
+
+        if render_config.dark_mode:
             st.markdown(
                 '<link rel="stylesheet" href="/static/dark_mode.css">',
                 unsafe_allow_html=True,
             )
 
         if st.session_state.get("_show_shortcuts", False):
-            st.info(t["shortcut_info"])
+            st.info(sidebar_state.language_strings["shortcut_info"])
 
-        render_export_ui(filtered, map_items, selected_pref, t)
+        render_export_ui(filtered, map_items, sidebar_state.selected_pref, sidebar_state.language_strings)
 
-        if toilets:
+        if prepared_data.toilets:
             cache_data = json.dumps([
                 {"place_id": t.get("place_id"), "name": t.get("name"),
                  "toilet_score": t.get("toilet_score"),
                  "lat": t.get("lat"), "lng": t.get("lng")}
-                for t in toilets[:200]
+                for t in prepared_data.toilets[:200]
             ], ensure_ascii=False)
             st.markdown(
                 f"<script>window.cacheToiletData({cache_data});</script>",
@@ -229,8 +260,15 @@ def main() -> None:
 
         write_query_params(
             build_query_params_from_state(
-                lang, selected_pref, internal_filter, search_query,
-                sort_order, gps_enabled, page, t, dark_mode=dark_mode,
+                sidebar_state.language_code,
+                sidebar_state.selected_pref,
+                internal_filter,
+                sidebar_state.search_query,
+                sidebar_state.sort_order,
+                sidebar_state.gps_enabled,
+                page,
+                sidebar_state.language_strings,
+                dark_mode=sidebar_state.dark_mode,
             )
         )
     except Exception as e:

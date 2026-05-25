@@ -2,16 +2,16 @@
 ui/data_loader.py
 データ読み込み・キャッシュ・都道府県別統計計算 (SQLite版)
 """
+
 import json
 import logging
-import math
 import os
 import sqlite3
 
 import pandas as pd
 import streamlit as st
 
-from app_config import DB_PATH, ERROR_METADATA
+from app_config import DB_PATH, EQUIPMENT_KEYWORDS, ERROR_METADATA
 
 from .types import ToiletDict
 
@@ -47,6 +47,7 @@ def get_db_connection() -> sqlite3.Connection:
 @st.cache_data(ttl=3600, max_entries=1, show_spinner="データを読み込み中...")
 def load_toilet_data(cache_token: tuple[int, int] | None = None) -> dict:
     """SQLite から全データを読み込み、アプリ用の辞書形式で返す。"""
+    _ = cache_token  # used by Streamlit cache key
     try:
         with get_db_connection() as conn:
             # トイレデータ読み込み
@@ -55,7 +56,7 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None) -> dict:
             meta_df = pd.read_sql("SELECT * FROM metadata", conn)
 
         # メタデータを辞書に変換
-        metadata = dict(zip(meta_df["key"], meta_df["value"]))
+        metadata = dict(zip(meta_df["key"], meta_df["value"], strict=False))
 
         # 型変換 (SQLite は文字列で保存されているため)
         for k in ["total", "scored", "public_toilets", "zoom"]:
@@ -90,13 +91,15 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None) -> dict:
         pref_stats = {}
         for t in toilets:
             pref = t.get("prefecture")
-            if not pref or (isinstance(pref, float) and math.isnan(pref)):
+            if pref is None or pref == "" or pd.isna(pref):
                 continue
             if pref not in pref_stats:
                 pref_stats[pref] = {"count": 0, "lat_sum": 0.0, "lng_sum": 0.0}
             pref_stats[pref]["count"] += 1
-            pref_stats[pref]["lat_sum"] += t["lat"] or 0
-            pref_stats[pref]["lng_sum"] += t["lng"] or 0
+            lat = t.get("lat")
+            lng = t.get("lng")
+            pref_stats[pref]["lat_sum"] += float(lat) if lat is not None and not pd.isna(lat) else 0.0
+            pref_stats[pref]["lng_sum"] += float(lng) if lng is not None and not pd.isna(lng) else 0.0
 
         for data in pref_stats.values():
             c = data.pop("count")
@@ -112,7 +115,7 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None) -> dict:
 
 
 def toilets_to_dataframe(toilets: list[ToiletDict]) -> pd.DataFrame:
-    """ toilets リストを DataFrame に変換（設備フラグカラムを追加）"""
+    """toilets リストを DataFrame に変換（設備フラグカラムを追加）"""
     df = pd.DataFrame(toilets)
     _add_equipment_columns(df)
     return df
@@ -120,7 +123,6 @@ def toilets_to_dataframe(toilets: list[ToiletDict]) -> pd.DataFrame:
 
 def _add_equipment_columns(df: pd.DataFrame) -> None:
     """top_keywords から設備フラグカラム (has_multi, has_diaper, has_wheelchair) を追加"""
-    from app_config import EQUIPMENT_KEYWORDS
     if "top_keywords" not in df.columns:
         df["has_multi"] = False
         df["has_diaper"] = False
@@ -132,28 +134,14 @@ def _add_equipment_columns(df: pd.DataFrame) -> None:
             return False
         return any(kw in targets for kw, _ in kw_list)
 
-    df["has_multi"] = df["top_keywords"].apply(
-        lambda kws: _check_keywords(kws, EQUIPMENT_KEYWORDS["multi"])
-    )
-    df["has_diaper"] = df["top_keywords"].apply(
-        lambda kws: _check_keywords(kws, EQUIPMENT_KEYWORDS["diaper"])
-    )
-    df["has_wheelchair"] = df["top_keywords"].apply(
-        lambda kws: _check_keywords(kws, EQUIPMENT_KEYWORDS["wheelchair"])
-    )
+    df["has_multi"] = df["top_keywords"].apply(lambda kws: _check_keywords(kws, EQUIPMENT_KEYWORDS["multi"]))
+    df["has_diaper"] = df["top_keywords"].apply(lambda kws: _check_keywords(kws, EQUIPMENT_KEYWORDS["diaper"]))
+    df["has_wheelchair"] = df["top_keywords"].apply(lambda kws: _check_keywords(kws, EQUIPMENT_KEYWORDS["wheelchair"]))
 
 
 def get_prefectures(df: pd.DataFrame) -> list[str]:
-    """ DataFrame から都道府県リストを生成 """
+    """DataFrame から都道府県リストを生成"""
     if "prefecture" in df.columns:
         prefs = df["prefecture"].dropna().unique().tolist()
         return ["全て"] + sorted([p for p in prefs if p])
     return ["全て"]
-
-
-def render_data_retry() -> None:
-    """データ読み込みエラー時に再試行ボタンを表示する。app.py から呼び出し可能。"""
-    if st.session_state.get("_data_error") and st.button("🔄 データを再読み込み", key="retry_db_load", use_container_width=True):
-        load_toilet_data.clear()
-        st.session_state.pop("_data_error", None)
-        st.rerun()

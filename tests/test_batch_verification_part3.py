@@ -2,56 +2,57 @@
 tests/test_batch_verification.py
 データ検証・品質ゲート関連の回帰テスト（test_batch_regressions.py から分割）
 """
-
 import verify_data
+
+from batch.quality_metrics_dto import SQLiteMetrics
 
 
 class TestCompareSqliteMetricsDetailed:
     def test_all_three_mismatches(self):
         from quality_metrics import compare_sqlite_metrics
         meta = {"total": 10, "scored": 8, "public_toilets": 3}
-        sqlite_metrics = {"total": 9, "scored": 7, "public_toilets": 2, "metadata": {}}
-        errors, warnings = compare_sqlite_metrics(meta, sqlite_metrics)
-        assert len(errors) == 3
+        sqlite_metrics = SQLiteMetrics(total=9, scored=7, public_toilets=2, prefecture_counts={}, metadata={})
+        result = compare_sqlite_metrics(meta, sqlite_metrics)
+        assert len(result.errors) == 3
 
     def test_metadata_mismatch_generates_warnings(self):
         from quality_metrics import compare_sqlite_metrics
         meta = {"total": 5, "scored": 5, "public_toilets": 1,
                 "last_updated": "2026-01-01", "prefecture_counts": {}}
-        sqlite_metrics = {"total": 5, "scored": 5, "public_toilets": 1,
-                          "metadata": {"last_updated": "2025-01-01", "db_synced_at": "2026-01-01"},
-                          "prefecture_counts": {}}
-        errors, warnings = compare_sqlite_metrics(meta, sqlite_metrics)
-        assert any("last_updated mismatch" in w for w in warnings)
+        sqlite_metrics = SQLiteMetrics(total=5, scored=5, public_toilets=1,
+                          prefecture_counts={},
+                          metadata={"last_updated": "2025-01-01", "db_synced_at": "2026-01-01"})
+        result = compare_sqlite_metrics(meta, sqlite_metrics)
+        assert any("last_updated mismatch" in w for w in result.warnings)
 
     def test_missing_db_synced_at_warning(self):
         from quality_metrics import compare_sqlite_metrics
         meta = {"total": 5, "scored": 5, "public_toilets": 1,
                 "last_updated": "2026-01-01", "prefecture_counts": {}}
-        sqlite_metrics = {"total": 5, "scored": 5, "public_toilets": 1,
-                          "metadata": {}, "prefecture_counts": {}}
-        errors, warnings = compare_sqlite_metrics(meta, sqlite_metrics)
-        assert any("db_synced_at missing" in w for w in warnings)
+        sqlite_metrics = SQLiteMetrics(total=5, scored=5, public_toilets=1,
+                          prefecture_counts={}, metadata={})
+        result = compare_sqlite_metrics(meta, sqlite_metrics)
+        assert any("db_synced_at missing" in w for w in result.warnings)
 
     def test_unexpected_prefecture_in_sqlite(self):
         from quality_metrics import compare_sqlite_metrics
         meta = {"total": 5, "scored": 5, "public_toilets": 1,
                 "prefecture_counts": {"東京都": 5}}
-        sqlite_metrics = {"total": 5, "scored": 5, "public_toilets": 1,
-                          "metadata": {"db_synced_at": "now"},
-                          "prefecture_counts": {"東京都": 5, "大阪府": 0}}
-        errors, warnings = compare_sqlite_metrics(meta, sqlite_metrics)
-        assert any("unexpected prefecture" in e for e in errors)
+        sqlite_metrics = SQLiteMetrics(total=5, scored=5, public_toilets=1,
+                          prefecture_counts={"東京都": 5, "大阪府": 0},
+                          metadata={"db_synced_at": "now"})
+        result = compare_sqlite_metrics(meta, sqlite_metrics)
+        assert any("unexpected prefecture" in e for e in result.errors)
 
     def test_missing_prefecture_in_sqlite(self):
         from quality_metrics import compare_sqlite_metrics
         meta = {"total": 5, "scored": 5, "public_toilets": 1,
                 "prefecture_counts": {"東京都": 5, "大阪府": 3}}
-        sqlite_metrics = {"total": 5, "scored": 5, "public_toilets": 1,
-                          "metadata": {"db_synced_at": "now"},
-                          "prefecture_counts": {"東京都": 5}}
-        errors, warnings = compare_sqlite_metrics(meta, sqlite_metrics)
-        assert any("missing prefecture" in e for e in errors)
+        sqlite_metrics = SQLiteMetrics(total=5, scored=5, public_toilets=1,
+                          prefecture_counts={"東京都": 5},
+                          metadata={"db_synced_at": "now"})
+        result = compare_sqlite_metrics(meta, sqlite_metrics)
+        assert any("missing prefecture" in e for e in result.errors)
 
 
 
@@ -195,7 +196,7 @@ class TestMainKantoMode:
 
     def test_with_sqlite_metrics_and_duplicates_and_warnings(self, monkeypatch, capsys):
         data = {"metadata": {"total": 3, "scored": 2, "public_toilets": 1,
-                             "last_updated": "2026-05-13", "prefecture_counts": {"東京都": 3}},
+                              "last_updated": "2026-05-13", "prefecture_counts": {"東京都": 3}},
                 "toilets": [
                     {"title": "A", "address": "東京都", "prefecture": "東京都",
                      "toilet_score": 80.0, "confidence": 0.8,
@@ -213,21 +214,22 @@ class TestMainKantoMode:
         monkeypatch.setattr(verify_data, "get_expected_prefectures", lambda: ["東京都"])
         monkeypatch.setattr(verify_data, "count_queries_for_pref", lambda pref: 10)
 
+        from batch.quality_metrics_dto import QualityMetrics
         def fake_collect_quality(t):
-            return {"total": 3, "missing_score": 1, "missing_prefecture": 1,
-                    "missing_address": 1, "duplicates": [
-                        {"key": ("place_id", "dup"), "link": ""},
-                    ], "prefecture_counts": {"東京都": 3}}
+            return QualityMetrics(total=3, missing_score=1, missing_prefecture=1,
+                        missing_address=1, duplicates=[
+                            {"key": ("place_id", "dup"), "link": ""},
+                        ], prefecture_counts={"東京都": 3})
 
         def fake_sqlite_metrics(path):
-            return {"total": 3, "scored": 2, "public_toilets": 1,
-                    "metadata": {"last_updated": "2026-05-13", "db_synced_at": "2026-05-13"},
-                    "prefecture_counts": {"東京都": 3}}
+            return SQLiteMetrics(total=3, scored=2, public_toilets=1,
+                        prefecture_counts={"東京都": 3},
+                        metadata={"last_updated": "2026-05-13", "db_synced_at": "2026-05-13"})
 
         monkeypatch.setattr(verify_data, "collect_quality_metrics", fake_collect_quality)
         monkeypatch.setattr(verify_data, "collect_sqlite_metrics", fake_sqlite_metrics)
         monkeypatch.setattr(verify_data, "compare_sqlite_metrics",
-                            lambda meta, sqlite: (["sqlite error"], ["sqlite warning"]))
+                            lambda meta, sqlite: type('ComparisonResult', (), {'errors': ["sqlite error"], 'warnings': ["sqlite warning"]})())
 
         result = verify_data.main()
         assert result == 1

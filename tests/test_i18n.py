@@ -64,4 +64,4 @@ class TestI18nCompleteness:
                 if isinstance(value, str) and "{" in value:
                     allowed_format_keys = ["page"]
                     if key not in allowed_format_keys:
-                        assert False, f"{lang_name}.{key} contains '{{' but is not in allowed_format_keys"
+                        raise AssertionError(f"{lang_name}.{key} contains '{{' but is not in allowed_format_keys")

@@ -103,7 +103,7 @@ class TestPrefectureCenters:
             "栃木県": (36.5657, 139.8836),
             "群馬県": (36.3907, 139.0604),
         }
-        for pref, coords in expected.items():
+        for pref in expected:
             assert pref in PREFECTURE_CENTERS
             lat, lng = PREFECTURE_CENTERS[pref]
             assert isinstance(lat, float) and isinstance(lng, float)

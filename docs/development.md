@@ -16,6 +16,9 @@ pip install -r requirements-dev.txt
 ```bash
 streamlit run app.py          # Run app
 pytest tests/ -v              # Run all tests
+pytest tests/e2e tests/visual -q  # Playwright E2E, a11y, and visual regression tests
+python scripts/update_screenshot_baselines.py  # Regenerate screenshot baselines
+python -m playwright install chromium  # Install browser for Playwright tests
 ruff check .                  # Lint
 pip-audit -r requirements.txt # Security audit
 ```

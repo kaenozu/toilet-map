@@ -116,6 +116,22 @@ def _build_ai_summary_html(t: ToiletDict) -> str:
     )
 
 
+def _build_equipment_tags(equipment: list[str]) -> str:
+    if not equipment:
+        return ""
+    tags = "".join(
+        f'<span style="display:inline-block;font-size:11px;padding:2px 6px;'
+        f'border-radius:4px;background:#e8f5e9;color:#2e7d32;'
+        f'border:1px solid #a5d6a7;margin:1px;">{esc(t)}</span>'
+        for t in equipment[:8]
+    )
+    return (
+        '<div style="margin-top:4px;line-height:2;">'
+        '<span style="font-size:10px;font-weight:600;color:#555;margin-right:4px;">🏷️ 設備:</span>'
+        + tags + "</div>"
+    )
+
+
 def _build_confidence_note(confidence: float, toilet_review_count: int) -> str:
     if confidence >= 0.4 and toilet_review_count >= 3:
         return ""
@@ -135,6 +151,7 @@ def build_popup_html(t: ToiletDict) -> str:
         badge = _build_public_badge(t["is_public_toilet"])
         confidence_pct = int(t["confidence"] * 100)
         phone_html = f'<span style="margin-right:6px;"><span aria-label="phone" role="img">📞</span>{esc(t["phone"])}</span>' if t.get("phone") else ""
+        equip_html = _build_equipment_tags(t.get("equipment", []))
         kw_html = _build_keyword_tags(t.get("top_keywords", []))
         rev_html = _build_review_html(t.get("sample_reviews", []))
         link_html = _build_link_html(t.get("link", ""))
@@ -178,6 +195,7 @@ def build_popup_html(t: ToiletDict) -> str:
           <div style="font-size:10px;color:#555;"><span aria-label="rating" role="img">⭐</span>{t.get('rating', '-')} ({t.get('review_count', 0)}件) {phone_html}</div>
         {confidence_note_html}
           {_build_ai_summary_html(t)}
+          {equip_html}
           {kw_html}
           {review_section}
           {link_html}

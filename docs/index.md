@@ -12,4 +12,5 @@ Streamlit マップ上に可視化するオープンソースアプリケーシ�
 - 📱 **Mobile Friendly** — Responsive layout with touch swipe pagination
 - 🌐 **Multi-language** — Japanese, English, Korean, Chinese (with i18n audit)
 - ♿ **Accessible** — Keyboard navigation, skip link, ARIA labels, axe-core audited
+- 🧪 **Regression Tested** — Playwright E2E, accessibility, and screenshot coverage
 - 📥 **Export** — CSV, GeoJSON, KML, GPX download

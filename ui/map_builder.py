@@ -29,6 +29,16 @@ FIT_BOUNDS_EPSILON = 0.01
 COORD_DEDUPE_PRECISION = 6
 
 
+def _resolve_tile_attribution(tile: str) -> str | None:
+    """Return attribution for URL-based tiles required by Folium."""
+    normalized = tile.lower()
+    if "openstreetmap.org" in normalized:
+        return "&copy; OpenStreetMap contributors"
+    if "cartocdn.com" in normalized:
+        return "&copy; OpenStreetMap contributors &copy; CARTO"
+    return None
+
+
 def _coerce_coordinate(value: object) -> float | None:
     try:
         coordinate = float(value)
@@ -93,7 +103,7 @@ def calc_map_center(
     # "全て": use prefecture-weighted center instead of raw average
     if prefecture_stats:
         lat_sum = lng_sum = weight_sum = 0.0
-        for pref_name, s in prefecture_stats.items():
+        for s in prefecture_stats.values():
             w = s.get("count", 0)
             if w > 0:
                 lat_sum += s.get("center_lat", 0) * w
@@ -104,9 +114,9 @@ def calc_map_center(
     return meta["center_lat"], meta["center_lng"], meta["zoom"]
 
 
-def _calc_fit_bounds(toilets: list[ToiletDict]) -> list[list[float]] | None:
+def _calc_fit_bounds(valid_toilets: list[tuple[ToiletDict, float, float]]) -> list[list[float]] | None:
     """マーカーを包む bounds を返す。1点だけの場合は少しだけ広げる。"""
-    coords = _collect_valid_coordinates(toilets)
+    coords = [(lat, lng) for _, lat, lng in valid_toilets]
     if not coords:
         return None
 
@@ -129,11 +139,15 @@ def _calc_fit_bounds(toilets: list[ToiletDict]) -> list[list[float]] | None:
 
 def add_heatmap(m: folium.Map, toilets: list[ToiletDict]) -> None:
     """Add an optional heatmap layer showing toilet density."""
-    locations = [
-        [t["lat"], t["lng"]]
-        for t in toilets
-        if t.get("lat") and t.get("lng")
-    ]
+    locations = []
+    for toilet in toilets:
+        lat = _coerce_coordinate(toilet.get("lat"))
+        lng = _coerce_coordinate(toilet.get("lng"))
+        if lat is None or lng is None:
+            continue
+        locations.append([lat, lng])
+        if len(locations) >= 2000:
+            break
     if locations:
         HeatMap(
             locations,
@@ -153,10 +167,12 @@ def build_map(
     show_heatmap: bool = False,
 ) -> folium.Map:
     try:
+        attribution = _resolve_tile_attribution(tile)
         m = folium.Map(
             location=[center_lat, center_lng],
             zoom_start=zoom,
             tiles=tile,
+            attr=attribution,
             control_scale=True,
             prefer_canvas=True,
         )
@@ -193,7 +209,7 @@ def build_map(
         if show_heatmap:
             add_heatmap(m, toilets)
 
-        bounds = _calc_fit_bounds(toilets)
+        bounds = _calc_fit_bounds(valid_toilets)
         if bounds:
             m.fit_bounds(bounds, padding=FIT_BOUNDS_PADDING)
 

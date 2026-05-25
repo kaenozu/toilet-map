@@ -2,17 +2,65 @@
 ui/components.py
 Streamlit UI components for toilet map
 """
+from datetime import datetime
+
 import streamlit as st
 
 from .helpers import esc, get_score_style, get_toilet_identity_key, safe_href
+from .reviews import render_review_form
 from .types import ToiletDict
+
+
+def _parse_timestamp(value: object) -> datetime | None:
+    if not value:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    normalized = raw.replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+
+
+def _build_score_reason_text(toilet: ToiletDict) -> str:
+    keywords = toilet.get("top_keywords") or []
+    pos_hits = 0
+    neg_hits = 0
+    for kw, count in keywords:
+        if kw.startswith("+"):
+            pos_hits += count
+        elif kw.startswith("-"):
+            neg_hits += count
+
+    toilet_review_count = int(toilet.get("toilet_review_count", 0) or 0)
+    if pos_hits == 0 and neg_hits == 0:
+        return f"根拠: トイレ言及 {toilet_review_count}件 と評価から算出"
+    return (
+        f"根拠: トイレ言及 {toilet_review_count}件 "
+        f"(ポジ語 {pos_hits} / ネガ語 {neg_hits})"
+    )
 
 
 def build_data_freshness_text(meta: dict[str, object], t: dict[str, str]) -> str:
     """生成日時と SQLite 同期日時を短い1行で返す。"""
     generated_at = meta.get("last_updated") or "N/A"
     synced_at = meta.get("db_synced_at") or "N/A"
-    return f"{t['freshness']} | {t['source_updated']} {generated_at} / {t['db_synced']} {synced_at}"
+    text = f"{t['freshness']} | {t['source_updated']} {generated_at} / {t['db_synced']} {synced_at}"
+
+    generated_dt = _parse_timestamp(generated_at)
+    if generated_dt is None:
+        return text
+
+    now = datetime.now(generated_dt.tzinfo)
+    age_days = (now - generated_dt).days
+    stale_days = 7
+    if age_days >= stale_days:
+        stale_label = t.get("freshness_stale", "更新から")
+        day_label = t.get("freshness_days", "日")
+        text = f"{text} | ⚠ {stale_label} {age_days}{day_label}"
+    return text
 
 
 def build_result_context_text(
@@ -86,8 +134,11 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
     rank_html = f'<span style="color:#999;font-weight:600;min-width:24px;">#{rank}</span>' if rank else ""
 
     freshness_badge = ""
-    if meta and meta.get("updated_at"):
-        date_part = str(meta["updated_at"])[:10]
+    freshness_value = None
+    if meta:
+        freshness_value = meta.get("last_updated") or meta.get("updated_at")
+    if freshness_value:
+        date_part = str(freshness_value)[:10]
         freshness_badge = (
             f'<span style="background:#fff3e0;color:#e65100;padding:1px 6px;'
             f'border-radius:3px;font-size:10px;margin-left:6px;">'
@@ -103,7 +154,7 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
     if compact:
         aria_label = f"{esc(t['title'])} - {t['toilet_score']:.0f}点"
         return f"""
-        <div class="toilet-card" role="listitem" aria-label="{aria_label}"
+        <div class="toilet-card" aria-label="{aria_label}"
             style="display:flex;align-items:center;gap:6px;padding:4px 8px;
             background:#ffffff;color:#222222;border-radius:6px;margin-bottom:2px;
             border:1px solid #e0e0e0;min-height:40px;
@@ -128,10 +179,11 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
         """.strip()
 
     links_html = _build_links_html(t)
+    score_reason = _build_score_reason_text(t)
 
     aria_label = f"{esc(t['title'])} - {t['toilet_score']:.0f}点"
     return f"""
-    <div class="toilet-card" role="listitem" aria-label="{aria_label}"
+    <div class="toilet-card" aria-label="{aria_label}"
         style="display:flex;align-items:center;gap:10px;padding:8px 12px;
         background:#ffffff;color:#222222;border-radius:8px;margin-bottom:4px;
         border:1px solid #e0e0e0;min-height:60px;
@@ -151,6 +203,9 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
             <div class="toilet-card-meta" style="font-size:11px;color:#666666;">
                 &#x2B50; {t.get('rating', '-')} &#xB7; 口コミ {t.get('review_count', 0)}件 &#xB7; 信頼度 {confidence_pct}%
             </div>
+            <div class="toilet-card-meta" style="font-size:10px;color:#757575;">
+                {esc(score_reason)}
+            </div>
             <div style="font-size:11px;margin-top:4px;">
                 {links_html}
             </div>
@@ -160,9 +215,14 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
     """.strip()
 
 
-def render_toilet_card(toilet: ToiletDict, rank: int | None = None, meta: dict[str, object] | None = None, compact: bool = False) -> None:
+def render_toilet_card(
+    toilet: ToiletDict,
+    rank: int | None = None,
+    meta: dict[str, object] | None = None,
+    compact: bool = False,
+    include_review_form: bool = True,
+) -> None:
     """ランキングリストのトイレカード（1行）"""
     st.markdown(build_toilet_card_html(toilet, rank, meta, compact=compact), unsafe_allow_html=True)
-    from ui.reviews import render_review_form
-    if not compact:
+    if not compact and include_review_form:
         render_review_form(get_toilet_identity_key(toilet), toilet.get("title", ""))

@@ -2,6 +2,7 @@
 ui/filters.py
 フィルタリング・検索ロジック
 """
+
 import logging
 import math
 import re
@@ -9,7 +10,7 @@ import re
 import numpy as np
 import pandas as pd
 
-from app_config import FILTER_CONFIG, PUBLIC_FILTER_VALUE, THRESHOLD
+from app_config import FILTER_CONFIG, PUBLIC_FILTER_VALUE
 
 logger = logging.getLogger(__name__)
 
@@ -32,22 +33,53 @@ ROMAJI_TO_JAPANESE = {
 }
 
 ENGLISH_PREFECTURE_NAMES = {
-    "hokkaido": "北海道", "aomori": "青森県", "iwate": "岩手県",
-    "miyagi": "宮城県", "akita": "秋田県", "yamagata": "山形県",
-    "fukushima": "福島県", "ibaraki": "茨城県", "tochigi": "栃木県",
-    "gunma": "群馬県", "saitama": "埼玉県", "chiba": "千葉県",
-    "tokyo": "東京都", "kanagawa": "神奈川県", "niigata": "新潟県",
-    "toyama": "富山県", "ishikawa": "石川県", "fukui": "福井県",
-    "yamanashi": "山梨県", "nagano": "長野県", "gifu": "岐阜県",
-    "shizuoka": "静岡県", "aichi": "愛知県", "mie": "三重県",
-    "shiga": "滋賀県", "kyoto": "京都府", "osaka": "大阪府",
-    "hyogo": "兵庫県", "nara": "奈良県", "wakayama": "和歌山県",
-    "tottori": "鳥取県", "shimane": "島根県", "okayama": "岡山県",
-    "hiroshima": "広島県", "yamaguchi": "山口県", "tokushima": "徳島県",
-    "kagawa": "香川県", "ehime": "愛媛県", "kochi": "高知県",
-    "fukuoka": "福岡県", "saga": "佐賀県", "nagasaki": "長崎県",
-    "kumamoto": "熊本県", "oita": "大分県", "miyazaki": "宮崎県",
-    "kagoshima": "鹿児島県", "okinawa": "沖縄県",
+    "hokkaido": "北海道",
+    "aomori": "青森県",
+    "iwate": "岩手県",
+    "miyagi": "宮城県",
+    "akita": "秋田県",
+    "yamagata": "山形県",
+    "fukushima": "福島県",
+    "ibaraki": "茨城県",
+    "tochigi": "栃木県",
+    "gunma": "群馬県",
+    "saitama": "埼玉県",
+    "chiba": "千葉県",
+    "tokyo": "東京都",
+    "kanagawa": "神奈川県",
+    "niigata": "新潟県",
+    "toyama": "富山県",
+    "ishikawa": "石川県",
+    "fukui": "福井県",
+    "yamanashi": "山梨県",
+    "nagano": "長野県",
+    "gifu": "岐阜県",
+    "shizuoka": "静岡県",
+    "aichi": "愛知県",
+    "mie": "三重県",
+    "shiga": "滋賀県",
+    "kyoto": "京都府",
+    "osaka": "大阪府",
+    "hyogo": "兵庫県",
+    "nara": "奈良県",
+    "wakayama": "和歌山県",
+    "tottori": "鳥取県",
+    "shimane": "島根県",
+    "okayama": "岡山県",
+    "hiroshima": "広島県",
+    "yamaguchi": "山口県",
+    "tokushima": "徳島県",
+    "kagawa": "香川県",
+    "ehime": "愛媛県",
+    "kochi": "高知県",
+    "fukuoka": "福岡県",
+    "saga": "佐賀県",
+    "nagasaki": "長崎県",
+    "kumamoto": "熊本県",
+    "oita": "大分県",
+    "miyazaki": "宮崎県",
+    "kagoshima": "鹿児島県",
+    "okinawa": "沖縄県",
 }
 
 
@@ -62,16 +94,16 @@ def haversine_distance(lat1: float, lng1: float, lat2: float | pd.Series, lng2: 
         dlat = lat2_rad - lat1_rad
         dlng = lng2_rad - lng1_rad
 
-        a = (np.sin(dlat / 2) ** 2 +
-             np.cos(lat1_rad) * np.cos(lat2_rad) * np.sin(dlng / 2) ** 2)
+        a = np.sin(dlat / 2) ** 2 + np.cos(lat1_rad) * np.cos(lat2_rad) * np.sin(dlng / 2) ** 2
         c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
         return EARTH_RADIUS_KM * c
     else:
         dlat = math.radians(lat2 - lat1)
         dlng = math.radians(lng2 - lng1)
-        a = (math.sin(dlat / 2) ** 2 +
-             math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
-             math.sin(dlng / 2) ** 2)
+        a = (
+            math.sin(dlat / 2) ** 2
+            + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2
+        )
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
         return EARTH_RADIUS_KM * c
 
@@ -122,6 +154,7 @@ def filter_toilets(
             df = df[df["category"].str.contains(pattern, na=False)]
 
         if user_lat is not None and user_lng is not None:
+            df = df.copy()
             df["distance"] = haversine_distance(user_lat, user_lng, df["lat"], df["lng"])
 
         return df
@@ -169,91 +202,3 @@ def search_toilets(df: pd.DataFrame, query: str | None) -> pd.DataFrame:
     for m in masks[1:]:
         combined = combined | m
     return df[combined]
-
-
-def filter_by_viewport(df: pd.DataFrame, bounds: dict) -> pd.DataFrame:
-    """地図の表示範囲（bounds）に基づいてフィルタリング
-
-    DEPRECATED: 現在のUIでは使用されていません。テスト互換性のため維持。
-    """
-    if not bounds or not isinstance(bounds, dict):
-        return df
-
-    coordinates = _extract_bounds_coordinates(bounds)
-    if not coordinates:
-        return df
-
-    sw_lat, sw_lng, ne_lat, ne_lng = coordinates
-    mask = (
-        (df["lat"] >= sw_lat) & (df["lat"] <= ne_lat) &
-        (df["lng"] >= sw_lng) & (df["lng"] <= ne_lng)
-    )
-    return df[mask]
-
-
-def _extract_bounds_coordinates(bounds: dict) -> tuple[float, float, float, float] | None:
-    """Leaflet の bounds から座標を安全に取り出す。"""
-    sw = bounds.get("_southWest")
-    ne = bounds.get("_northEast")
-    if not sw or not ne:
-        return None
-
-    try:
-        sw_lat = float(sw.get("lat"))
-        sw_lng = float(sw.get("lng"))
-        ne_lat = float(ne.get("lat"))
-        ne_lng = float(ne.get("lng"))
-    except (TypeError, ValueError):
-        return None
-
-    return sw_lat, sw_lng, ne_lat, ne_lng
-
-
-def get_underserved_areas_in_viewport(bounds: dict, stats: dict) -> list[dict]:
-    """
-    表示範囲内の都道府県から不足エリアを特定する。
-    複数都道府県が表示範囲内にあれば、中心に近い順に最大5件返す。
-
-    DEPRECATED: 現在のUIでは使用されていません。テスト互換性のため維持。
-    """
-    if not bounds:
-        return []
-
-    coordinates = _extract_bounds_coordinates(bounds)
-    if not coordinates:
-        return []
-
-    sw_lat, sw_lng, ne_lat, ne_lng = coordinates
-    center_lat = (sw_lat + ne_lat) / 2
-    center_lng = (sw_lng + ne_lng) / 2
-
-    from app_config import PREFECTURE_CENTERS
-
-    # 表示範囲内にある都道府県を、中心からの距離順にリスト
-    visible_prefs = []
-    for pref, (plat, plng) in PREFECTURE_CENTERS.items():
-        if sw_lat <= plat <= ne_lat and sw_lng <= plng <= ne_lng:
-            dist = math.sqrt((plat - center_lat) ** 2 + (plng - center_lng) ** 2)
-            visible_prefs.append((dist, pref))
-
-    # 表示範囲内にない場合は最も近い都道府県を使う
-    if not visible_prefs:
-        for pref, (plat, plng) in PREFECTURE_CENTERS.items():
-            dist = math.sqrt((plat - center_lat) ** 2 + (plng - center_lng) ** 2)
-            visible_prefs.append((dist, pref))
-
-    visible_prefs.sort()
-
-    MAX_SUGGESTIONS = 5
-    underserved = []
-    for _, pref in visible_prefs:
-        if pref in stats:
-            for city, count in stats[pref].items():
-                if count < THRESHOLD:
-                    underserved.append({"pref": pref, "city": city, "count": count})
-                    if len(underserved) >= MAX_SUGGESTIONS:
-                        break
-        if len(underserved) >= MAX_SUGGESTIONS:
-            break
-
-    return underserved[:MAX_SUGGESTIONS]

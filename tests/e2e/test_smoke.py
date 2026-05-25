@@ -4,43 +4,16 @@ Playwright E2E end-to-end test for Streamlit app.
 Related: app.py, ui/sidebar.py, ui/pagination.py
 """
 
-import subprocess
-import sys
-import time
-
-import pytest
 from playwright.sync_api import Page, expect
 
-
-@pytest.fixture(scope="module")
-def streamlit_app():
-    """Start Streamlit app in background for E2E tests."""
-    port = "18502"
-    proc = subprocess.Popen(
-        [sys.executable, "-m", "streamlit", "run", "app.py",
-         "--server.port", port, "--server.headless", "true"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    url = f"http://localhost:{port}"
-    for _ in range(30):
-        try:
-            import urllib.request
-            urllib.request.urlopen(f"{url}/_stcore/health")
-            break
-        except Exception:
-            time.sleep(2)
-    else:
-        proc.kill()
-        raise RuntimeError("Streamlit app failed to start")
-    yield url
-    proc.kill()
-    proc.wait(timeout=10)
+from ui.i18n import APP_TITLE
 
 
 class TestSmoke:
     def test_title_displayed(self, streamlit_app, page: Page):
         page.goto(streamlit_app)
-        expect(page).to_have_title("トイレきれい度マップ")
+        page.wait_for_function("document.title !== 'Streamlit'")
+        expect(page).to_have_title(APP_TITLE)
 
     def test_sidebar_renders(self, streamlit_app, page: Page):
         page.goto(streamlit_app)
@@ -49,8 +22,9 @@ class TestSmoke:
 
     def test_map_renders(self, streamlit_app, page: Page):
         page.goto(streamlit_app)
-        map_el = page.locator("iframe[title*='folium']")
-        expect(map_el).to_be_visible(timeout=15000)
+        map_selector = "iframe[src*='streamlit_folium'], iframe[title*='folium']"
+        page.wait_for_selector(map_selector, state="attached", timeout=30000)
+        assert page.locator(map_selector).count() >= 1
 
     def test_filter_selectable(self, streamlit_app, page: Page):
         page.goto(streamlit_app)

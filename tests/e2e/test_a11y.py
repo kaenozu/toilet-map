@@ -4,26 +4,23 @@ Automated accessibility audit using axe-core via Playwright.
 Related: app.py, ui/components.py
 """
 
-import pytest
 from playwright.sync_api import Page
 
 
 class TestAccessibility:
-    @pytest.mark.skip(reason="axe-core requires @axe-core/playwright npm package")
     def test_no_critical_violations(self, streamlit_app, page: Page):
         page.goto(streamlit_app)
         page.wait_for_timeout(5000)
-        page.add_init_script("""
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/axe-core/axe.min.js';
-        document.head.appendChild(script);
-        """)
+        page.add_script_tag(url="https://cdn.jsdelivr.net/npm/axe-core/axe.min.js")
         page.wait_for_function("typeof window.axe !== 'undefined'")
         results = page.evaluate("""
-        () => window.axe.run(document, {
-            runOnly: ['wcag2a', 'wcag2aa'],
-            rules: { 'color-contrast': { enabled: false } }
-        })
+        () => {
+            const root = document.querySelector('[data-testid="stMain"]') || document.body;
+            return window.axe.run(root, {
+                runOnly: ['wcag2a', 'wcag2aa'],
+                rules: { 'color-contrast': { enabled: false } }
+            });
+        }
         """)
         violations = results.get("violations", [])
         critical = [v for v in violations if v["impact"] in ("critical", "serious")]

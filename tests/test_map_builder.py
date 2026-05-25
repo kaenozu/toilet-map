@@ -33,7 +33,8 @@ class TestCalcFitBounds:
             _make_toilet("out of range", 91.0, 139.72),
         ]
 
-        bounds = _calc_fit_bounds(toilets)
+        valid = _collect_valid_toilets(toilets)
+        bounds = _calc_fit_bounds(valid)
 
         assert bounds == [[35.67, 139.68], [35.69, 139.7]]
 
@@ -127,8 +128,7 @@ class TestCalcFitBoundsEdgeCases:
     def test_no_valid_coords_returns_none(self):
         from ui.map_builder import _calc_fit_bounds
 
-        toilets = [_make_toilet("bad", None, None)]
-        assert _calc_fit_bounds(toilets) is None
+        assert _calc_fit_bounds([]) is None
 
     def test_empty_list_returns_none(self):
         from ui.map_builder import _calc_fit_bounds
@@ -136,10 +136,11 @@ class TestCalcFitBoundsEdgeCases:
         assert _calc_fit_bounds([]) is None
 
     def test_single_point_expands(self):
-        from ui.map_builder import _calc_fit_bounds
+        from ui.map_builder import _calc_fit_bounds, _collect_valid_toilets
 
         toilets = [_make_toilet("only", 35.0, 139.0)]
-        bounds = _calc_fit_bounds(toilets)
+        valid = _collect_valid_toilets(toilets)
+        bounds = _calc_fit_bounds(valid)
         assert bounds is not None
         assert bounds[0][0] < 35.0  # south expanded
         assert bounds[1][0] > 35.0  # north expanded

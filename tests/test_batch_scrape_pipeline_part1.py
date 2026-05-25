@@ -192,7 +192,7 @@ class TestNationwideRunner:
             str(pref_dir / "batch_001.txt"),
             str(pref_dir / "batch_002.txt"),
         ]
-        assert all(env["PROGRESS_FILE"].endswith(stem) for (_, env, _), stem in zip(calls, ["batch_001", "batch_002"]))
+        assert all(env["PROGRESS_FILE"].endswith(stem) for (_, env, _), stem in zip(calls, ["batch_001", "batch_002"], strict=False))
         assert all(env["SYNC_EVERY_SUCCESS"] == "10" for _, env, _ in calls)
 
 

@@ -7,7 +7,6 @@ import json
 import logging
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +35,7 @@ def _render_swipe_handler(t: dict[str, str]) -> None:
     """Inject touch swipe handler for pagination (B4)."""
     prev_text = t.get("prev", "← 前へ")
     next_text = t.get("next", "次へ →")
-    components.html(
+    st.html(
         f"""<div id="swipe-handler" style="display:none;"></div>
 <script>
 (function() {{
@@ -66,8 +65,6 @@ def _render_swipe_handler(t: dict[str, str]) -> None:
     }}, {{passive: true}});
 }})();
 </script>""",
-        height=0,
-        width=0,
     )
 
 
@@ -83,7 +80,7 @@ def render_pagination(total: int, page: int, total_pages: int, t: dict[str, str]
 
         prev_col, info_col, next_col = st.columns([1, 2, 1])
         with prev_col:
-            if st.button(t["prev"], disabled=page <= 1, key="pagination_prev", use_container_width=True):
+            if st.button(t["prev"], disabled=page <= 1, key="pagination_prev", width="stretch"):
                 st.session_state.page = max(1, page - 1)
                 st.rerun()
         with info_col:
@@ -92,7 +89,7 @@ def render_pagination(total: int, page: int, total_pages: int, t: dict[str, str]
                 unsafe_allow_html=True,
             )
         with next_col:
-            if st.button(t["next"], disabled=page >= total_pages, key="pagination_next", use_container_width=True):
+            if st.button(t["next"], disabled=page >= total_pages, key="pagination_next", width="stretch"):
                 st.session_state.page = min(total_pages, page + 1)
                 st.rerun()
     except Exception as e:

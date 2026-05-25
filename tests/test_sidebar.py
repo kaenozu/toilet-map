@@ -34,7 +34,7 @@ class TestGetTranslatedFilters:
     def test_internal_values_match_filter_config(self):
         from app_config import FILTER_CONFIG
         _, display_to_internal = get_translated_filters("日本語")
-        for display_name, ja_key in display_to_internal.items():
+        for ja_key in display_to_internal.values():
             assert ja_key in FILTER_CONFIG
 
 

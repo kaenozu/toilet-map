@@ -2,9 +2,10 @@
 tests/test_batch_verification.py
 データ検証・品質ゲート関連の回帰テスト（test_batch_regressions.py から分割）
 """
-
 import pytest
 import verify_data
+
+from batch.quality_metrics_dto import QualityMetrics
 
 
 class TestVerifyDataLoad:
@@ -102,11 +103,11 @@ class TestVerifyDataMain:
         monkeypatch.setattr(verify_data, "get_expected_prefectures", lambda: ["東京都"])
 
         monkeypatch.setattr(verify_data, "collect_quality_metrics",
-                            lambda toilets: {"total": 0, "missing_score": 0, "missing_prefecture": 0,
-                                             "missing_address": 0, "duplicates": [],
-                                             "prefecture_counts": {}})
+                            lambda toilets: QualityMetrics(total=0, missing_score=0, missing_prefecture=0,
+                                          missing_address=0, duplicates=[],
+                                          prefecture_counts={}))
         monkeypatch.setattr(verify_data, "evaluate_quality_gate",
-                            lambda metrics, expected: (["Error: missing prefecture"], []))
+                            lambda metrics, expected: type('QualityGateResult', (), {'errors': ["Error: missing prefecture"], 'warnings': []})())
         monkeypatch.setattr(verify_data, "collect_sqlite_metrics", lambda path: None)
 
         result = verify_data.main()

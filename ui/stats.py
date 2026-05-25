@@ -32,7 +32,7 @@ def calc_score_distribution(toilets: list[ToiletDict]) -> list[dict[str, object]
                 counts[i] += 1
                 break
     result = []
-    for count, (_, _, label, color) in zip(counts, SCORE_DISTRIBUTION_RANGES):
+    for count, (_, _, label, color) in zip(counts, SCORE_DISTRIBUTION_RANGES, strict=False):
         pct = count / total * 100 if total > 0 else 0
         result.append({"count": count, "pct": round(pct, 1), "label": label, "color": color})
     return result
@@ -49,7 +49,7 @@ def render_score_distribution(toilets: list[ToiletDict]) -> None:
         color=alt.Color("color:N", scale=None, legend=None),
         tooltip=["label:N", "count:Q", "pct:Q"],
     ).properties(height=200)
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 
 
 def render_stats(meta: dict, toilets: list[ToiletDict], t: dict) -> None:

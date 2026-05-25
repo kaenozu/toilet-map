@@ -52,10 +52,12 @@ def render_quality_dashboard(meta: dict, toilets: list[dict], t: dict) -> None:
         if scores:
             st.caption("\u30b9\u30b3\u30a2\u5206\u5e03")
             score_series = pd.Series(scores, name="score")
-            st.bar_chart(
-                score_series.value_counts(bins=10).sort_index(),
-                height=150,
-            )
+            bins = list(range(0, 101, 10))
+            bucket = pd.cut(score_series, bins=bins, right=False, include_lowest=True)
+            counts = bucket.value_counts(sort=False)
+            labels = [f"{left}-{right - 1}" for left, right in zip(bins[:-1], bins[1:], strict=False)]
+            chart_df = pd.DataFrame({"range": labels, "count": counts.to_list()}).set_index("range")
+            st.bar_chart(chart_df, height=150)
 
 
 def _calc_data_age_days(meta: dict) -> int:

@@ -22,5 +22,5 @@ Interactive OpenAPI documentation (Swagger UI).
 
 ## Streamlit Internals
 
-- All state managed via `st.session_state` (see `ui/session_state.py`)
+- State is coordinated through `st.session_state` in the UI modules (`ui/sidebar.py`, `ui/query_params.py`, `ui/pagination.py`, `ui/plugin_api.py`)
 - Caching via `st.cache_data` (data) and `st.cache_resource` (DB connection)

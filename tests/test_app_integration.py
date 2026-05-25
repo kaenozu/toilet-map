@@ -34,7 +34,7 @@ class TestAppConfigCoherence:
         from app_config import FILTER_I18N_KEYS
         from ui.i18n import LANGUAGES
         for lang_name, lang_dict in LANGUAGES.items():
-            for ja_key, i18n_key in FILTER_I18N_KEYS.items():
+            for i18n_key in FILTER_I18N_KEYS.values():
                 assert i18n_key in lang_dict, f"{lang_name} に {i18n_key} がありません"
 
 
@@ -52,6 +52,6 @@ class TestDataFlowSchema:
     def test_score_distribution_ranges_match(self):
         from app_config import SCORE_DISTRIBUTION_RANGES, SCORE_RANGES
         assert len(SCORE_RANGES) == len(SCORE_DISTRIBUTION_RANGES)
-        for sr, sdr in zip(SCORE_RANGES, SCORE_DISTRIBUTION_RANGES):
+        for sr, sdr in zip(SCORE_RANGES, SCORE_DISTRIBUTION_RANGES, strict=False):
             assert sr[0] == sdr[0], f"スコアしきい値不一致: {sr[0]} != {sdr[0]}"
             assert sr[1] == sdr[3], f"色不一致: {sr[1]} != {sdr[3]}"

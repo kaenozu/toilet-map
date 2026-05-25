@@ -114,7 +114,18 @@ def _render_query_state_section(query_params: dict, prefectures: list[str], tran
             st.session_state[key] = value
 
 
-def _render_filter_section(t: dict, prefectures: list[str], translated_filters: dict[str, str]) -> tuple[str, str, str, str]:
+def _render_filter_section(
+    t: dict,
+    prefectures: list[str],
+    translated_filters: dict[str, str],
+    user_location: tuple | None,
+) -> tuple[str, str, str, str]:
+    st.caption(
+        t.get(
+            "quick_start_hint",
+            "まずは『公共トイレ』か検索から始めるのがおすすめです。",
+        )
+    )
     selected_pref = st.selectbox(
         t["prefecture"], prefectures, key="pref_select"
     )
@@ -133,6 +144,13 @@ def _render_filter_section(t: dict, prefectures: list[str], translated_filters: 
         horizontal=True,
         key="sort_select",
     )
+    if sort_order == t["sort_near"] and not user_location:
+        st.info(
+            t.get(
+                "sort_near_without_gps",
+                "現在地が未取得です。GPSをONにすると『現在地から近い順』が有効になります。",
+            )
+        )
 
     st.checkbox(t.get("compact_mode", "コンパクト表示"), key="compact_mode")
 
@@ -185,7 +203,12 @@ def render_sidebar(
             user_location, gps_enabled = _handle_gps_section(t)
 
             st.divider()
-            selected_pref, filter_type, search_query, sort_order = _render_filter_section(t, prefectures, translated_filters)
+            selected_pref, filter_type, search_query, sort_order = _render_filter_section(
+                t,
+                prefectures,
+                translated_filters,
+                user_location,
+            )
 
             st.divider()
             dark_mode, selected_tile = _render_settings_section(t)
@@ -206,7 +229,7 @@ def render_sidebar(
     except Exception:
         logger.exception("render_sidebar failed")
         return SidebarResult(
-            t=t, lang=t.get("language_label", "ja"),
+            t=t, lang=LANGUAGE_OPTIONS[0],
             selected_pref="全て", filter_type="すべて",
             search_query="", sort_order="",
             user_location=None, gps_enabled=False,

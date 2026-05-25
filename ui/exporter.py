@@ -90,5 +90,5 @@ def render_export_ui(filtered_df: pd.DataFrame, map_items: list, selected_pref: 
             data,
             f"toilets_{selected_pref}.{ext}",
             mime,
-            use_container_width=True,
+            width="stretch",
         )

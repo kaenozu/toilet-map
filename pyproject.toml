@@ -32,5 +32,5 @@ description = "Google Maps のレビューからトイレのきれい度を自�
 requires-python = ">=3.11"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "SIM"]
+select = ["E", "F", "W", "I", "UP", "SIM", "B", "PERF"]
 ignore = ["E501"]
