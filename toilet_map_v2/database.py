@@ -52,9 +52,18 @@ CREATE TABLE IF NOT EXISTS reviews (
     is_toilet_related INTEGER NOT NULL CHECK(is_toilet_related IN (0, 1)),
     UNIQUE(place_id, content_hash)
 );
+CREATE TABLE IF NOT EXISTS migration_rejections (
+    id INTEGER PRIMARY KEY,
+    source_index INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    rejected_at TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_places_location ON places(latitude, longitude);
 CREATE INDEX IF NOT EXISTS idx_places_active ON places(is_active);
 CREATE INDEX IF NOT EXISTS idx_toilets_score ON toilets(score_status, score);
+CREATE INDEX IF NOT EXISTS idx_reviews_place ON reviews(place_id);
+CREATE INDEX IF NOT EXISTS idx_rejections_reason ON migration_rejections(reason);
 """
 
 
@@ -66,7 +75,9 @@ def connect(path: str | Path) -> sqlite3.Connection:
 
 
 def initialize(path: str | Path) -> None:
-    with connect(path) as connection:
+    database_path = Path(path)
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    with connect(database_path) as connection:
         connection.executescript(SCHEMA_SQL)
         connection.execute(
             "INSERT OR REPLACE INTO schema_meta(key, value) VALUES('schema_version', ?)",
