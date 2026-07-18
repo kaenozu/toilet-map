@@ -12,25 +12,13 @@ def normalize_identity_text(value: object) -> str:
     return re.sub(r"\s+", "", str(value or "")).lower()
 
 
-def build_source_id(
+def build_fallback_source_id(
     record: Mapping[str, object],
     *,
     lat: float | None = None,
     lng: float | None = None,
 ) -> str:
-    """Return a stable ID, preferring provider IDs and using a deterministic fallback."""
-    existing = str(record.get("source_id") or "").strip()
-    if existing:
-        return existing
-
-    place_id = str(record.get("place_id") or "").strip()
-    if place_id:
-        return f"place_id:{place_id}"
-
-    data_id = str(record.get("data_id") or "").strip()
-    if data_id:
-        return f"data_id:{data_id}"
-
+    """Return the deterministic title/address/coordinate identity."""
     if lat is None:
         try:
             raw_lat = record.get("lat") if record.get("lat") is not None else record.get("latitude")
@@ -56,3 +44,25 @@ def build_source_id(
     payload = f"{title}|{address}|{coordinate_part}"
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
     return f"fallback:{digest}"
+
+
+def build_source_id(
+    record: Mapping[str, object],
+    *,
+    lat: float | None = None,
+    lng: float | None = None,
+) -> str:
+    """Return a stable ID, preferring provider IDs and using a deterministic fallback."""
+    existing = str(record.get("source_id") or "").strip()
+    if existing:
+        return existing
+
+    place_id = str(record.get("place_id") or "").strip()
+    if place_id:
+        return f"place_id:{place_id}"
+
+    data_id = str(record.get("data_id") or "").strip()
+    if data_id:
+        return f"data_id:{data_id}"
+
+    return build_fallback_source_id(record, lat=lat, lng=lng)
