@@ -1,8 +1,7 @@
-"""
-ui/map_builder.py
-Folium 地図構築・マーカー配置
-app.py から分離
-"""
+"""Folium map construction."""
+
+from __future__ import annotations
+
 import math
 
 import folium
@@ -13,6 +12,7 @@ from app_config import (
     POPUP_FIX_JS,
     PREFECTURE_CENTERS,
     PUBLIC_MARKER_RADIUS,
+    TILE_ATTRIBUTIONS,
 )
 
 from .helpers import get_score_style
@@ -22,46 +22,28 @@ from .types import ToiletDict
 CLUSTER_THRESHOLDS = [(500, 50), (1000, 80), (float("inf"), 100)]
 FIT_BOUNDS_PADDING = (24, 24)
 FIT_BOUNDS_EPSILON = 0.01
-COORD_DEDUPE_PRECISION = 6
 
 
 def _coerce_coordinate(value: object) -> float | None:
     try:
-        coordinate = float(value)
+        coordinate = float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return None
-    if not math.isfinite(coordinate):
-        return None
-    return coordinate
+    return coordinate if math.isfinite(coordinate) else None
 
 
-def _coordinate_key(lat: float, lng: float) -> tuple[float, float]:
-    return (round(lat, COORD_DEDUPE_PRECISION), round(lng, COORD_DEDUPE_PRECISION))
-
-
-def _collect_valid_toilets(
-    toilets: list[ToiletDict],
-) -> list[tuple[ToiletDict, float, float]]:
-    """重複座標を除外して有効なトイレデータを収集"""
+def _collect_valid_toilets(toilets: list[ToiletDict]) -> list[tuple[ToiletDict, float, float]]:
+    """Preserve distinct records even when they share the same coordinates."""
     valid: list[tuple[ToiletDict, float, float]] = []
-    seen: set[tuple[float, float]] = set()
     for toilet in toilets:
-        lat = _coerce_coordinate(toilet.get("lat"))
-        lng = _coerce_coordinate(toilet.get("lng"))
-        if lat is None or lng is None:
+        lat, lng = _coerce_coordinate(toilet.get("lat")), _coerce_coordinate(toilet.get("lng"))
+        if lat is None or lng is None or not (-90 <= lat <= 90 and -180 <= lng <= 180):
             continue
-        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
-            continue
-        key = _coordinate_key(lat, lng)
-        if key in seen:
-            continue
-        seen.add(key)
         valid.append((toilet, lat, lng))
     return valid
 
 
 def _collect_valid_coordinates(toilets: list[ToiletDict]) -> list[tuple[float, float]]:
-    """_collect_valid_toilets から座標のみを抽出"""
     return [(lat, lng) for _, lat, lng in _collect_valid_toilets(toilets)]
 
 
@@ -72,44 +54,49 @@ def calc_cluster_radius(count: int) -> int:
     return 100
 
 
-def calc_map_center(
-    selected_pref: str,
-    meta: dict,
-    prefecture_stats: dict,
-) -> tuple[float, float, int]:
+def calc_map_center(selected_pref: str, meta: dict, prefecture_stats: dict) -> tuple[float, float, int]:
     if selected_pref != "全て" and selected_pref in PREFECTURE_CENTERS:
-        if selected_pref in prefecture_stats and prefecture_stats[selected_pref]["count"] >= 5:
-            return (
-                prefecture_stats[selected_pref]["center_lat"],
-                prefecture_stats[selected_pref]["center_lng"],
-                11,
-            )
+        stats = prefecture_stats.get(selected_pref)
+        if stats and stats.get("count", 0) >= 5:
+            return stats["center_lat"], stats["center_lng"], 11
         lat, lng = PREFECTURE_CENTERS[selected_pref]
         return lat, lng, 11
     return meta["center_lat"], meta["center_lng"], meta["zoom"]
 
 
 def _calc_fit_bounds(toilets: list[ToiletDict]) -> list[list[float]] | None:
-    """マーカーを包む bounds を返す。1点だけの場合は少しだけ広げる。"""
-    coords = _collect_valid_coordinates(toilets)
-    if not coords:
+    coordinates = _collect_valid_coordinates(toilets)
+    if not coordinates:
         return None
-
-    lats = [lat for lat, _ in coords]
-    lngs = [lng for _, lng in coords]
-    south = min(lats)
-    north = max(lats)
-    west = min(lngs)
-    east = max(lngs)
-
+    lats, lngs = [lat for lat, _ in coordinates], [lng for _, lng in coordinates]
+    south, north, west, east = min(lats), max(lats), min(lngs), max(lngs)
     if south == north:
         south -= FIT_BOUNDS_EPSILON
         north += FIT_BOUNDS_EPSILON
     if west == east:
         west -= FIT_BOUNDS_EPSILON
         east += FIT_BOUNDS_EPSILON
-
     return [[south, west], [north, east]]
+
+
+def _create_map(center_lat: float, center_lng: float, zoom: int, tile: str) -> folium.Map:
+    if tile in TILE_ATTRIBUTIONS:
+        map_object = folium.Map(
+            location=[center_lat, center_lng],
+            zoom_start=zoom,
+            tiles=None,
+            control_scale=True,
+            prefer_canvas=True,
+        )
+        folium.TileLayer(tiles=tile, attr=TILE_ATTRIBUTIONS[tile], name="OpenTopoMap").add_to(map_object)
+        return map_object
+    return folium.Map(
+        location=[center_lat, center_lng],
+        zoom_start=zoom,
+        tiles=tile,
+        control_scale=True,
+        prefer_canvas=True,
+    )
 
 
 def build_map(
@@ -119,17 +106,9 @@ def build_map(
     zoom: int,
     tile: str = "OpenStreetMap",
 ) -> folium.Map:
-    m = folium.Map(
-        location=[center_lat, center_lng],
-        zoom_start=zoom,
-        tiles=tile,
-        control_scale=True,
-        prefer_canvas=True,  # large datasets: use Canvas renderer for performance
-    )
-    m.get_root().html.add_child(folium.Element(POPUP_FIX_JS))
-
+    map_object = _create_map(center_lat, center_lng, zoom, tile)
+    map_object.get_root().html.add_child(folium.Element(POPUP_FIX_JS))  # type: ignore[attr-defined]
     valid_toilets = _collect_valid_toilets(toilets)
-
     cluster = MarkerCluster(
         options={
             "maxClusterRadius": calc_cluster_radius(len(valid_toilets)),
@@ -137,13 +116,10 @@ def build_map(
             "disableClusteringAtZoom": 15,
         },
         name="トイレ",
-    ).add_to(m)
-
-    for t, lat, lng in valid_toilets:
-        color, emoji, _ = get_score_style(t["toilet_score"])
-        radius = PUBLIC_MARKER_RADIUS if t["is_public_toilet"] else NORMAL_MARKER_RADIUS
-
-        popup_html = build_popup_html(t)
+    ).add_to(map_object)
+    for toilet, lat, lng in valid_toilets:
+        color, emoji, _ = get_score_style(toilet["toilet_score"])
+        radius = PUBLIC_MARKER_RADIUS if toilet["is_public_toilet"] else NORMAL_MARKER_RADIUS
         folium.CircleMarker(
             location=[lat, lng],
             radius=radius,
@@ -152,12 +128,9 @@ def build_map(
             fill=True,
             fill_color=color,
             fill_opacity=0.9,
-            popup=folium.Popup(popup_html, max_width=320, auto_pan=True),
-            tooltip=f"{emoji} {t['title']}",
+            popup=folium.Popup(build_popup_html(toilet), max_width=320, auto_pan=True),
+            tooltip=f"{emoji} {toilet['title']}",
         ).add_to(cluster)
-
-    bounds = _calc_fit_bounds(toilets)
-    if bounds:
-        m.fit_bounds(bounds, padding=FIT_BOUNDS_PADDING)
-
-    return m
+    if bounds := _calc_fit_bounds(toilets):
+        map_object.fit_bounds(bounds, padding=FIT_BOUNDS_PADDING)
+    return map_object
