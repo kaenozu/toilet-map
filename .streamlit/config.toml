@@ -1,5 +1,6 @@
 [server]
 maxUploadSize = 5
+enableStaticServing = true
 
 [deploy]
 pythonVersion = "3.11"
