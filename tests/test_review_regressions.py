@@ -132,3 +132,28 @@ def test_atomic_gzip_save(tmp_path):
 def test_posix_file_lock_module_is_available():
     if os.name != "nt":
         assert utils.fcntl is not None
+
+
+def test_incremental_refresh_replaces_legacy_fallback_with_provider_id(tmp_path):
+    old = _toilet("", "A")
+    old["source_id"] = ""
+    old_path = tmp_path / "canonical.json.gz"
+    with gzip.open(old_path, "wt", encoding="utf-8") as file:
+        json.dump({"metadata": {}, "toilets": [old]}, file)
+
+    raw_path = tmp_path / "raw.json"
+    provider_place = _place(
+        place_id="new-provider-id",
+        title="A",
+        category="公園",
+        address="東京都千代田区",
+        latitude=35.0,
+        longitude=139.0,
+    )
+    raw_path.write_text(json.dumps(provider_place, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    process_data.process_file(str(raw_path), str(old_path), "--incremental")
+    with gzip.open(old_path, "rt", encoding="utf-8") as file:
+        toilets = json.load(file)["toilets"]
+    assert len(toilets) == 1
+    assert toilets[0]["source_id"] == "place_id:new-provider-id"
