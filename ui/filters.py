@@ -1,7 +1,7 @@
-"""
-ui/filters.py
-フィルタリング・検索ロジック
-"""
+"""Filtering and literal AND-search logic."""
+
+from __future__ import annotations
+
 import math
 import re
 
@@ -11,56 +11,42 @@ import pandas as pd
 from app_config import FILTER_CONFIG, PUBLIC_FILTER_VALUE, THRESHOLD
 
 EARTH_RADIUS_KM = 6371.0
-
-
-def haversine_distance(lat1: float, lng1: float, lat2: float | pd.Series, lng2: float | pd.Series) -> float | pd.Series:
-    """2点間の距離を計算 (km)。lat2, lng2 はスカラーまたはpandas Series"""
-    if isinstance(lat2, pd.Series):
-        lat1_rad = np.radians(lat1)
-        lng1_rad = np.radians(lng1)
-        lat2_rad = np.radians(lat2)
-        lng2_rad = np.radians(lng2)
-
-        dlat = lat2_rad - lat1_rad
-        dlng = lng2_rad - lng1_rad
-
-        a = (np.sin(dlat / 2) ** 2 +
-             np.cos(lat1_rad) * np.cos(lat2_rad) * np.sin(dlng / 2) ** 2)
-        c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
-        return EARTH_RADIUS_KM * c
-    else:
-        dlat = math.radians(lat2 - lat1)
-        dlng = math.radians(lng2 - lng1)
-        a = (math.sin(dlat / 2) ** 2 +
-             math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
-             math.sin(dlng / 2) ** 2)
-        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-        return EARTH_RADIUS_KM * c
-
-
-# barrier_free は多目的・おむつ替え・車椅子のいずれかが true ならマッチ
 _BARRIER_FREE_OR_COLS = ["has_multi", "has_diaper", "has_wheelchair"]
 
 
+def haversine_distance(lat1: float, lng1: float, lat2: float | pd.Series, lng2: float | pd.Series) -> float | pd.Series:
+    if isinstance(lat2, pd.Series):
+        lat1_rad, lng1_rad = np.radians(lat1), np.radians(lng1)
+        lat2_rad, lng2_rad = np.radians(lat2), np.radians(lng2)
+        dlat, dlng = lat2_rad - lat1_rad, lng2_rad - lng1_rad
+        a = np.sin(dlat / 2) ** 2 + np.cos(lat1_rad) * np.cos(lat2_rad) * np.sin(dlng / 2) ** 2
+        return EARTH_RADIUS_KM * 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+    dlat = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2
+    return EARTH_RADIUS_KM * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
 def _apply_equipment_filter(df: pd.DataFrame, pattern: str) -> pd.DataFrame:
-    """設備フィルタ（__keyword__*）を適用"""
     column_map = {
         "__keyword__multi": "has_multi",
         "__keyword__diaper": "has_diaper",
         "__keyword__wheelchair": "has_wheelchair",
     }
     if pattern == "__keyword__barrier_free":
-        cols = [c for c in _BARRIER_FREE_OR_COLS if c in df.columns]
-        if cols:
-            mask = df[cols[0]]
-            for c in cols[1:]:
-                mask = mask | df[c]
-            return df[mask]
-        return df
-    col = column_map.get(pattern)
-    if col and col in df.columns:
-        return df[df[col]]
-    return df
+        columns = [column for column in _BARRIER_FREE_OR_COLS if column in df.columns]
+        if not columns:
+            return df
+        mask = df[columns[0]].fillna(False).astype(bool)
+        for column in columns[1:]:
+            mask |= df[column].fillna(False).astype(bool)
+        return df[mask]
+    equipment_column = column_map.get(pattern)
+    return (
+        df[df[equipment_column].fillna(False).astype(bool)]
+        if equipment_column and equipment_column in df.columns
+        else df
+    )
 
 
 def filter_toilets(
@@ -70,139 +56,92 @@ def filter_toilets(
     user_lat: float | None = None,
     user_lng: float | None = None,
 ) -> pd.DataFrame:
-    """条件に基づいてフィルタリング。現在地があれば距離を計算。"""
+    result = df
     if prefecture != "全て":
-        df = df[df["prefecture"] == prefecture]
-
+        result = result[result["prefecture"] == prefecture]
     pattern = FILTER_CONFIG.get(filter_type)
     if pattern == PUBLIC_FILTER_VALUE:
-        df = df[df["is_public_toilet"]]
-    elif pattern and isinstance(pattern, str) and pattern.startswith("__keyword__"):
-        df = _apply_equipment_filter(df, pattern)
+        result = result[result["is_public_toilet"].fillna(False).astype(bool)]
+    elif isinstance(pattern, str) and pattern.startswith("__keyword__"):
+        result = _apply_equipment_filter(result, pattern)
     elif pattern:
-        df = df[df["category"].str.contains(pattern, na=False)]
-
+        result = result[result["category"].str.contains(pattern, na=False, regex=True)]
     if user_lat is not None and user_lng is not None:
-        df["distance"] = haversine_distance(user_lat, user_lng, df["lat"], df["lng"])
+        result = result.copy()
+        result["distance"] = haversine_distance(user_lat, user_lng, result["lat"], result["lng"])
+    return result
 
-    return df
+
+def _literal_mask(series: pd.Series, word: str) -> pd.Series:
+    return series.astype("string").str.contains(word, case=False, na=False, regex=False)
 
 
 def search_toilets(df: pd.DataFrame, query: str | None) -> pd.DataFrame:
-    """名前・住所・カテゴリで検索（部分単語一致, スコア範囲対応）"""
-    if not query:
+    if not query or not (query := query.strip()):
         return df
-    q = query.strip()
-    if not q:
-        return df
-
-    score_range_match = re.match(r"^(\d{1,3})[\-~](\d{1,3})$", q)
+    score_range_match = re.fullmatch(r"(\d{1,3})[\-~](\d{1,3})", query)
     if score_range_match:
-        lo = int(score_range_match.group(1))
-        hi = int(score_range_match.group(2))
-        return df[(df["toilet_score"] >= lo) & (df["toilet_score"] <= hi)]
+        low, high = map(int, score_range_match.groups())
+        if low > high:
+            return df.iloc[0:0]
+        return df[(df["toilet_score"] >= low) & (df["toilet_score"] <= high)]
 
-    words = [w for w in re.split(r"[\s,、]+", q) if w]
+    words = [word for word in re.split(r"[\s,、]+", query) if word]
     if not words:
         return df
-
-    masks = [
-        (
-            df["title"].str.contains(w, case=False, na=False)
-            | df["address"].str.contains(w, case=False, na=False)
-            | df["category"].str.contains(w, case=False, na=False)
+    combined = pd.Series(True, index=df.index)
+    for word in words:
+        word_mask = (
+            _literal_mask(df["title"], word)
+            | _literal_mask(df["address"], word)
+            | _literal_mask(df["category"], word)
         )
-        for w in words
-    ]
-    combined = masks[0]
-    for m in masks[1:]:
-        combined = combined | m
+        combined &= word_mask
     return df[combined]
 
 
 def filter_by_viewport(df: pd.DataFrame, bounds: dict) -> pd.DataFrame:
-    """地図の表示範囲（bounds）に基づいてフィルタリング
-
-    DEPRECATED: 現在のUIでは使用されていません。テスト互換性のため維持。
-    """
     if not bounds or not isinstance(bounds, dict):
         return df
-
     coordinates = _extract_bounds_coordinates(bounds)
     if not coordinates:
         return df
-
     sw_lat, sw_lng, ne_lat, ne_lng = coordinates
-    mask = (
-        (df["lat"] >= sw_lat) & (df["lat"] <= ne_lat) &
-        (df["lng"] >= sw_lng) & (df["lng"] <= ne_lng)
-    )
-    return df[mask]
+    return df[(df["lat"] >= sw_lat) & (df["lat"] <= ne_lat) & (df["lng"] >= sw_lng) & (df["lng"] <= ne_lng)]
 
 
 def _extract_bounds_coordinates(bounds: dict) -> tuple[float, float, float, float] | None:
-    """Leaflet の bounds から座標を安全に取り出す。"""
-    sw = bounds.get("_southWest")
-    ne = bounds.get("_northEast")
-    if not sw or not ne:
+    southwest, northeast = bounds.get("_southWest"), bounds.get("_northEast")
+    if not southwest or not northeast:
         return None
-
     try:
-        sw_lat = float(sw.get("lat"))
-        sw_lng = float(sw.get("lng"))
-        ne_lat = float(ne.get("lat"))
-        ne_lng = float(ne.get("lng"))
+        return float(southwest.get("lat")), float(southwest.get("lng")), float(northeast.get("lat")), float(northeast.get("lng"))
     except (TypeError, ValueError):
         return None
 
-    return sw_lat, sw_lng, ne_lat, ne_lng
-
 
 def get_underserved_areas_in_viewport(bounds: dict, stats: dict) -> list[dict]:
-    """
-    表示範囲内の都道府県から不足エリアを特定する。
-    複数都道府県が表示範囲内にあれば、中心に近い順に最大5件返す。
-
-    DEPRECATED: 現在のUIでは使用されていません。テスト互換性のため維持。
-    """
-    if not bounds:
+    if not bounds or not (coordinates := _extract_bounds_coordinates(bounds)):
         return []
-
-    coordinates = _extract_bounds_coordinates(bounds)
-    if not coordinates:
-        return []
-
     sw_lat, sw_lng, ne_lat, ne_lng = coordinates
-    center_lat = (sw_lat + ne_lat) / 2
-    center_lng = (sw_lng + ne_lng) / 2
-
+    center_lat, center_lng = (sw_lat + ne_lat) / 2, (sw_lng + ne_lng) / 2
     from app_config import PREFECTURE_CENTERS
 
-    # 表示範囲内にある都道府県を、中心からの距離順にリスト
-    visible_prefs = []
-    for pref, (plat, plng) in PREFECTURE_CENTERS.items():
-        if sw_lat <= plat <= ne_lat and sw_lng <= plng <= ne_lng:
-            dist = math.sqrt((plat - center_lat) ** 2 + (plng - center_lng) ** 2)
-            visible_prefs.append((dist, pref))
-
-    # 表示範囲内にない場合は最も近い都道府県を使う
-    if not visible_prefs:
-        for pref, (plat, plng) in PREFECTURE_CENTERS.items():
-            dist = math.sqrt((plat - center_lat) ** 2 + (plng - center_lng) ** 2)
-            visible_prefs.append((dist, pref))
-
-    visible_prefs.sort()
-
-    MAX_SUGGESTIONS = 5
-    underserved = []
-    for _, pref in visible_prefs:
-        if pref in stats:
-            for city, count in stats[pref].items():
-                if count < THRESHOLD:
-                    underserved.append({"pref": pref, "city": city, "count": count})
-                    if len(underserved) >= MAX_SUGGESTIONS:
-                        break
-        if len(underserved) >= MAX_SUGGESTIONS:
-            break
-
-    return underserved[:MAX_SUGGESTIONS]
+    visible = [
+        (math.hypot(lat - center_lat, lng - center_lng), pref)
+        for pref, (lat, lng) in PREFECTURE_CENTERS.items()
+        if sw_lat <= lat <= ne_lat and sw_lng <= lng <= ne_lng
+    ]
+    if not visible:
+        visible = [
+            (math.hypot(lat - center_lat, lng - center_lng), pref)
+            for pref, (lat, lng) in PREFECTURE_CENTERS.items()
+        ]
+    underserved: list[dict] = []
+    for _, pref in sorted(visible):
+        for city, count in stats.get(pref, {}).items():
+            if count < THRESHOLD:
+                underserved.append({"pref": pref, "city": city, "count": count})
+                if len(underserved) == 5:
+                    return underserved
+    return underserved
