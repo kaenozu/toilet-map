@@ -1,142 +1,40 @@
-"""
-ui/styles.py
-Mobile CSS styles for Streamlit app
-CSS inlined directly; no file I/O at import time.
-"""
+"""CSS constants injected directly by Streamlit."""
 
 MOBILE_CSS = """<style>
-/* ===== モバイル / サイドバー最適化 ===== */
-
-/* サイドバー幅（デスクトップ・展開時） */
-section[data-testid="stSidebar"]:not([aria-expanded="false"]) {
-    min-width: 280px !important;
-    max-width: 360px !important;
+section[data-testid="stSidebar"]:not([aria-expanded="false"]) { min-width:280px!important; max-width:360px!important; }
+section[data-testid="stSidebar"] > div:first-child { padding-left:0!important; }
+section[data-testid="stSidebar"][aria-expanded="false"] { width:0!important; min-width:0!important; max-width:0!important; overflow:hidden!important; flex-shrink:0!important; padding:0!important; margin:0!important; }
+section[data-testid="stSidebar"][aria-expanded="false"] + div .block-container { max-width:100%!important; }
+@media (max-width:768px) {
+  .block-container { padding:1rem .5rem 0!important; max-width:100%!important; }
+  h1 { font-size:1.3rem!important; margin-bottom:.3rem!important; }
+  .stCaption { font-size:.75rem!important; }
+  .stFolium > div { margin-top:0!important; }
+  .stSelectbox label,.stTextInput label { font-size:16px!important; }
+  .score-legend-mobile { font-size:.7rem!important; }
+  .score-legend-mobile .bar { width:120px!important; height:10px!important; }
+  .streamlit-expanderHeader { font-size:14px!important; padding:4px 8px!important; }
+  .stButton > button,.stDownloadButton > button { min-height:44px!important; }
+  .toilet-card { -webkit-tap-highlight-color:transparent!important; transition:background .15s!important; }
+  .toilet-card:active { background:#f5f5f5!important; }
+  .stRadio > label { font-size:13px!important; }
+  .stRadio > div { gap:4px!important; }
+  .leaflet-popup-content-wrapper { max-width:calc(100vw - 40px)!important; min-width:0!important; }
+  .leaflet-popup-content { min-width:0!important; max-width:calc(100vw - 60px)!important; font-size:13px!important; }
 }
-section[data-testid="stSidebar"] > div:first-child {
-    padding-left: 0 !important;
+.stButton > button { color:#fff!important; background-color:#1a73e8!important; border-color:#1a73e8!important; font-weight:600!important; }
+.stButton > button:disabled { background-color:#999!important; color:#fff!important; border-color:#999!important; }
+.stButton > button[kind="secondary"] { background-color:#555!important; color:#fff!important; border-color:#555!important; }
+@media (prefers-color-scheme:dark) {
+  .toilet-card { background:#1e1e1e!important; color:#e0e0e0!important; border-color:#333!important; }
+  .toilet-card .toilet-card-title,.toilet-card .toilet-card-subtitle,.toilet-card .toilet-card-arrow,.toilet-card .toilet-card-meta { color:inherit!important; }
 }
+</style>"""
 
-/* サイドバー格納時：サイドバーをゼロ幅に */
-section[data-testid="stSidebar"][aria-expanded="false"] {
-    width: 0 !important;
-    min-width: 0 !important;
-    max-width: 0 !important;
-    overflow: hidden !important;
-    flex-shrink: 0 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-}
-/* サイドバー格納時：メインコンテンツを全幅に */
-section[data-testid="stSidebar"][aria-expanded="false"] + div .block-container {
-    max-width: 100% !important;
-}
-
-/* Streamlitの余分な余白を削減 */
-@media (max-width: 768px) {
-    .block-container {
-        padding-top: 1rem !important;
-        padding-bottom: 0 !important;
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
-        max-width: 100% !important;
-    }
-
-    /* タイトル縮小 */
-    h1 { font-size: 1.3rem !important; margin-bottom: 0.3rem !important; }
-
-    /* キャプション縮小 */
-    .stCaption { font-size: 0.75rem !important; }
-
-    /* 地図コンテナの上下マージン削減 */
-    .stFolium > div { margin-top: 0 !important; }
-
-    /* selectboxとtext_inputのフォントサイズ調整（iOSズーム防止） */
-    .stSelectbox label, .stTextInput label {
-        font-size: 16px !important;
-    }
-
-    /* 凡例を小さく */
-    .score-legend-mobile { font-size: 0.7rem !important; }
-    .score-legend-mobile .bar { width: 120px !important; height: 10px !important; }
-
-    /* 統計expander コンパクト化 */
-    .streamlit-expanderHeader {
-        font-size: 14px !important;
-        padding: 4px 8px !important;
-    }
-
-    /* ページネーションボタン タップ領域拡大 */
-    .stButton > button {
-        min-height: 44px !important;
-        font-size: 14px !important;
-    }
-
-    /* トイレカードのタッチ操作改善 */
-    .toilet-card {
-        -webkit-tap-highlight-color: transparent !important;
-        transition: background 0.15s !important;
-    }
-    .toilet-card:active {
-        background: #f5f5f5 !important;
-    }
-
-    /* ラジオボタンをコンパクトに */
-    .stRadio > label {
-        font-size: 13px !important;
-    }
-    .stRadio > div {
-        gap: 4px !important;
-    }
-
-    /* ダウンロードボタン */
-    .stDownloadButton > button {
-        min-height: 44px !important;
-    }
-}
-
-/* スマホではポップアップ幅を画面幅に合わせる */
-@media (max-width: 768px) {
-    .leaflet-popup-content-wrapper {
-        max-width: calc(100vw - 40px) !important;
-        min-width: 0 !important;
-    }
-    .leaflet-popup-content {
-        min-width: 0 !important;
-        max-width: calc(100vw - 60px) !important;
-        font-size: 13px !important;
-    }
-}
-
-/* ===== 文字コントラスト改善（テーマ問わず） ===== */
-.stButton > button {
-    color: #ffffff !important;
-    background-color: #1a73e8 !important;
-    border-color: #1a73e8 !important;
-    font-weight: 600 !important;
-}
-.stButton > button:disabled {
-    background-color: #999 !important;
-    color: #fff !important;
-    border-color: #999 !important;
-}
-.stButton > button[kind="secondary"] {
-    background-color: #555 !important;
-    color: #ffffff !important;
-    border-color: #555 !important;
-}
-
-/* ===== ダークモード対応 ===== */
-@media (prefers-color-scheme: dark) {
-    .toilet-card {
-        background: #1e1e1e !important;
-        color: #e0e0e0 !important;
-        border-color: #333 !important;
-    }
-    .toilet-card .toilet-card-title,
-    .toilet-card .toilet-card-subtitle,
-    .toilet-card .toilet-card-arrow,
-    .toilet-card .toilet-card-meta {
-        color: inherit !important;
-    }
-}
+DARK_MODE_CSS = """<style>
+.toilet-card { background:#1e1e1e!important; color:#e0e0e0!important; border-color:#333!important; }
+.toilet-card .toilet-card-title,
+.toilet-card .toilet-card-subtitle,
+.toilet-card .toilet-card-meta,
+.toilet-card .toilet-card-arrow { color:inherit!important; }
 </style>"""
