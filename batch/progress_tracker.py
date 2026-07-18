@@ -1,36 +1,59 @@
-"""
-batch/progress_tracker.py
-スクレイプの進捗管理とファイル I/O ユーティリティ
-進捗ファイルの読み書き、ステータス公開、パーツファイルマージ
-"""
+# mypy: disable-error-code="no-redef"
+"""Scrape progress persistence keyed by query fingerprint."""
+
+from __future__ import annotations
+
+import hashlib
 import os
 
-from utils import update_expansion_status
+try:
+    from .utils import update_expansion_status
+except ImportError:
+    from utils import update_expansion_status
 
 PROGRESS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.environ.get("PROGRESS_FILE", ".progress"))
+ProgressState = dict[int, str]
+
+
+def query_fingerprint(query: str) -> str:
+    return hashlib.sha256(query.strip().encode("utf-8")).hexdigest()[:16]
 
 
 def load_queries(path: str) -> list[str]:
-    """Load non-comment query lines from a batch query file."""
     if not os.path.exists(path):
         return []
-    with open(path, encoding="utf-8") as f:
-        return [stripped for line in f if (stripped := line.strip()) and not stripped.startswith("#")]
+    with open(path, encoding="utf-8") as file:
+        return [stripped for line in file if (stripped := line.strip()) and not stripped.startswith("#")]
 
 
-def load_progress(path: str = PROGRESS_FILE) -> set[int]:
-    """Load completed query indices from a progress file."""
+def load_progress(path: str = PROGRESS_FILE) -> ProgressState:
+    """Load `index<TAB>fingerprint`; legacy index-only rows are treated as stale."""
     if not os.path.exists(path):
-        return set()
-    with open(path) as f:
-        return {int(line.strip()) for line in f if line.strip()}
+        return {}
+    progress: ProgressState = {}
+    with open(path, encoding="utf-8") as file:
+        for line in file:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            index_text, separator, fingerprint = stripped.partition("\t")
+            try:
+                index = int(index_text)
+            except ValueError:
+                continue
+            progress[index] = fingerprint if separator else ""
+    return progress
 
 
-def save_progress(done: set[int], path: str = PROGRESS_FILE) -> None:
-    """Persist completed query indices in ascending order."""
-    with open(path, "w") as f:
-        for idx in sorted(done):
-            f.write(f"{idx}\n")
+def save_progress(done: ProgressState, path: str = PROGRESS_FILE) -> None:
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    temp_path = f"{path}.tmp"
+    with open(temp_path, "w", encoding="utf-8") as file:
+        for index in sorted(done):
+            file.write(f"{index}\t{done[index]}\n")
+        file.flush()
+        os.fsync(file.fileno())
+    os.replace(temp_path, path)
 
 
 def publish_expansion_status(
@@ -46,7 +69,6 @@ def publish_expansion_status(
     status: str = "running",
     message: str = "",
 ) -> None:
-    """Publish the current expansion status to the shared status file."""
     update_expansion_status(
         run_id,
         {
@@ -67,10 +89,9 @@ def publish_expansion_status(
 
 
 def merge_part_files(raw_dir: str, output_path: str, total: int) -> None:
-    """Merge numbered part_###.json files into one output file."""
-    with open(output_path, "w", encoding="utf-8") as outf:
-        for i in range(1, total + 1):
-            part = os.path.join(raw_dir, f"part_{i:03d}.json")
-            if os.path.exists(part):
-                with open(part, encoding="utf-8") as pf:
-                    outf.write(pf.read())
+    with open(output_path, "w", encoding="utf-8") as output:
+        for index in range(1, total + 1):
+            part_path = os.path.join(raw_dir, f"part_{index:03d}.json")
+            if os.path.exists(part_path):
+                with open(part_path, encoding="utf-8") as part:
+                    output.write(part.read())
