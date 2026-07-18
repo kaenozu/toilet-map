@@ -1,33 +1,34 @@
-"""
-batch/scrape_runner.py
-バッチスクレイプの実行エンジン（Windows batから呼び出される）
+# mypy: disable-error-code="no-redef"
+"""Batch scrape runner with resumable query-fingerprint progress."""
 
-使い方:
-  python scrape_runner.py                          # queries.txtを使用
-  python scrape_runner.py --city 羽生市            # 市名でフィルタ
-  python scrape_runner.py --city 羽生市 --prefecture 埼玉県
+from __future__ import annotations
 
-関連: city_bounds.py, process_data.py, generate_queries.py
-"""
 import os
 import shutil
-import sys
 import time
 
-from cli_parser import detect_city_from_queries, parse_args
-from docker_exec import scrape_query
-from pipeline import run_postprocess_pipeline
-from progress_tracker import (
-    PROGRESS_FILE as DEFAULT_PROGRESS_FILE,
-)
-from progress_tracker import (
-    load_progress,
-    load_queries,
-    publish_expansion_status,
-    save_progress,
-)
-from scrape_filter import prepare_input_data
-from utils import logger
+try:
+    from .cli_parser import detect_city_from_queries, parse_args
+    from .docker_exec import scrape_query
+    from .pipeline import run_postprocess_pipeline
+    from .progress_tracker import PROGRESS_FILE as DEFAULT_PROGRESS_FILE
+    from .progress_tracker import (
+        load_progress,
+        load_queries,
+        publish_expansion_status,
+        query_fingerprint,
+        save_progress,
+    )
+    from .scrape_filter import prepare_input_data
+    from .utils import logger
+except ImportError:
+    from cli_parser import detect_city_from_queries, parse_args
+    from docker_exec import scrape_query
+    from pipeline import run_postprocess_pipeline
+    from progress_tracker import PROGRESS_FILE as DEFAULT_PROGRESS_FILE
+    from progress_tracker import load_progress, load_queries, publish_expansion_status, query_fingerprint, save_progress
+    from scrape_filter import prepare_input_data
+    from utils import logger
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 QUERIES_FILE = os.path.join(SCRIPT_DIR, os.environ.get("QUERIES", "queries.txt"))
@@ -55,36 +56,35 @@ def _maybe_sync_after_success(city: str, pref: str, success_count: int) -> None:
 def _execute_scraping_loop(
     queries: list[str],
     total: int,
-    done: set[int],
+    done: dict[int, str],
     progress_file: str,
     args: dict,
     run_id: str,
     started_at: float,
-) -> tuple[int, int, int, set[int]]:
+) -> tuple[int, int, int, dict[int, str]]:
     success = skipped = failed = 0
     city = args.get("city", "")
     pref = args.get("prefecture", "")
 
-    max_q = args.get("max_queries")
-    if max_q is not None:
-        queries = queries[:max_q]
+    max_queries = args.get("max_queries")
+    if max_queries is not None:
+        queries = queries[:max_queries]
         total = len(queries)
         logger.info(f"[MAX-QUERIES] Limited to first {total} queries")
 
+    done = {index: fingerprint for index, fingerprint in done.items() if 1 <= index <= total}
     if done:
-        done = {idx for idx in done if 1 <= idx <= total}
-        logger.info(f"Resuming: {len(done)}/{total} already done (after filter).")
+        logger.info(f"Resuming: {len(done)}/{total} progress rows loaded.")
 
     if args.get("dry_run"):
         logger.info("[DRY-RUN] Dockerスクレイプをスキップします。")
-        for i in range(1, total + 1):
-            if i not in done:
-                done.add(i)
+        for index, query in enumerate(queries, 1):
+            done[index] = query_fingerprint(query)
         save_progress(done, progress_file)
         publish_expansion_status(
             run_id,
-            pref=args.get("prefecture", ""),
-            city=args.get("city", ""),
+            pref=pref,
+            city=city,
             total=total,
             done=len(done),
             success=0,
@@ -93,32 +93,35 @@ def _execute_scraping_loop(
             status="running",
             message="dry-run",
         )
-        logger.info(f"[DRY-RUN] 進捗ファイルに {len(done)}/{total} 件を記録しました。")
         return 0, 0, 0, done
 
-    for i, query in enumerate(queries, 1):
-        part_file = os.path.join(RAW_DIR, f"part_{i:03d}.json")
-        if i in done and os.path.exists(part_file):
-            logger.info(f"[{i}/{total}] (done) {query}")
+    for index, query in enumerate(queries, 1):
+        part_file = os.path.join(RAW_DIR, f"part_{index:03d}.json")
+        fingerprint = query_fingerprint(query)
+        if done.get(index) == fingerprint and os.path.exists(part_file):
+            logger.info(f"[{index}/{total}] (done) {query}")
             skipped += 1
             continue
+        if index in done:
+            logger.info(f"[{index}/{total}] Query changed; invalidating stale progress entry")
+            done.pop(index, None)
 
         logger.info(f"\n{'=' * 50}")
-        logger.info(f"[{i}/{total}] {query}")
+        logger.info(f"[{index}/{total}] {query}")
         logger.info(f"{'=' * 50}")
 
-        ok = False
+        succeeded = False
         for retry in range(MAX_RETRIES + 1):
             if retry > 0:
                 logger.info(f"  Retry #{retry} ... waiting {RETRY_SLEEP}s")
                 time.sleep(RETRY_SLEEP)
             if scrape_query(query, part_file, cwd=SCRIPT_DIR):
-                ok = True
+                succeeded = True
                 break
 
-        if ok:
+        if succeeded:
             success += 1
-            done.add(i)
+            done[index] = fingerprint
             save_progress(done, progress_file)
             _maybe_sync_after_success(city, pref, success)
         else:
@@ -139,7 +142,7 @@ def _execute_scraping_loop(
             message=query,
         )
 
-        if ok and i < total:
+        if succeeded and index < total:
             logger.info(f"  Sleeping {SLEEP_BETWEEN}s ...")
             time.sleep(SLEEP_BETWEEN)
 
@@ -147,22 +150,23 @@ def _execute_scraping_loop(
 
 
 def _cleanup_on_success(failed: int, progress_file: str) -> None:
-    if failed == 0:
-        for path in [progress_file, RAW_DIR]:
-            if os.path.exists(path):
-                if os.path.isdir(path):
-                    shutil.rmtree(path)
-                else:
-                    os.remove(path)
-                logger.info(f"Cleaned up: {path}")
+    if failed != 0:
+        return
+    for path in [progress_file, RAW_DIR]:
+        if not os.path.exists(path):
+            continue
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+        else:
+            os.remove(path)
+        logger.info(f"Cleaned up: {path}")
 
 
-def run_batch():
+def run_batch() -> None:
     args = parse_args()
     queries = load_queries(QUERIES_FILE)
     total = len(queries)
     started_at = time.time()
-
     progress_file = args.get("progress_file") or DEFAULT_PROGRESS_FILE
 
     city = args["city"]
@@ -171,11 +175,7 @@ def run_batch():
         city, pref = detect_city_from_queries(QUERIES_FILE)
     run_id = f"{pref}_{city}".replace(" ", "_")
 
-    if city or pref:
-        logger.info(f"City filter: {pref}{city}")
-    else:
-        logger.info("City filter: OFF (no --city specified, could not auto-detect)")
-
+    logger.info(f"City filter: {pref}{city}" if city or pref else "City filter: OFF")
     logger.info(f"Queries: {total}")
     logger.info(f"Sleep between: {SLEEP_BETWEEN}s")
     logger.info(f"Est. time: ~{total * (180 + SLEEP_BETWEEN) // 60} min")
@@ -196,12 +196,11 @@ def run_batch():
 
     done = load_progress(progress_file)
     if done:
-        logger.info(f"Resuming: {len(done)}/{total} already done.")
-        for idx in list(done):
-            if not os.path.exists(os.path.join(RAW_DIR, f"part_{idx:03d}.json")):
-                logger.warning(f"Missing part file for query #{idx} - will re-run")
-                done.discard(idx)
-        logger.info("")
+        logger.info(f"Resuming: {len(done)}/{total} progress rows found.")
+        for index in list(done):
+            if not os.path.exists(os.path.join(RAW_DIR, f"part_{index:03d}.json")):
+                logger.warning(f"Missing part file for query #{index} - will re-run")
+                done.pop(index, None)
     else:
         if os.path.exists(RAW_OUTPUT):
             shutil.copy(RAW_OUTPUT, RAW_OUTPUT + ".bak")
@@ -209,16 +208,12 @@ def run_batch():
         if os.path.exists(RAW_DIR):
             shutil.rmtree(RAW_DIR)
         os.makedirs(RAW_DIR, exist_ok=True)
-        logger.info("")
 
     success, skipped, failed, done = _execute_scraping_loop(
-        queries, total, done, progress_file, args, run_id, started_at,
+        queries, total, done, progress_file, args, run_id, started_at
     )
 
-    logger.info(f"\n{'=' * 50}")
-    logger.info(f"  Scraping done  OK: {success} / Skip: {skipped} / Fail: {failed}")
-    logger.info(f"{'=' * 50}\n")
-
+    logger.info(f"Scraping done  OK: {success} / Skip: {skipped} / Fail: {failed}")
     try:
         _sync_canonical_data(city, pref)
     except RuntimeError as exc:
@@ -235,7 +230,7 @@ def run_batch():
             message=str(exc),
         )
         logger.error(f"[ERROR] {exc}")
-        sys.exit(1)
+        raise SystemExit(1) from exc
 
     _cleanup_on_success(failed, progress_file)
     if failed > 0:
@@ -252,7 +247,7 @@ def run_batch():
             message=f"{failed} queries failed",
         )
         logger.error(f"[ERROR] Scrape finished with {failed} failed queries")
-        sys.exit(1)
+        raise SystemExit(1)
 
     publish_expansion_status(
         run_id,
@@ -266,7 +261,7 @@ def run_batch():
         status="done",
         message="completed",
     )
-    logger.info(f"\nOutput: {os.path.abspath(PROCESSED)}")
+    logger.info(f"Output: {os.path.abspath(PROCESSED)}")
 
 
 if __name__ == "__main__":
