@@ -1,8 +1,5 @@
-"""
-batch/scoring_config.py
-スコアリング定数・キーワード辞書
-process_data.py から分離
-"""
+"""Scoring constants and keyword dictionaries."""
+
 import re
 
 SCORE_CLAMP_MIN = -5.0
@@ -10,8 +7,8 @@ SCORE_CLAMP_MAX = 5.0
 DISPLAY_SCORE_OFFSET = 5
 DISPLAY_SCORE_MULTIPLIER = 10
 
-CONFIDENCE_REVIEW_FACTOR = 5.0  # レビュー数で信頼度を正規化する際の係数（5レビューで1.0）
-CONFIDENCE_MIN = 0.1  # 信頼度下限（レビューなしの場合）
+CONFIDENCE_REVIEW_FACTOR = 5.0
+CONFIDENCE_MIN = 0.1
 
 RATING_THRESHOLD_HIGH = 4
 RATING_THRESHOLD_LOW = 2
@@ -20,9 +17,11 @@ NEGATIVE_DAMPEN_HIGH = 0.4
 POSITIVE_DAMPEN_LOW = 0.4
 NEGATIVE_BOOST_LOW = 1.2
 
-NEGATION_WINDOW = 30
-
+# Negation is intentionally local. A large window caused unrelated and embedded
+# 「ない」tokens to cancel complete phrases such as 「使えない」.
+NEGATION_WINDOW = 12
 NEGATION_WORDS = [
+    "ではない", "じゃない", "ではありません", "じゃありません",
     "ない", "なし", "なく", "ません", "無い",
     "されてない", "されていない",
 ]
@@ -41,8 +40,8 @@ POSITIVE_KEYWORDS = {
 
 NEGATIVE_KEYWORDS = {
     "こびりつき": -4, "こびり付い": -4, "カチ": -3, "汚物": -4,
-    "臭い": -3, "悪臭": -4, "異臭": -4,
-    "汚い": -4, "汚れてる": -3, "汚れていた": -3, "汚れています": -3,
+    "臭い": -3, "臭く": -3, "悪臭": -4, "異臭": -4,
+    "汚い": -4, "汚く": -4, "汚れてる": -3, "汚れていた": -3, "汚れています": -3,
     "臭い匂い": -3, "変な匂い": -3, "匂いがきつい": -3,
     "びしょびしょ": -3, "詰まって": -3, "詰まり": -3,
     "狭い": -2, "暗い": -2,
@@ -61,15 +60,13 @@ NEGATIVE_KEYWORDS = {
 
 TOILET_MENTION_KEYWORDS = [
     "トイレ", "お手洗い", "おてあらい", "化粧室", "洗面所",
-    " restroom", " washroom", " bathroom",
+    "restroom", "washroom", "bathroom",
     "ウォシュレット", "シャワートイレ",
 ]
-
 TOILET_CATEGORIES = ["公共トイレ", "トイレ", "restroom"]
-
-SENTENCE_SPLIT_RE = re.compile(r'[。\n！？!?]')
+SENTENCE_SPLIT_RE = re.compile(r"[。\n！？!?]")
 TOILET_MENTION_RE = re.compile(
-    '|'.join(re.escape(k) for k in TOILET_MENTION_KEYWORDS),
+    "|".join(re.escape(k) for k in TOILET_MENTION_KEYWORDS),
     re.IGNORECASE,
 )
 AREA_NAME_RE = re.compile(r"(\S+[都道府県]\S+[市区町村])")
