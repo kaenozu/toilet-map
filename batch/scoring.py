@@ -1,31 +1,55 @@
-"""
-batch/scoring.py
-スコアリングロジック（process_data.py から抽出）
-レビューからのトイレスコア計算・信頼度算出・キーワード抽出
-"""
+# mypy: disable-error-code="no-redef"
+"""Review scoring and confidence calculation."""
+
+from __future__ import annotations
+
+import math
 import re
 from collections import Counter
 from typing import TypedDict
 
-from scoring_config import (
-    CONFIDENCE_MIN,
-    CONFIDENCE_REVIEW_FACTOR,
-    NEGATION_WINDOW,
-    NEGATION_WORDS,
-    NEGATIVE_BOOST_LOW,
-    NEGATIVE_DAMPEN_HIGH,
-    NEGATIVE_KEYWORDS,
-    POSITIVE_BOOST_HIGH,
-    POSITIVE_DAMPEN_LOW,
-    POSITIVE_KEYWORDS,
-    RATING_THRESHOLD_HIGH,
-    RATING_THRESHOLD_LOW,
-    SCORE_CLAMP_MAX,
-    SCORE_CLAMP_MIN,
-    SENTENCE_SPLIT_RE,
-    TOILET_CATEGORIES,
-    TOILET_MENTION_RE,
-)
+try:
+    from .identity import normalize_identity_text
+    from .scoring_config import (
+        CONFIDENCE_MIN,
+        CONFIDENCE_REVIEW_FACTOR,
+        NEGATION_WINDOW,
+        NEGATION_WORDS,
+        NEGATIVE_BOOST_LOW,
+        NEGATIVE_DAMPEN_HIGH,
+        NEGATIVE_KEYWORDS,
+        POSITIVE_BOOST_HIGH,
+        POSITIVE_DAMPEN_LOW,
+        POSITIVE_KEYWORDS,
+        RATING_THRESHOLD_HIGH,
+        RATING_THRESHOLD_LOW,
+        SCORE_CLAMP_MAX,
+        SCORE_CLAMP_MIN,
+        SENTENCE_SPLIT_RE,
+        TOILET_CATEGORIES,
+        TOILET_MENTION_RE,
+    )
+except ImportError:
+    from identity import normalize_identity_text
+    from scoring_config import (
+        CONFIDENCE_MIN,
+        CONFIDENCE_REVIEW_FACTOR,
+        NEGATION_WINDOW,
+        NEGATION_WORDS,
+        NEGATIVE_BOOST_LOW,
+        NEGATIVE_DAMPEN_HIGH,
+        NEGATIVE_KEYWORDS,
+        POSITIVE_BOOST_HIGH,
+        POSITIVE_DAMPEN_LOW,
+        POSITIVE_KEYWORDS,
+        RATING_THRESHOLD_HIGH,
+        RATING_THRESHOLD_LOW,
+        SCORE_CLAMP_MAX,
+        SCORE_CLAMP_MIN,
+        SENTENCE_SPLIT_RE,
+        TOILET_CATEGORIES,
+        TOILET_MENTION_RE,
+    )
 
 
 class PlaceDict(TypedDict, total=False):
@@ -34,6 +58,9 @@ class PlaceDict(TypedDict, total=False):
     address: str
     latitude: float
     longitude: float
+    longtitude: float
+    place_id: str
+    data_id: str
     phone: str
     review_rating: float
     review_count: int
@@ -61,6 +88,7 @@ class ToiletScoreInfo(TypedDict):
 
 
 class ToiletResultDict(TypedDict):
+    source_id: str
     title: str
     category: str
     address: str
@@ -87,15 +115,22 @@ TOILET_ABSENCE_PATTERNS = [
 ]
 TOILET_ABSENCE_RE = re.compile("|".join(TOILET_ABSENCE_PATTERNS), re.IGNORECASE)
 
-_POS_SORTED = sorted(POSITIVE_KEYWORDS.keys(), key=len, reverse=True)
-_NEG_SORTED = sorted(NEGATIVE_KEYWORDS.keys(), key=len, reverse=True)
-_POS_PATTERN = re.compile('|'.join(re.escape(k) for k in _POS_SORTED))
-_NEG_PATTERN = re.compile('|'.join(re.escape(k) for k in _NEG_SORTED))
-_NEGATION_PATTERN = re.compile('|'.join(re.escape(w) for w in NEGATION_WORDS))
+_POS_PATTERN = re.compile("|".join(re.escape(k) for k in sorted(POSITIVE_KEYWORDS, key=len, reverse=True)))
+_NEG_PATTERN = re.compile("|".join(re.escape(k) for k in sorted(NEGATIVE_KEYWORDS, key=len, reverse=True)))
+_NEGATION_PATTERN = re.compile("|".join(re.escape(w) for w in sorted(NEGATION_WORDS, key=len, reverse=True)))
 
 
 def _normalize_identity_text(value: object) -> str:
-    return re.sub(r"\s+", "", str(value or "")).lower()
+    """Backward-compatible wrapper used by older tests and callers."""
+    return normalize_identity_text(value)
+
+
+def _coerce_float(value: object, default: float = 0.0) -> float:
+    try:
+        result = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+    return result if math.isfinite(result) else default
 
 
 def mentions_toilet(text: str) -> bool:
@@ -105,67 +140,71 @@ def mentions_toilet(text: str) -> bool:
 
 
 def _get_longitude(place: PlaceDict) -> float | None:
-    """経度を取得。longitude がなければ longtitude をフォールバックとして使う。"""
-    lon: object = place.get("longitude")
-    if not lon:
-        lon = place.get("longtitude")
-    if not lon:
+    raw = place.get("longitude")
+    if raw is None or raw == "":
+        raw = place.get("longtitude")
+    if raw is None or raw == "":
         return None
-    try:
-        return float(lon)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return None
+    value = _coerce_float(raw, default=float("nan"))
+    return value if math.isfinite(value) else None
 
 
 def _extract_coordinates(place: PlaceDict) -> tuple[float | None, float | None]:
-    """place から緯度経度を抽出。_get_longitude 内で longtitude へのフォールバックも行う。"""
-    lat = place.get("latitude")
+    raw_lat = place.get("latitude")
+    if raw_lat is None or raw_lat == "":
+        return None, _get_longitude(place)
+    lat: float | None = _coerce_float(raw_lat, default=float("nan"))
     lon = _get_longitude(place)
+    if lat is not None and not math.isfinite(lat):
+        lat = None
+    if lat is not None and not -90 <= lat <= 90:
+        lat = None
+    if lon is not None and not -180 <= lon <= 180:
+        lon = None
     return lat, lon
 
 
 def extract_toilet_contexts(text: str) -> list[str]:
     sentences = [s.strip() for s in SENTENCE_SPLIT_RE.split(text) if s.strip()]
-    toilet_indices = set()
-    for i, sent in enumerate(sentences):
-        if mentions_toilet(sent):
-            for j in range(max(0, i - 1), min(len(sentences), i + 2)):
-                toilet_indices.add(j)
-    return [sentences[i] for i in sorted(toilet_indices)] if toilet_indices else []
+    toilet_indices: set[int] = set()
+    for i, sentence in enumerate(sentences):
+        if mentions_toilet(sentence):
+            toilet_indices.update(range(max(0, i - 1), min(len(sentences), i + 2)))
+    return [sentences[i] for i in sorted(toilet_indices)]
+
+
+def _is_externally_negated(text: str, start: int, end: int) -> bool:
+    """Detect a suffix negation without matching ``ない`` inside the phrase itself."""
+    del start
+    suffix = text[end : end + NEGATION_WINDOW]
+    connector = r"^[\s、,はがをもにとでじゃ]*"
+    return re.search(connector + _NEGATION_PATTERN.pattern, suffix) is not None
 
 
 def _apply_scoring_and_negation(target_text: str) -> tuple[float, list[str]]:
     score = 0.0
-    matched_tags = []
+    matched_tags: list[str] = []
 
-    neg_word_positions = [m.start() for m in _NEGATION_PATTERN.finditer(target_text)]
+    for match in _POS_PATTERN.finditer(target_text):
+        keyword = match.group()
+        if not _is_externally_negated(target_text, match.start(), match.end()):
+            score += POSITIVE_KEYWORDS[keyword]
+            matched_tags.append(f"+{keyword}")
 
-    def is_negated(pos: int) -> bool:
-        return any(abs(pos - np) < NEGATION_WINDOW for np in neg_word_positions)
-
-    for m in _POS_PATTERN.finditer(target_text):
-        kw = m.group()
-        val = POSITIVE_KEYWORDS[kw]
-        if not is_negated(m.start()):
-            score += val
-            matched_tags.append(f"+{kw}")
-
-    for m in _NEG_PATTERN.finditer(target_text):
-        kw = m.group()
-        val = NEGATIVE_KEYWORDS[kw]
-        if is_negated(m.start()):
-            matched_tags.append(f"~{kw}")
+    for match in _NEG_PATTERN.finditer(target_text):
+        keyword = match.group()
+        if _is_externally_negated(target_text, match.start(), match.end()):
+            matched_tags.append(f"~{keyword}")
         else:
-            score += val
-            matched_tags.append(f"-{kw}")
+            score += NEGATIVE_KEYWORDS[keyword]
+            matched_tags.append(f"-{keyword}")
 
     return score, matched_tags
 
 
 def score_toilet_from_review(text: str) -> tuple[float, list[str]]:
     contexts = extract_toilet_contexts(text) or [text]
-    target_text = "。".join(contexts)
-    score, matched = _apply_scoring_and_negation(target_text)
+    score, matched = _apply_scoring_and_negation("。".join(contexts))
     return max(SCORE_CLAMP_MIN, min(SCORE_CLAMP_MAX, score)), matched
 
 
@@ -173,50 +212,46 @@ def _adjust_by_rating(score: float, matched: list[str], rating: float) -> tuple[
     if rating >= RATING_THRESHOLD_HIGH:
         if score < 0:
             score *= NEGATIVE_DAMPEN_HIGH
-            matched = [m for m in matched if not m.startswith("-")] + \
-                       [f"~{m[1:]}" for m in matched if m.startswith("-")]
+            matched = [m for m in matched if not m.startswith("-")] + [f"~{m[1:]}" for m in matched if m.startswith("-")]
         elif score > 0:
             score *= POSITIVE_BOOST_HIGH
     elif rating <= RATING_THRESHOLD_LOW:
         if score > 0:
             score *= POSITIVE_DAMPEN_LOW
-            matched = [m for m in matched if not m.startswith("+")] + \
-                       [f"~{m[1:]}" for m in matched if m.startswith("+")]
+            matched = [m for m in matched if not m.startswith("+")] + [f"~{m[1:]}" for m in matched if m.startswith("+")]
         elif score < 0:
             score *= NEGATIVE_BOOST_LOW
     return score, matched
 
 
-def _collect_toilet_reviews(
-    place: PlaceDict,
-) -> tuple[list[ToiletReviewDict], list[str]]:
+def _collect_toilet_reviews(place: PlaceDict) -> tuple[list[ToiletReviewDict], list[str]]:
     reviews = (place.get("user_reviews") or []) + (place.get("user_reviews_extended") or [])
     toilet_reviews: list[ToiletReviewDict] = []
-    all_highlights = []
-    seen_descs: set[str] = set()
+    all_highlights: list[str] = []
+    seen_descriptions: set[str] = set()
 
-    for r in reviews:
-        desc = r.get("Description", "")
-        if not desc or not desc.strip() or not mentions_toilet(desc):
+    for review in reviews:
+        description = str(review.get("Description") or "")
+        if not description.strip() or not mentions_toilet(description):
             continue
-        desc_key = desc.strip()
-        if desc_key in seen_descs:
+        description_key = description.strip()
+        if description_key in seen_descriptions:
             continue
-        seen_descs.add(desc_key)
+        seen_descriptions.add(description_key)
 
-        s, matched = score_toilet_from_review(desc)
-        rating = float(r.get("Rating") or 0)
-        s, matched = _adjust_by_rating(s, matched, rating)
-        s = max(SCORE_CLAMP_MIN, min(SCORE_CLAMP_MAX, s))
+        review_score, matched = score_toilet_from_review(description)
+        rating = _coerce_float(review.get("Rating"), 0.0)
+        review_score, matched = _adjust_by_rating(review_score, matched, rating)
+        review_score = max(SCORE_CLAMP_MIN, min(SCORE_CLAMP_MAX, review_score))
 
         toilet_reviews.append({
-            "text": desc,
-            "rating": r.get("Rating"),
-            "when": r.get("When"),
-            "name": r.get("Name"),
-            "score": round(s, 2),
+            "text": description,
+            "rating": review.get("Rating"),
+            "when": review.get("When"),
+            "name": review.get("Name"),
+            "score": round(review_score, 2),
             "matched_keywords": matched,
-            "toilet_context": "。".join(extract_toilet_contexts(desc)),
+            "toilet_context": "。".join(extract_toilet_contexts(description)),
         })
         all_highlights.extend(matched)
 
@@ -229,41 +264,33 @@ def _calculate_final_score(
     total_score: float,
 ) -> tuple[float, float]:
     if toilet_reviews:
-        avg_score = total_score / len(toilet_reviews)
-        final_score = avg_score * 0.7 + (place_rating - 3.0) * 0.3
+        average_score = total_score / len(toilet_reviews)
+        final_score = average_score * 0.7 + (place_rating - 3.0) * 0.3
         confidence = min(1.0, len(toilet_reviews) / CONFIDENCE_REVIEW_FACTOR)
+    elif place_rating > 0:
+        final_score = (place_rating - 3.0) * 0.5
+        confidence = CONFIDENCE_MIN
     else:
-        if place_rating > 0:
-            final_score = (place_rating - 3.0) * 0.5
-            confidence = CONFIDENCE_MIN
-        else:
-            final_score = 0.0
-            confidence = 0.0
-    final_score = max(SCORE_CLAMP_MIN, min(SCORE_CLAMP_MAX, final_score))
-    return final_score, confidence
+        final_score = 0.0
+        confidence = 0.0
+    return max(SCORE_CLAMP_MIN, min(SCORE_CLAMP_MAX, final_score)), confidence
 
 
 def compute_toilet_score(place: PlaceDict) -> ToiletScoreInfo:
-    toilet_reviews, all_highlights = _collect_toilet_reviews(place)
-    total_score = sum(r["score"] for r in toilet_reviews)
-    place_rating = float(place.get("review_rating") or 0)
-    final_score, confidence = _calculate_final_score(
-        toilet_reviews, place_rating, total_score,
-    )
-
-    highlight_counts = Counter(all_highlights)
+    toilet_reviews, highlights = _collect_toilet_reviews(place)
+    total_score = sum(review["score"] for review in toilet_reviews)
+    place_rating = _coerce_float(place.get("review_rating"), 0.0)
+    final_score, confidence = _calculate_final_score(toilet_reviews, place_rating, total_score)
     return {
         "score": round(final_score, 2),
         "confidence": round(confidence, 2),
         "toilet_review_count": len(toilet_reviews),
         "toilet_reviews": toilet_reviews[:20],
-        "top_keywords": highlight_counts.most_common(5),
+        "top_keywords": Counter(highlights).most_common(5),
     }
 
 
 def is_toilet_place(place: PlaceDict) -> bool:
-    cat = (place.get("category") or "").lower()
-    title = (place.get("title") or "").lower()
-    return any(tc.lower() in cat or tc.lower() in title for tc in TOILET_CATEGORIES)
-
-
+    category = str(place.get("category") or "").lower()
+    title = str(place.get("title") or "").lower()
+    return any(keyword.lower() in category or keyword.lower() in title for keyword in TOILET_CATEGORIES)
