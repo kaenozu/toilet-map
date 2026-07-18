@@ -1,17 +1,11 @@
 [tool.pytest.ini_options]
-pythonpath = [
-  ".",
-  "batch"
-]
+pythonpath = [".", "batch"]
 testpaths = ["tests"]
+python_functions = ["test_*", "*_symmetric"]
 
 [tool.coverage.run]
 source = ["."]
-omit = [
-    "tests/*",
-    ".venv/*",
-    "**/__pycache__/*",
-]
+omit = ["tests/*", ".venv/*", "**/__pycache__/*"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -27,7 +21,7 @@ line-length = 120
 
 [project]
 name = "toilet-map"
-version = "1.0.0"
+version = "1.1.0"
 description = "Google Maps のレビューからトイレのきれい度を自動判定して地図上に表示する Streamlit アプリ"
 requires-python = ">=3.11"
 
