@@ -1,12 +1,10 @@
-"""
-ui/types.py
-Shared TypedDict definitions for UI components
-"""
+"""Shared TypedDict definitions for UI components."""
+
 from typing import TypedDict
 
 
 class ToiletDict(TypedDict, total=False):
-    """トイレデータの型定義"""
+    source_id: str
     title: str
     category: str
     address: str
@@ -24,4 +22,3 @@ class ToiletDict(TypedDict, total=False):
     sample_reviews: list[dict[str, object]]
     prefecture: str
     distance: float | None
-
