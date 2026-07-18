@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import cast
 
 try:
-    from .identity import build_source_id
+    from .identity import build_fallback_source_id, build_source_id
     from .scoring import (
         PlaceDict,
         ToiletResultDict,
@@ -23,7 +23,7 @@ try:
     from .scoring_config import AREA_NAME_RE, DISPLAY_SCORE_MULTIPLIER, DISPLAY_SCORE_OFFSET
     from .utils import extract_prefecture, load_jsonl, logger, save_json
 except ImportError:
-    from identity import build_source_id
+    from identity import build_fallback_source_id, build_source_id
     from scoring import (
         PlaceDict,
         ToiletResultDict,
@@ -221,9 +221,18 @@ def process_file(input_path: str, output_path: str, mode: str = "--full") -> Non
 
     if mode == "--incremental":
         merged = _normalize_existing_results(load_existing(output_path))
-        new_count = sum(key not in merged for key in new_results)
-        updated_count = sum(key in merged for key in new_results)
-        merged.update(new_results)
+        new_count = 0
+        updated_count = 0
+        for key, result in new_results.items():
+            fallback_key = build_fallback_source_id(result)
+            if key in merged:
+                updated_count += 1
+            elif fallback_key in merged:
+                merged.pop(fallback_key)
+                updated_count += 1
+            else:
+                new_count += 1
+            merged[key] = result
         results = list(merged.values())
         logger.info(
             f"差分マージ: 新規追加 {new_count}件 / 更新 {updated_count}件 / "
