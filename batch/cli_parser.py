@@ -25,8 +25,15 @@ def _positive_int(value: str) -> int:
     return parsed
 
 
-def parse_args() -> dict:
-    """Parse known arguments while preserving the pipeline's tolerant CLI behavior."""
+def parse_args(*, strict: bool | None = None) -> dict:
+    """Parse CLI options with package-strict and direct-script compatible modes.
+
+    Package imports are used by the maintained runner and reject malformed limits.
+    The legacy direct-script import path keeps its historical warning-and-continue
+    behavior so existing Windows automation does not abort unexpectedly.
+    """
+    if strict is None:
+        strict = bool(__package__)
     parser = argparse.ArgumentParser(description="Run resumable toilet-map scraping")
     parser.add_argument("--city", default=FILTER_CITY)
     parser.add_argument("--prefecture", default=FILTER_PREF)
@@ -41,7 +48,9 @@ def parse_args() -> dict:
     if raw_max_queries is not None:
         try:
             namespace.max_queries = _positive_int(raw_max_queries)
-        except argparse.ArgumentTypeError:
+        except argparse.ArgumentTypeError as exc:
+            if strict:
+                parser.error(f"argument --max-queries: {exc}")
             logger.warning("Invalid --max-queries value: %s", raw_max_queries)
             namespace.max_queries = None
     return vars(namespace)
