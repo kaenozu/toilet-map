@@ -17,7 +17,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  backend-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install ruff==0.12.4
+      - run: ruff check v2/backend
+
   backend:
+    needs: backend-lint
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -43,7 +54,6 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install './v2/backend[dev]'
-      - run: ruff check v2/backend
       - run: pytest -q
         working-directory: v2/backend
       - name: Apply versioned migrations twice
