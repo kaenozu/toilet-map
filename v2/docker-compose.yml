@@ -15,6 +15,7 @@ services:
     volumes:
       - toilet-map-db:/var/lib/postgresql/data
       - ./backend/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+      - ./backend/migrations:/docker-entrypoint-initdb.d/migrations:ro
 
   backend:
     build: ./backend
