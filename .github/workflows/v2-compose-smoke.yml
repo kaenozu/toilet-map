@@ -22,84 +22,6 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-      - name: Analyze canonical identity collisions
-        shell: bash
-        run: |
-          python - <<'PY'
-          import gzip
-          import hashlib
-          import json
-          from collections import defaultdict
-          from pathlib import Path
-
-          path = Path("data/toilets.json.gz")
-          with gzip.open(path, "rt", encoding="utf-8") as handle:
-              payload = json.load(handle)
-          records = payload.get("toilets", []) if isinstance(payload, dict) else payload
-
-          def first(record, *keys):
-              for key in keys:
-                  value = record.get(key)
-                  if value is not None and value != "":
-                      return value
-              return None
-
-          def stable_key(record):
-              explicit = first(record, "stable_key", "source_id", "place_id", "data_id", "id")
-              if explicit is not None:
-                  return str(explicit)
-              canonical = "|".join(
-                  str(first(record, key) or "")
-                  for key in ("name", "address", "latitude", "longitude")
-              )
-              return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:32]
-
-          groups = defaultdict(list)
-          for index, record in enumerate(records):
-              if isinstance(record, dict):
-                  groups[stable_key(record)].append((index, record))
-
-          collisions = []
-          for key, items in groups.items():
-              if len(items) < 2:
-                  continue
-              collision_records = []
-              for index, record in items:
-                  canonical = json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-                  collision_records.append({
-                      "index": index,
-                      "record_hash": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
-                      "source_id": record.get("source_id"),
-                      "place_id": record.get("place_id"),
-                      "data_id": record.get("data_id"),
-                      "id": record.get("id"),
-                      "name": record.get("name") or record.get("title"),
-                      "address": record.get("address"),
-                      "latitude": record.get("latitude") or record.get("lat"),
-                      "longitude": record.get("longitude") or record.get("lng"),
-                      "review_count": record.get("review_count") or record.get("user_ratings_total"),
-                      "reviews": len(record.get("reviews") or record.get("sample_reviews") or []),
-                  })
-              collisions.append({"stable_key": key, "records": collision_records})
-
-          diagnostics = {
-              "record_count": len(records),
-              "collision_key_count": len(collisions),
-              "colliding_record_count": sum(len(item["records"]) for item in collisions),
-              "collisions": collisions,
-          }
-          Path("v2-identity-collisions.json").write_text(
-              json.dumps(diagnostics, ensure_ascii=False, indent=2), encoding="utf-8"
-          )
-          print(json.dumps({key: diagnostics[key] for key in diagnostics if key != "collisions"}))
-          PY
-      - name: Upload identity diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: v2-identity-collisions
-          path: v2-identity-collisions.json
-          if-no-files-found: error
       - name: Validate Compose configuration
         run: docker compose -f v2/docker-compose.yml config --quiet
       - name: Build images
@@ -116,7 +38,7 @@ jobs:
           tail -n 100 v2-compose-migrate.log
           exit "$status"
       - name: Upload migration diagnostics
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: v2-compose-migrate-log
