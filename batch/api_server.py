@@ -21,6 +21,9 @@ except ImportError:
     from db_utils import DB_PATH, JSON_PATH
     from snapshot_integrity import ensure_snapshot_current
 
+# Compatibility hook retained for tests and deployments that patched the old name.
+ensure_database_current = ensure_snapshot_current
+
 
 class ToiletModel(BaseModel):
     id: int
@@ -81,7 +84,7 @@ app.add_middleware(
 
 @contextmanager
 def _connection() -> Iterator[sqlite3.Connection]:
-    ensure_snapshot_current(JSON_PATH, DB_PATH)
+    ensure_database_current(JSON_PATH, DB_PATH)
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     try:
