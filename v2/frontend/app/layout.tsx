@@ -1,7 +1,9 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import "./globals.css";
 
-export const metadata = {
-  title: "トイレきれい度マップ v2",
+export const metadata: Metadata = {
+  title: "トイレきれい度マップ",
   description: "公開トイレのきれい度を地図と一覧で確認",
 };
 
