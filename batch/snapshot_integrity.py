@@ -10,11 +10,16 @@ import tempfile
 from pathlib import Path
 
 try:
-    from .db_utils import DB_PATH, JSON_PATH, database_requires_rebuild
-    from .to_sqlite import _convert_core
+    from . import db_utils as _db_utils
+    from . import to_sqlite as _to_sqlite
 except ImportError:
-    from db_utils import DB_PATH, JSON_PATH, database_requires_rebuild
-    from to_sqlite import _convert_core
+    import db_utils as _db_utils
+    import to_sqlite as _to_sqlite
+
+DB_PATH = _db_utils.DB_PATH
+JSON_PATH = _db_utils.JSON_PATH
+database_requires_rebuild = _db_utils.database_requires_rebuild
+_convert_core = _to_sqlite._convert_core
 
 MANIFEST_PATH = os.path.join(os.path.dirname(DB_PATH), "snapshot.json")
 
