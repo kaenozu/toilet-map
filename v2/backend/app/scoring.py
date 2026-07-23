@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 SCORING_VERSION = "keyword-v2"
 POSITIVE = ("きれい", "綺麗", "清潔", "清掃", "快適", "新しい", "clean", "spotless")
