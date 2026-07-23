@@ -1,3 +1,5 @@
+"""Deterministic aggregate and dimensional keyword scoring."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable
