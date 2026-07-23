@@ -470,19 +470,31 @@ class TestQueryGeneration:
 
 
 class TestPostProcessPipeline:
-    def test_run_postprocess_pipeline_converts_sqlite_incrementally(self, monkeypatch):
+    def test_run_postprocess_pipeline_converts_sqlite_incrementally(self, monkeypatch, tmp_path):
         calls = []
 
         class Result:
             returncode = 0
 
         def fake_run(cmd):
+            import gzip
+            import sqlite3
+
             calls.append(cmd)
+            if "process_data.py" in cmd[1]:
+                with gzip.open(cmd[3], "wt", encoding="utf-8") as file:
+                    json.dump({"metadata": {}, "toilets": []}, file)
+            else:
+                db_path = Path(cmd[cmd.index("--db-path") + 1])
+                with sqlite3.connect(db_path) as connection:
+                    connection.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT)")
             return Result()
 
         monkeypatch.setattr(pipeline.subprocess, "run", fake_run)
+        monkeypatch.setattr(pipeline, "DB_PATH", str(tmp_path / "output.db"))
+        monkeypatch.setattr(pipeline, "SNAPSHOT_MANIFEST_PATH", str(tmp_path / "snapshot.json"))
 
-        pipeline.run_postprocess_pipeline("input.json", "output.json.gz", ".")
+        pipeline.run_postprocess_pipeline("input.json", str(tmp_path / "output.json.gz"), ".")
 
         assert len(calls) == 2
         assert calls[0][-1] == "--incremental"

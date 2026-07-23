@@ -88,6 +88,7 @@ def run_postprocess_pipeline(input_path: str, processed_path: str, script_dir: s
                 temp_json,
                 "--db-path",
                 temp_db,
+                "--incremental",
             ],
             "SQLite conversion failed",
         )
