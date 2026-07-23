@@ -22,6 +22,7 @@ from .types import ToiletDict
 CLUSTER_THRESHOLDS = [(500, 50), (1000, 80), (float("inf"), 100)]
 FIT_BOUNDS_PADDING = (24, 24)
 FIT_BOUNDS_EPSILON = 0.01
+MAX_MAP_MARKERS = 1500
 
 
 def _coerce_coordinate(value: object) -> float | None:
@@ -41,6 +42,21 @@ def _collect_valid_toilets(toilets: list[ToiletDict]) -> list[tuple[ToiletDict, 
             continue
         valid.append((toilet, lat, lng))
     return valid
+
+
+def _select_map_toilets(toilets: list[ToiletDict], limit: int = MAX_MAP_MARKERS) -> list[ToiletDict]:
+    """Bound generated Folium HTML while keeping the highest-confidence records."""
+    if len(toilets) <= limit:
+        return toilets
+    return sorted(
+        toilets,
+        key=lambda item: (
+            float(item.get("confidence") or 0),
+            int(item.get("toilet_review_count") or 0),
+            float(item.get("toilet_score") or 0),
+        ),
+        reverse=True,
+    )[:limit]
 
 
 def _collect_valid_coordinates(toilets: list[ToiletDict]) -> list[tuple[float, float]]:
@@ -108,7 +124,8 @@ def build_map(
 ) -> folium.Map:
     map_object = _create_map(center_lat, center_lng, zoom, tile)
     map_object.get_root().html.add_child(folium.Element(POPUP_FIX_JS))  # type: ignore[attr-defined]
-    valid_toilets = _collect_valid_toilets(toilets)
+    selected_toilets = _select_map_toilets(toilets)
+    valid_toilets = _collect_valid_toilets(selected_toilets)
     cluster = MarkerCluster(
         options={
             "maxClusterRadius": calc_cluster_radius(len(valid_toilets)),
@@ -131,6 +148,6 @@ def build_map(
             popup=folium.Popup(build_popup_html(toilet), max_width=320, auto_pan=True),
             tooltip=f"{emoji} {toilet['title']}",
         ).add_to(cluster)
-    if bounds := _calc_fit_bounds(toilets):
+    if bounds := _calc_fit_bounds(selected_toilets):
         map_object.fit_bounds(bounds, padding=FIT_BOUNDS_PADDING)
     return map_object

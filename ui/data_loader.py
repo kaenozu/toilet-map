@@ -14,6 +14,27 @@ from batch.db_utils import ensure_database_current
 
 from .types import ToiletDict
 
+TOILET_COLUMNS = [
+    "id",
+    "source_id",
+    "title",
+    "category",
+    "address",
+    "lat",
+    "lng",
+    "phone",
+    "rating",
+    "review_count",
+    "link",
+    "is_public_toilet",
+    "toilet_score",
+    "confidence",
+    "toilet_review_count",
+    "prefecture",
+    "sample_reviews_json",
+    "top_keywords",
+]
+
 
 def get_data_cache_token() -> tuple[int, int]:
     try:
@@ -75,6 +96,9 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None) -> dict:
 
 def toilets_to_dataframe(toilets: list[ToiletDict]) -> pd.DataFrame:
     dataframe = pd.DataFrame(toilets)
+    for column in TOILET_COLUMNS:
+        if column not in dataframe.columns:
+            dataframe[column] = pd.Series(dtype="object")
     _add_equipment_columns(dataframe)
     return dataframe
 
