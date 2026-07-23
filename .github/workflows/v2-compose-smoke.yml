@@ -23,9 +23,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Validate Compose configuration
-        run: docker compose -f v2/docker-compose.yml config
+        run: docker compose -f v2/docker-compose.yml config --quiet
       - name: Build images
-        run: docker compose -f v2/docker-compose.yml build
+        run: docker compose -f v2/docker-compose.yml build --quiet
       - name: Start clean PostgreSQL/PostGIS
         run: docker compose -f v2/docker-compose.yml up -d db
       - name: Import and publish the canonical dataset
