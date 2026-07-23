@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Annotated, Any
@@ -14,10 +15,14 @@ from .importer import import_legacy
 app = FastAPI(title="Toilet Map API", version="2.0.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin for origin in os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",") if origin],
+    allow_origins=[
+        origin
+        for origin in os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
+        if origin
+    ],
     allow_credentials=False,
     allow_methods=["GET", "POST"],
-    allow_headers=["*"] ,
+    allow_headers=["*"],
 )
 
 ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "")
@@ -85,6 +90,7 @@ def list_places(
     if any(value is not None for value in bounds):
         if not all(value is not None for value in bounds):
             raise HTTPException(status_code=422, detail="north, south, east and west must be supplied together")
+        assert north is not None and south is not None and east is not None and west is not None
         if south >= north:
             raise HTTPException(status_code=422, detail="south must be lower than north")
         conditions.append("ST_Intersects(p.location::geometry, ST_MakeEnvelope(%s, %s, %s, %s, 4326))")
@@ -112,7 +118,8 @@ def list_places(
          WHERE {where_sql}
     """
     with database() as connection:
-        total = int(connection.execute(count_sql, params).fetchone()["total"])
+        count_row = connection.execute(count_sql, params).fetchone()
+        total = int(count_row["total"] if count_row else 0)
         rows = connection.execute(select_sql, [*params, limit, offset]).fetchall()
     return {"items": rows, "total": total, "limit": limit, "offset": offset}
 
@@ -190,12 +197,22 @@ def admin_import(request: ImportRequest) -> dict[str, Any]:
     dataset_id, count = import_legacy(Path(request.path), source=request.source)
     with database() as connection:
         connection.execute(
-            "INSERT INTO jobs (kind, payload) VALUES ('validate_dataset', jsonb_build_object('dataset_version_id', %s))",
+            """
+            INSERT INTO jobs (kind, payload)
+            VALUES ('validate_dataset', jsonb_build_object('dataset_version_id', %s))
+            """,
             (dataset_id,),
         )
         if request.auto_publish:
             connection.execute(
-                "INSERT INTO jobs (kind, payload, available_at) VALUES ('publish_dataset', jsonb_build_object('dataset_version_id', %s), now() + interval '2 seconds')",
+                """
+                INSERT INTO jobs (kind, payload, available_at)
+                VALUES (
+                    'publish_dataset',
+                    jsonb_build_object('dataset_version_id', %s),
+                    now() + interval '2 seconds'
+                )
+                """,
                 (dataset_id,),
             )
         connection.commit()
@@ -207,7 +224,9 @@ def enqueue_job(request: JobRequest) -> dict[str, int]:
     with database() as connection:
         row = connection.execute(
             "INSERT INTO jobs (kind, payload) VALUES (%s, %s::jsonb) RETURNING id",
-            (request.kind, __import__("json").dumps(request.payload)),
+            (request.kind, json.dumps(request.payload)),
         ).fetchone()
         connection.commit()
+    if row is None:
+        raise HTTPException(status_code=500, detail="failed to enqueue job")
     return {"job_id": int(row["id"])}
