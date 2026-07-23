@@ -10,7 +10,14 @@ from typing import Any
 from psycopg import Connection
 
 from .db import database
-from .scoring import SCORING_VERSION, score_reviews
+from .entities import upsert_legacy_entity
+from .scoring import (
+    DIMENSION_SCORING_VERSION,
+    SCORING_VERSION,
+    ScoreDimension,
+    score_review_dimensions,
+    score_reviews,
+)
 
 
 def _records(payload: object) -> list[dict[str, Any]]:
@@ -98,7 +105,9 @@ def normalized_records(records: Iterable[dict[str, Any]]) -> Iterator[dict[str, 
             continue
         lat, lon = coordinates
         reviews = _reviews(record)
-        score_result = score_reviews(review["body"] for review in reviews)
+        review_bodies = [review["body"] for review in reviews]
+        score_result = score_reviews(review_bodies)
+        dimension_scores = score_review_dimensions(review_bodies)
         imported_score = _first(record, "toilet_score", "score")
         imported_confidence = _first(record, "confidence")
         known = {
@@ -120,7 +129,20 @@ def normalized_records(records: Iterable[dict[str, Any]]) -> Iterator[dict[str, 
             "confidence": imported_confidence if imported_confidence is not None else score_result.confidence,
             "review_count": int(_first(record, "review_count", "user_ratings_total", default=len(reviews)) or 0),
             "reviews": reviews,
-            "score_explanation": score_result.explanation,
+            "score_explanation": {
+                **score_result.explanation,
+                "dimensions": {
+                    dimension.value: {
+                        "score": result.score,
+                        "confidence": result.confidence,
+                        "evidence_count": result.evidence_count,
+                        "positive_matches": result.positive_matches,
+                        "negative_matches": result.negative_matches,
+                    }
+                    for dimension, result in dimension_scores.items()
+                },
+            },
+            "dimension_scores": dimension_scores,
             "attributes": attributes,
             "raw_payload": record,
         }
@@ -140,6 +162,60 @@ def create_dataset(connection: Connection, *, source: str, source_metadata: dict
     return int(row["id"])
 
 
+def _store_dimension_scores(
+    connection: Connection,
+    *,
+    facility_id: int,
+    source_record_id: int,
+    dimension_scores: dict[ScoreDimension, Any],
+) -> None:
+    for dimension, result in dimension_scores.items():
+        if result.score is None:
+            continue
+        connection.execute(
+            """
+            INSERT INTO facility_scores (
+              facility_id, dimension, model_version, score, confidence, evidence_count, last_observed_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, now())
+            ON CONFLICT (facility_id, dimension, model_version) DO UPDATE SET
+              score = EXCLUDED.score,
+              confidence = EXCLUDED.confidence,
+              evidence_count = EXCLUDED.evidence_count,
+              last_observed_at = EXCLUDED.last_observed_at,
+              calculated_at = now()
+            """,
+            (
+                facility_id,
+                dimension.value,
+                DIMENSION_SCORING_VERSION,
+                result.score,
+                result.confidence,
+                result.evidence_count,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO score_evidence (
+              facility_id, source_record_id, dimension, model_version, value,
+              reliability_weight, extraction_method, observed_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, 'keyword', now())
+            ON CONFLICT (source_record_id, dimension, model_version) DO UPDATE SET
+              facility_id = EXCLUDED.facility_id,
+              value = EXCLUDED.value,
+              reliability_weight = EXCLUDED.reliability_weight,
+              observed_at = EXCLUDED.observed_at
+            """,
+            (
+                facility_id,
+                source_record_id,
+                dimension.value,
+                DIMENSION_SCORING_VERSION,
+                result.score,
+                result.confidence,
+            ),
+        )
+
+
 def import_legacy(path: Path, *, source: str = "legacy-json") -> tuple[int, int]:
     records, metadata = load_legacy_snapshot(path)
     normalized = list(normalized_records(records))
@@ -149,15 +225,22 @@ def import_legacy(path: Path, *, source: str = "legacy-json") -> tuple[int, int]
     with database() as connection:
         dataset_id = create_dataset(connection, source=source, source_metadata=metadata)
         for item in normalized:
+            entity_ids = upsert_legacy_entity(
+                connection,
+                dataset_id=dataset_id,
+                provider=source,
+                item=item,
+            )
             row = connection.execute(
                 """
                 INSERT INTO places (
                     dataset_version_id, stable_key, name, address, prefecture, category,
-                    location, toilet_score, confidence, review_count, attributes
+                    location, toilet_score, confidence, review_count, attributes,
+                    facility_id, source_record_id
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s,
                     ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
-                    %s, %s, %s, %s::jsonb
+                    %s, %s, %s, %s::jsonb, %s, %s
                 )
                 RETURNING id
                 """,
@@ -166,6 +249,8 @@ def import_legacy(path: Path, *, source: str = "legacy-json") -> tuple[int, int]
                     item["prefecture"], item["category"], item["longitude"], item["latitude"],
                     item["toilet_score"], item["confidence"], item["review_count"],
                     json.dumps(item["attributes"], ensure_ascii=False),
+                    entity_ids.facility_id,
+                    entity_ids.source_record_id,
                 ),
             ).fetchone()
             if row is None:
@@ -199,6 +284,12 @@ def import_legacy(path: Path, *, source: str = "legacy-json") -> tuple[int, int]
                     place_id, SCORING_VERSION, item["toilet_score"], item["confidence"],
                     json.dumps(item["score_explanation"], ensure_ascii=False),
                 ),
+            )
+            _store_dimension_scores(
+                connection,
+                facility_id=entity_ids.facility_id,
+                source_record_id=entity_ids.source_record_id,
+                dimension_scores=item["dimension_scores"],
             )
         connection.execute(
             "UPDATE dataset_versions SET record_count = %s WHERE id = %s",
