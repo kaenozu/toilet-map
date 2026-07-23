@@ -1,0 +1,18 @@
+name: Export source
+
+on:
+  push:
+    branches: [fix/main-ci-green]
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-tree
+          path: |
+            .
+            !.git
+          include-hidden-files: true
