@@ -26,21 +26,16 @@ jobs:
         run: docker compose -f v2/docker-compose.yml config
       - name: Build images
         run: docker compose -f v2/docker-compose.yml build
-      - name: Start from an empty database and serve imported data
+      - name: Start clean PostgreSQL/PostGIS
+        run: docker compose -f v2/docker-compose.yml up -d db
+      - name: Import and publish the canonical dataset
+        run: docker compose -f v2/docker-compose.yml --profile tools run --rm migrate
+      - name: Start backend and frontend
+        run: docker compose -f v2/docker-compose.yml up -d backend frontend
+      - name: Verify backend health and published data
         shell: bash
         run: |
           set -euo pipefail
-          compose=(docker compose -f v2/docker-compose.yml)
-          cleanup() {
-            "${compose[@]}" logs --no-color || true
-            "${compose[@]}" down -v --remove-orphans || true
-          }
-          trap cleanup EXIT
-
-          "${compose[@]}" up -d db
-          "${compose[@]}" --profile tools run --rm migrate
-          "${compose[@]}" up -d backend frontend
-
           for _ in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8000/health >/dev/null; then
               break
@@ -50,7 +45,10 @@ jobs:
           curl -fsS http://127.0.0.1:8000/health
           curl -fsS 'http://127.0.0.1:8000/api/v2/places?limit=1' \
             | python -c 'import json, sys; payload = json.load(sys.stdin); assert payload["total"] > 0; assert payload["items"]'
-
+      - name: Verify frontend
+        shell: bash
+        run: |
+          set -euo pipefail
           for _ in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:3000 >/dev/null; then
               break
@@ -58,3 +56,9 @@ jobs:
             sleep 2
           done
           curl -fsS http://127.0.0.1:3000 >/dev/null
+      - name: Show container logs
+        if: failure()
+        run: docker compose -f v2/docker-compose.yml logs --no-color
+      - name: Clean up Compose resources
+        if: always()
+        run: docker compose -f v2/docker-compose.yml down -v --remove-orphans
