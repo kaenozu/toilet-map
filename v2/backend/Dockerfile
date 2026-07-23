@@ -3,6 +3,7 @@ FROM python:3.12.11-slim
 WORKDIR /app
 COPY pyproject.toml ./
 COPY app ./app
+COPY migrations ./migrations
 COPY schema.sql ./schema.sql
 RUN pip install --no-cache-dir . \
     && useradd --create-home --uid 10001 appuser \
