@@ -1,0 +1,28 @@
+@import "leaflet/dist/leaflet.css";
+
+:root { color-scheme: light; font-family: system-ui, sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #f6f7f8; color: #1d2329; }
+button, input, select { font: inherit; }
+.shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+.header { padding: 16px 20px; background: #fff; border-bottom: 1px solid #dfe3e7; }
+.header h1 { margin: 0; font-size: 1.35rem; }
+.header p { margin: 4px 0 0; color: #66717c; }
+.content { display: grid; grid-template-columns: minmax(300px, 380px) 1fr; min-height: 0; }
+.sidebar { padding: 16px; overflow: auto; border-right: 1px solid #dfe3e7; background: #fff; }
+.filters { display: grid; gap: 8px; margin-bottom: 14px; }
+.filters input, .filters select { width: 100%; padding: 10px; border: 1px solid #cbd2d8; border-radius: 8px; background: #fff; }
+.stats { padding: 10px; margin-bottom: 12px; background: #f0f4f7; border-radius: 8px; font-size: .9rem; }
+.cards { display: grid; gap: 10px; }
+.card { padding: 12px; border: 1px solid #dde2e6; border-radius: 10px; background: #fff; }
+.card h2 { margin: 0 0 4px; font-size: 1rem; }
+.card p { margin: 3px 0; color: #5c6770; font-size: .9rem; }
+.score { font-weight: 700; }
+.map { min-height: calc(100vh - 78px); }
+.map .leaflet-container { width: 100%; height: 100%; min-height: calc(100vh - 78px); }
+.empty { padding: 24px; text-align: center; color: #66717c; }
+@media (max-width: 800px) {
+  .content { grid-template-columns: 1fr; grid-template-rows: auto 55vh; }
+  .sidebar { border-right: 0; border-bottom: 1px solid #dfe3e7; max-height: 45vh; }
+  .map, .map .leaflet-container { min-height: 55vh; }
+}

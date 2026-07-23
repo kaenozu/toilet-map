@@ -1,0 +1,71 @@
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_DB: toilet_map
+      POSTGRES_USER: toilet_map
+      POSTGRES_PASSWORD: toilet_map
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U toilet_map -d toilet_map"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "5432:5432"
+    volumes:
+      - toilet-map-db:/var/lib/postgresql/data
+      - ./backend/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://toilet_map:toilet_map@db:5432/toilet_map
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-local-development-key}
+      CORS_ORIGINS: http://localhost:3000
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ../data:/data:ro
+    ports:
+      - "8000:8000"
+
+  worker:
+    build: ./backend
+    command: ["python", "-m", "app.worker"]
+    environment:
+      DATABASE_URL: postgresql://toilet_map:toilet_map@db:5432/toilet_map
+    depends_on:
+      db:
+        condition: service_healthy
+
+  migrate:
+    build: ./backend
+    profiles: ["tools"]
+    command:
+      - /bin/sh
+      - -c
+      - python -m app.cli init-db && python -m app.cli import-legacy /data/toilets.json.gz --publish
+    environment:
+      DATABASE_URL: postgresql://toilet_map:toilet_map@db:5432/toilet_map
+    volumes:
+      - ../data:/data:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+volumes:
+  toilet-map-db:
