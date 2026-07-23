@@ -1,5 +1,5 @@
 from app.importer import normalized_records
-from app.scoring import score_reviews
+from app.scoring import ScoreDimension, score_review_dimensions, score_reviews
 
 
 def test_scoring_keeps_unrelated_reviews_unscored() -> None:
@@ -13,6 +13,14 @@ def test_scoring_detects_cleanliness_signal() -> None:
     assert result.score is not None
     assert result.score > 50
     assert result.matched_reviews == 2
+
+
+def test_multidimensional_scoring_keeps_evidence_separate() -> None:
+    results = score_review_dimensions(["清潔で、おむつ台と車椅子用の手すりがあります"])
+    assert results[ScoreDimension.CLEANLINESS].score is not None
+    assert results[ScoreDimension.ACCESSIBILITY].score is not None
+    assert results[ScoreDimension.CHILD_FRIENDLINESS].score is not None
+    assert results[ScoreDimension.CONGESTION].score is None
 
 
 def test_legacy_normalization_rejects_missing_coordinates() -> None:
