@@ -1,20 +1,219 @@
-name: Export source
+name: Apply CI fixes
 
 on:
   push:
     branches: [fix/main-ci-green]
-  pull_request:
-    branches: [main]
+
+permissions:
+  contents: write
 
 jobs:
-  export:
+  apply:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/upload-artifact@v4
         with:
-          name: source-tree
-          path: |
-            .
-            !.git
-          include-hidden-files: true
+          ref: fix/main-ci-green
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Apply fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('batch/scoring.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''def _get_longitude(place: PlaceDict) -> float | None:
+              raw = place.get("longitude")
+              if raw is None or raw == "":
+                  raw = place.get("longtitude")
+          '''
+          new = '''def _get_longitude(place: PlaceDict) -> float | None:
+              raw = place.get("longitude")
+              legacy_raw = place.get("longtitude")
+              if raw is None or raw == "" or (raw == 0 and legacy_raw not in (None, "", 0)):
+                  raw = legacy_raw
+          '''
+          if old not in text:
+              raise SystemExit('scoring longitude snippet not found')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+
+          path = Path('batch/process_data.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              'from .identity import build_fallback_source_id, build_source_id',
+              'from .identity import build_fallback_source_id, build_source_id, normalize_identity_text',
+          ).replace(
+              'from identity import build_fallback_source_id, build_source_id',
+              'from identity import build_fallback_source_id, build_source_id, normalize_identity_text',
+          )
+          old = '''def make_place_key(place: PlaceDict) -> str:
+              lat, lng = _extract_coordinates(place)
+              if (
+                  not place.get("place_id")
+                  and not place.get("data_id")
+                  and not place.get("source_id")
+                  and not place.get("address")
+                  and not place.get("category")
+                  and lat is not None
+                  and lng is not None
+              ):
+                  return f"legacy_coords:{float(lat):.6f},{float(lng):.6f}"
+              return build_source_id(place, lat=lat, lng=lng)
+          '''
+          new = '''def make_place_key(place: PlaceDict) -> str:
+              lat, lng = _extract_coordinates(place)
+              if place.get("source_id") or place.get("place_id") or place.get("data_id"):
+                  return build_source_id(place, lat=lat, lng=lng)
+
+              title = normalize_identity_text(place.get("title"))
+              address = normalize_identity_text(place.get("address"))
+              if address:
+                  return f"title_address:{title}|{address}"
+              if lat is not None and lng is not None:
+                  return f"coords:{float(lat):.6f},{float(lng):.6f}"
+              return build_source_id(place, lat=lat, lng=lng)
+          '''
+          if old not in text:
+              raise SystemExit('make_place_key snippet not found')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+
+          path = Path('batch/pipeline.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''                "--db-path",
+                          temp_db,
+                      ],'''
+          new = '''                "--db-path",
+                          temp_db,
+                          "--incremental",
+                      ],'''
+          if old not in text:
+              raise SystemExit('pipeline sqlite snippet not found')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+
+          path = Path('tests/test_pipeline.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              'from pathlib import Path\n',
+              'import gzip\nimport json\nimport sqlite3\nfrom pathlib import Path\n',
+          )
+          old = '''    monkeypatch.setattr(pipeline, "DB_PATH", str(data_dir / "toilets.db"))
+              calls = []
+
+              def fake_run(command):
+                  calls.append(command)
+                  if "process_data.py" in command[1]:
+                      Path(command[3]).write_bytes(b"json")
+                  else:
+                      Path(command[command.index("--db-path") + 1]).write_bytes(b"db")
+                  return _result(0)
+          '''
+          new = '''    db_path = data_dir / "toilets.db"
+              manifest_path = data_dir / "snapshot.json"
+              monkeypatch.setattr(pipeline, "DB_PATH", str(db_path))
+              monkeypatch.setattr(pipeline, "SNAPSHOT_MANIFEST_PATH", str(manifest_path))
+              calls = []
+
+              def fake_run(command):
+                  calls.append(command)
+                  if "process_data.py" in command[1]:
+                      with gzip.open(command[3], "wt", encoding="utf-8") as file:
+                          json.dump({"metadata": {}, "toilets": []}, file)
+                  else:
+                      staged_db = Path(command[command.index("--db-path") + 1])
+                      with sqlite3.connect(staged_db) as connection:
+                          connection.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT)")
+                  return _result(0)
+          '''
+          if old not in text:
+              raise SystemExit('pipeline success test snippet not found')
+          text = text.replace(old, new)
+          old = '''    assert processed.read_bytes() == b"json"
+              assert (data_dir / "toilets.db").read_bytes() == b"db"
+              assert len(calls) == 2
+              assert "--incremental" in calls[0]
+              assert "--db-path" in calls[1]
+          '''
+          new = '''    with gzip.open(processed, "rt", encoding="utf-8") as file:
+                  snapshot_id = json.load(file)["metadata"]["snapshot_id"]
+              with sqlite3.connect(db_path) as connection:
+                  db_snapshot_id = connection.execute(
+                      "SELECT value FROM metadata WHERE key = 'snapshot_id'"
+                  ).fetchone()[0]
+              assert db_snapshot_id == snapshot_id
+              assert json.loads(manifest_path.read_text(encoding="utf-8"))["snapshot_id"] == snapshot_id
+              assert len(calls) == 2
+              assert "--incremental" in calls[0]
+              assert "--db-path" in calls[1]
+              assert calls[1][-1] == "--incremental"
+          '''
+          if old not in text:
+              raise SystemExit('pipeline success assertions not found')
+          text = text.replace(old, new)
+          old = '''        if len(calls) == 1:
+                      Path(command[3]).write_bytes(b"new-json")
+                      return _result(0)
+          '''
+          new = '''        if len(calls) == 1:
+                      with gzip.open(command[3], "wt", encoding="utf-8") as file:
+                          json.dump({"metadata": {}, "toilets": []}, file)
+                      return _result(0)
+          '''
+          if old not in text:
+              raise SystemExit('pipeline failure test snippet not found')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+
+          path = Path('tests/test_batch_scrape_pipeline.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              'def test_run_postprocess_pipeline_converts_sqlite_incrementally(self, monkeypatch):',
+              'def test_run_postprocess_pipeline_converts_sqlite_incrementally(self, monkeypatch, tmp_path):',
+          )
+          old = '''        def fake_run(cmd):
+                      calls.append(cmd)
+                      return Result()
+
+                  monkeypatch.setattr(pipeline.subprocess, "run", fake_run)
+
+                  pipeline.run_postprocess_pipeline("input.json", "output.json.gz", ".")
+          '''
+          new = '''        def fake_run(cmd):
+                      import gzip
+                      import sqlite3
+
+                      calls.append(cmd)
+                      if "process_data.py" in cmd[1]:
+                          with gzip.open(cmd[3], "wt", encoding="utf-8") as file:
+                              json.dump({"metadata": {}, "toilets": []}, file)
+                      else:
+                          db_path = Path(cmd[cmd.index("--db-path") + 1])
+                          with sqlite3.connect(db_path) as connection:
+                              connection.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT)")
+                      return Result()
+
+                  monkeypatch.setattr(pipeline.subprocess, "run", fake_run)
+                  monkeypatch.setattr(pipeline, "DB_PATH", str(tmp_path / "output.db"))
+                  monkeypatch.setattr(pipeline, "SNAPSHOT_MANIFEST_PATH", str(tmp_path / "snapshot.json"))
+
+                  pipeline.run_postprocess_pipeline("input.json", str(tmp_path / "output.json.gz"), ".")
+          '''
+          if old not in text:
+              raise SystemExit('batch pipeline test snippet not found')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+
+          Path('.github/workflows/export-source.yml').unlink()
+          PY
+      - name: Verify focused tests
+        run: |
+          python -m py_compile batch/pipeline.py batch/process_data.py batch/scoring.py tests/test_pipeline.py tests/test_batch_scrape_pipeline.py
+          python -m pytest tests/test_pipeline.py tests/test_batch_scrape_pipeline.py::TestPostProcessPipeline::test_run_postprocess_pipeline_converts_sqlite_incrementally tests/test_process_data.py::TestMakePlaceKey tests/test_process_data.py::TestExtractCoordinates::test_longitude_zero_falls_back_to_longtitude -q
+      - name: Commit fixes
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix: restore CI test contracts"
+          git push origin HEAD:fix/main-ci-green
