@@ -46,23 +46,50 @@ jobs:
         working-directory: v2/backend
       - run: python -m app.cli init-db
         working-directory: v2/backend
-      - name: Verify transactional dataset publication
+      - name: Verify entity ingestion and transactional publication
         working-directory: v2/backend
         run: |
           python - <<'PY'
           import gzip, json
           from pathlib import Path
+          from app.db import database
           from app.importer import import_legacy
           from app.worker import validate_dataset, publish_dataset
           fixture = Path('/tmp/toilets.json.gz')
           with gzip.open(fixture, 'wt', encoding='utf-8') as handle:
               json.dump({'metadata': {'snapshot_id': 'ci'}, 'toilets': [
-                  {'place_id': 'ci-1', 'name': 'CI Toilet', 'latitude': 35.0, 'longitude': 139.0, 'toilet_score': 80}
+                  {
+                      'place_id': 'ci-1',
+                      'name': 'CI Toilet',
+                      'latitude': 35.0,
+                      'longitude': 139.0,
+                      'toilet_score': 80,
+                      'reviews': ['清潔で車椅子用の手すりがあります'],
+                  }
               ]}, handle)
           dataset_id, count = import_legacy(fixture, source='ci')
           assert count == 1
           validate_dataset(dataset_id)
           publish_dataset(dataset_id)
+          with database() as connection:
+              counts = connection.execute(
+                  '''
+                  SELECT
+                    (SELECT count(*) FROM facilities) AS facilities,
+                    (SELECT count(*) FROM source_records WHERE dataset_version_id = %s) AS source_records,
+                    (SELECT count(*) FROM facility_source_links WHERE status = 'matched') AS matched_links,
+                    (SELECT count(*) FROM published_place_snapshots WHERE dataset_version_id = %s) AS snapshots,
+                    (SELECT count(*) FROM facility_scores) AS dimension_scores
+                  ''',
+                  (dataset_id, dataset_id),
+              ).fetchone()
+          assert counts == {
+              'facilities': 1,
+              'source_records': 1,
+              'matched_links': 1,
+              'snapshots': 1,
+              'dimension_scores': 2,
+          }
           PY
       - name: API smoke test
         working-directory: v2/backend
