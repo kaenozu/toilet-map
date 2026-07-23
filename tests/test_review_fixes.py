@@ -88,9 +88,7 @@ def test_tag_staged_snapshot_writes_matching_ids(tmp_path):
     with gzip.open(json_path, "rt", encoding="utf-8") as file:
         assert json.load(file)["metadata"]["snapshot_id"] == "snapshot-1"
     with sqlite3.connect(db_path) as connection:
-        value = connection.execute(
-            "SELECT value FROM metadata WHERE key = 'snapshot_id'"
-        ).fetchone()[0]
+        value = connection.execute("SELECT value FROM metadata WHERE key = 'snapshot_id'").fetchone()[0]
     assert value == "snapshot-1"
 
 
@@ -99,9 +97,7 @@ def test_map_error_message_does_not_include_exception(monkeypatch):
     monkeypatch.setattr(
         app,
         "build_map",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            RuntimeError("secret/path")
-        ),
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("secret/path")),
     )
     monkeypatch.setattr(app.st, "markdown", lambda *args, **kwargs: None)
     monkeypatch.setattr(app.st, "caption", lambda *args, **kwargs: None)
@@ -109,15 +105,11 @@ def test_map_error_message_does_not_include_exception(monkeypatch):
     monkeypatch.setattr(app.st, "info", lambda *args, **kwargs: None)
     monkeypatch.setattr(app, "render_score_legend", lambda: None)
     monkeypatch.setattr(app, "render_stats", lambda *args, **kwargs: None)
-    monkeypatch.setattr(
-        app, "render_data_quality", lambda *args, **kwargs: None
-    )
+    monkeypatch.setattr(app, "render_data_quality", lambda *args, **kwargs: None)
     monkeypatch.setattr(app, "init_page_state", lambda: None)
     monkeypatch.setattr(app, "reset_page", lambda *args: None)
     monkeypatch.setattr(app, "calc_pagination", lambda *args: (0, 0, 0, 1))
-    monkeypatch.setattr(
-        app, "calc_map_center", lambda *args: (35.0, 139.0, 10)
-    )
+    monkeypatch.setattr(app, "calc_map_center", lambda *args: (35.0, 139.0, 10))
     monkeypatch.setattr(app.st, "session_state", {"page": 1})
 
     app._render_main_content(
