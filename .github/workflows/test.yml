@@ -18,8 +18,25 @@ jobs:
         run: pip install ruff pre-commit
       - name: Lint with ruff
         run: ruff check .
-      - name: Check formatting
-        run: pre-commit run ruff-format --all-files --show-diff-on-failure
+      - name: Capture formatting diff
+        id: format
+        shell: bash
+        run: |
+          set +e
+          ruff format --diff . > formatting.diff
+          status=$?
+          cat formatting.diff
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload formatting diff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruff-format-diff
+          path: formatting.diff
+      - name: Enforce formatting
+        if: steps.format.outputs.status != '0'
+        run: exit 1
       - name: Type-check pre-commit hook
         run: pre-commit run mypy --all-files --show-diff-on-failure
 
