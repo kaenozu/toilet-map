@@ -3,6 +3,8 @@ name: Export source
 on:
   push:
     branches: [fix/main-ci-green]
+  pull_request:
+    branches: [main]
 
 jobs:
   export:
