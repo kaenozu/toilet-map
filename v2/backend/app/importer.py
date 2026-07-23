@@ -13,6 +13,7 @@ from psycopg import Connection
 
 from .db import database
 from .entities import upsert_legacy_entity
+from .legacy_identity import resolve_stable_key_collisions
 from .score_storage import store_dimension_observations
 from .scoring import SCORING_VERSION, score_review_dimensions, score_reviews
 
@@ -178,7 +179,7 @@ def _insert_reviews(
 
 def import_legacy(path: Path, *, source: str = "legacy-json") -> tuple[int, int]:
     records, metadata = load_legacy_snapshot(path)
-    normalized = list(normalized_records(records))
+    normalized = resolve_stable_key_collisions(normalized_records(records))
     if not normalized:
         raise ValueError("snapshot contains no valid places")
 
