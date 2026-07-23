@@ -34,6 +34,7 @@ jobs:
           PY
       - name: Verify focused tests
         run: |
+          python -m pip install pytest
           python -m py_compile batch/pipeline.py batch/process_data.py batch/scoring.py tests/test_pipeline.py tests/test_batch_scrape_pipeline.py
           python -m pytest tests/test_pipeline.py tests/test_batch_scrape_pipeline.py::TestPostProcessPipeline::test_run_postprocess_pipeline_converts_sqlite_incrementally tests/test_process_data.py::TestMakePlaceKey tests/test_process_data.py::TestExtractCoordinates::test_longitude_zero_falls_back_to_longtitude -q
       - name: Commit fixes
