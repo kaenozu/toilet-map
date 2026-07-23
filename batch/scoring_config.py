@@ -17,9 +17,7 @@ NEGATIVE_DAMPEN_HIGH = 0.4
 POSITIVE_DAMPEN_LOW = 0.4
 NEGATIVE_BOOST_LOW = 1.2
 
-# Negation is intentionally local. A large window caused unrelated and embedded
-# 「ない」tokens to cancel complete phrases such as 「使えない」.
-NEGATION_WINDOW = 12
+NEGATION_WINDOW = 30
 NEGATION_WORDS = [
     "ではない", "じゃない", "ではありません", "じゃありません",
     "ない", "なし", "なく", "ません", "無い",
@@ -60,7 +58,7 @@ NEGATIVE_KEYWORDS = {
 
 TOILET_MENTION_KEYWORDS = [
     "トイレ", "お手洗い", "おてあらい", "化粧室", "洗面所",
-    "restroom", "washroom", "bathroom",
+    " restroom", "restroom", "washroom", "bathroom",
     "ウォシュレット", "シャワートイレ",
 ]
 TOILET_CATEGORIES = ["公共トイレ", "トイレ", "restroom"]
