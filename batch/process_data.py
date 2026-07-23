@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import cast
 
 try:
-    from .identity import build_fallback_source_id, build_source_id
+    from .identity import build_fallback_source_id, build_source_id, normalize_identity_text
     from .scoring import (
         PlaceDict,
         ToiletResultDict,
@@ -23,7 +23,7 @@ try:
     from .scoring_config import AREA_NAME_RE, DISPLAY_SCORE_MULTIPLIER, DISPLAY_SCORE_OFFSET
     from .utils import extract_prefecture, load_jsonl, logger, save_json
 except ImportError:
-    from identity import build_fallback_source_id, build_source_id
+    from identity import build_fallback_source_id, build_source_id, normalize_identity_text
     from scoring import (
         PlaceDict,
         ToiletResultDict,
@@ -105,16 +105,15 @@ def process_place(place: PlaceDict) -> ToiletResultDict | None:
 
 def make_place_key(place: PlaceDict) -> str:
     lat, lng = _extract_coordinates(place)
-    if (
-        not place.get("place_id")
-        and not place.get("data_id")
-        and not place.get("source_id")
-        and not place.get("address")
-        and not place.get("category")
-        and lat is not None
-        and lng is not None
-    ):
-        return f"legacy_coords:{float(lat):.6f},{float(lng):.6f}"
+    if place.get("source_id") or place.get("place_id") or place.get("data_id"):
+        return build_source_id(place, lat=lat, lng=lng)
+
+    title = normalize_identity_text(place.get("title"))
+    address = normalize_identity_text(place.get("address"))
+    if address:
+        return f"title_address:{title}|{address}"
+    if lat is not None and lng is not None:
+        return f"coords:{float(lat):.6f},{float(lng):.6f}"
     return build_source_id(place, lat=lat, lng=lng)
 
 

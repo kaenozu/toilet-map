@@ -147,8 +147,9 @@ def mentions_toilet(text: str) -> bool:
 
 def _get_longitude(place: PlaceDict) -> float | None:
     raw = place.get("longitude")
-    if raw is None or raw == "":
-        raw = place.get("longtitude")
+    legacy_raw = place.get("longtitude")
+    if raw is None or raw == "" or (raw == 0 and legacy_raw not in (None, "", 0)):
+        raw = legacy_raw
     if raw is None or raw == "":
         return None
     value = _coerce_float(raw, default=float("nan"))
