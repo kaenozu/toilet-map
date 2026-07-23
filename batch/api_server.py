@@ -15,9 +15,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 try:
-    from .db_utils import DB_PATH, JSON_PATH, ensure_database_current
+    from .db_utils import DB_PATH, JSON_PATH
+    from .snapshot_integrity import ensure_snapshot_current
 except ImportError:
-    from db_utils import DB_PATH, JSON_PATH, ensure_database_current
+    from db_utils import DB_PATH, JSON_PATH
+    from snapshot_integrity import ensure_snapshot_current
 
 
 class ToiletModel(BaseModel):
@@ -33,8 +35,8 @@ class ToiletModel(BaseModel):
     review_count: int = 0
     link: str = ""
     is_public_toilet: bool = False
-    toilet_score: float = 0.0
-    confidence: float = 0.0
+    toilet_score: float | None = None
+    confidence: float | None = None
     toilet_review_count: int = 0
     prefecture: str = ""
     sample_reviews: list[dict[str, Any]] = Field(default_factory=list)
@@ -64,7 +66,7 @@ class DistributionResponse(BaseModel):
     distribution: list[DistributionBucket]
 
 
-app = FastAPI(title="Toilet Map API", version="1.1.0")
+app = FastAPI(title="Toilet Map API", version="1.2.0")
 app.openapi_tags = [
     {"name": "toilets", "description": "トイレデータの取得"},
     {"name": "stats", "description": "統計情報"},
@@ -79,7 +81,7 @@ app.add_middleware(
 
 @contextmanager
 def _connection() -> Iterator[sqlite3.Connection]:
-    ensure_database_current(JSON_PATH, DB_PATH)
+    ensure_snapshot_current(JSON_PATH, DB_PATH)
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     try:
@@ -117,6 +119,7 @@ def list_toilets(
     prefecture: str | None = Query(None),
     min_score: float = Query(0.0, ge=0.0, le=100.0),
     max_score: float = Query(100.0, ge=0.0, le=100.0),
+    include_unscored: bool = Query(True),
     q: str | None = Query(None, max_length=200),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
@@ -124,8 +127,12 @@ def list_toilets(
     if min_score > max_score:
         raise HTTPException(status_code=422, detail="min_score must not exceed max_score")
 
-    where = ["toilet_score BETWEEN ? AND ?"]
+    score_clause = "(toilet_score BETWEEN ? AND ?"
     params: list[Any] = [min_score, max_score]
+    if include_unscored:
+        score_clause += " OR toilet_score IS NULL"
+    score_clause += ")"
+    where = [score_clause]
     if prefecture:
         where.append("prefecture = ?")
         params.append(prefecture)
@@ -143,7 +150,8 @@ def list_toilets(
     with _connection() as connection:
         total = connection.execute(f"SELECT COUNT(*) FROM toilets WHERE {where_sql}", params).fetchone()[0]
         rows = connection.execute(
-            f"SELECT * FROM toilets WHERE {where_sql} ORDER BY toilet_score DESC, id ASC LIMIT ? OFFSET ?",
+            f"SELECT * FROM toilets WHERE {where_sql} "
+            "ORDER BY toilet_score IS NULL, toilet_score DESC, id ASC LIMIT ? OFFSET ?",
             [*params, limit, offset],
         ).fetchall()
     return ToiletListResponse(total=total, toilets=[ToiletModel(**_row_to_toilet(row)) for row in rows])
