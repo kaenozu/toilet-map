@@ -29,7 +29,21 @@ jobs:
       - name: Start clean PostgreSQL/PostGIS
         run: docker compose -f v2/docker-compose.yml up -d db
       - name: Import and publish the canonical dataset
-        run: docker compose -f v2/docker-compose.yml --profile tools run --rm migrate
+        shell: bash
+        run: |
+          set +e
+          docker compose -f v2/docker-compose.yml --profile tools run --rm migrate \
+            >v2-compose-migrate.log 2>&1
+          status=$?
+          tail -n 100 v2-compose-migrate.log
+          exit "$status"
+      - name: Upload migration diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-compose-migrate-log
+          path: v2-compose-migrate.log
+          if-no-files-found: error
       - name: Start backend and frontend
         run: docker compose -f v2/docker-compose.yml up -d backend frontend
       - name: Verify backend health and published data
@@ -58,7 +72,7 @@ jobs:
           curl -fsS http://127.0.0.1:3000 >/dev/null
       - name: Show container logs
         if: failure()
-        run: docker compose -f v2/docker-compose.yml logs --no-color
+        run: docker compose -f v2/docker-compose.yml logs --no-color --tail=100
       - name: Clean up Compose resources
         if: always()
         run: docker compose -f v2/docker-compose.yml down -v --remove-orphans
