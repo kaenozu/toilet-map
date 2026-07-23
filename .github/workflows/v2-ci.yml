@@ -1,0 +1,45 @@
+name: V2 CI
+
+on:
+  pull_request:
+    paths:
+      - 'v2/**'
+      - '.github/workflows/v2-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'v2/**'
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install './v2/backend[dev]'
+      - run: ruff check v2/backend
+      - run: python -m compileall -q v2/backend/app
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: v2/frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: v2/frontend/package-lock.json
+      - run: npm install
+      - run: npm run build
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: docker compose -f v2/docker-compose.yml config
+      - run: docker compose -f v2/docker-compose.yml build
