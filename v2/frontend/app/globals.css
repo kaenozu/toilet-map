@@ -1,28 +1,59 @@
+/* Shared public and administrator interface styles. */
 @import "leaflet/dist/leaflet.css";
 
 :root { color-scheme: light; font-family: system-ui, sans-serif; }
 * { box-sizing: border-box; }
 body { margin: 0; background: #f6f7f8; color: #1d2329; }
-button, input, select { font: inherit; }
+button, input, select, textarea { font: inherit; }
+button, a { touch-action: manipulation; }
+a { color: #155ea8; }
 .shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
-.header { padding: 16px 20px; background: #fff; border-bottom: 1px solid #dfe3e7; }
-.header h1 { margin: 0; font-size: 1.35rem; }
-.header p { margin: 4px 0 0; color: #66717c; }
-.content { display: grid; grid-template-columns: minmax(300px, 380px) 1fr; min-height: 0; }
+.header { padding: 16px 20px; background: #fff; border-bottom: 1px solid #dfe3e7; display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+.header h1, .admin-header h1 { margin: 0; font-size: 1.35rem; }
+.header p, .admin-header p { margin: 4px 0 0; color: #66717c; }
+.admin-link { white-space: nowrap; }
+.content { display: grid; grid-template-columns: minmax(320px, 410px) 1fr; min-height: 0; }
 .sidebar { padding: 16px; overflow: auto; border-right: 1px solid #dfe3e7; background: #fff; }
-.filters { display: grid; gap: 8px; margin-bottom: 14px; }
-.filters input, .filters select { width: 100%; padding: 10px; border: 1px solid #cbd2d8; border-radius: 8px; background: #fff; }
+.filters { display: grid; gap: 9px; margin-bottom: 14px; }
+.filters input, .filters select, .report-form select, .report-form textarea, .admin-auth input { width: 100%; padding: 10px; border: 1px solid #cbd2d8; border-radius: 8px; background: #fff; }
+.filter-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.checks { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 9px; background: #f7f9fa; border-radius: 8px; }
+.checks label { display: flex; gap: 6px; align-items: center; font-size: .88rem; }
+.checks input { width: auto; }
+.location-row, .card-actions, .admin-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+button, .card-actions a { border: 0; border-radius: 8px; padding: 9px 12px; background: #1668b2; color: #fff; cursor: pointer; text-decoration: none; }
+button.secondary { background: #e8edf1; color: #29343d; }
+button.danger { background: #b32929; }
+.location-status, .form-status { margin: 0; font-size: .82rem; color: #53616c; }
 .stats { padding: 10px; margin-bottom: 12px; background: #f0f4f7; border-radius: 8px; font-size: .9rem; }
 .cards { display: grid; gap: 10px; }
 .card { padding: 12px; border: 1px solid #dde2e6; border-radius: 10px; background: #fff; }
 .card h2 { margin: 0 0 4px; font-size: 1rem; }
-.card p { margin: 3px 0; color: #5c6770; font-size: .9rem; }
-.score { font-weight: 700; }
+.card p { margin: 5px 0; color: #5c6770; font-size: .9rem; }
+.badges { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.badge { display: inline-flex; padding: 4px 8px; border-radius: 999px; font-size: .78rem; font-weight: 700; }
+.score-badge { background: #edf4ff; color: #174f8c; }
+.trust-badge { background: #eaf7ef; color: #23653c; }
+.meta { font-size: .8rem !important; }
+.report-form { display: grid; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e3e7ea; }
+.report-form textarea { min-height: 74px; resize: vertical; }
 .map { min-height: calc(100vh - 78px); }
 .map .leaflet-container { width: 100%; height: 100%; min-height: calc(100vh - 78px); }
+.user-location-marker span { display: block; width: 20px; height: 20px; border: 4px solid #fff; border-radius: 50%; background: #1677ff; box-shadow: 0 0 0 2px #1677ff; }
 .empty { padding: 24px; text-align: center; color: #66717c; }
+.admin-shell { max-width: 1200px; margin: 0 auto; padding: 20px; }
+.admin-header { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+.admin-auth { display: grid; grid-template-columns: minmax(220px, 420px) auto 1fr; gap: 8px; align-items: center; margin: 20px 0; padding: 14px; background: #fff; border: 1px solid #dfe3e7; border-radius: 10px; }
+.admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.admin-card { padding: 14px; border: 1px solid #dfe3e7; border-radius: 10px; background: #fff; }
+.admin-card h3 { margin-top: 0; }
+.candidate-list { display: grid; gap: 8px; margin: 12px 0; }
+.candidate { display: grid; gap: 4px; padding: 9px; border-radius: 8px; background: #f3f6f8; }
+.candidate span { font-size: .82rem; color: #66717c; }
 @media (max-width: 800px) {
   .content { grid-template-columns: 1fr; grid-template-rows: auto 55vh; }
-  .sidebar { border-right: 0; border-bottom: 1px solid #dfe3e7; max-height: 45vh; }
+  .sidebar { border-right: 0; border-bottom: 1px solid #dfe3e7; max-height: 52vh; }
   .map, .map .leaflet-container { min-height: 55vh; }
+  .filter-row, .checks, .admin-auth { grid-template-columns: 1fr; }
+  .header, .admin-header { align-items: flex-start; }
 }
