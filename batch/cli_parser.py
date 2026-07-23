@@ -2,47 +2,33 @@
 batch/cli_parser.py
 scrape_runner.py の CLI 引数解析とクエリファイルからの都市・県自動検出
 """
+import argparse
 import os
 import re
-import sys
-
-from utils import logger
 
 FILTER_CITY = os.environ.get("CITY", "")
 FILTER_PREF = os.environ.get("PREFECTURE", "")
 
 
+def _positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a positive integer") from exc
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
 def parse_args() -> dict:
-    args: dict[str, str | bool | int | None] = {
-        "city": FILTER_CITY,
-        "prefecture": FILTER_PREF,
-        "progress_file": None,
-        "dry_run": False,
-        "max_queries": None,
-    }
-    i = 1
-    while i < len(sys.argv):
-        if sys.argv[i] == "--city" and i + 1 < len(sys.argv):
-            args["city"] = sys.argv[i + 1]
-            i += 2
-        elif sys.argv[i] == "--prefecture" and i + 1 < len(sys.argv):
-            args["prefecture"] = sys.argv[i + 1]
-            i += 2
-        elif sys.argv[i] == "--progress-file" and i + 1 < len(sys.argv):
-            args["progress_file"] = sys.argv[i + 1]
-            i += 2
-        elif sys.argv[i] == "--dry-run":
-            args["dry_run"] = True
-            i += 1
-        elif sys.argv[i] == "--max-queries" and i + 1 < len(sys.argv):
-            try:
-                args["max_queries"] = int(sys.argv[i + 1])
-            except ValueError:
-                logger.warning(f"Invalid --max-queries value: {sys.argv[i+1]}")
-            i += 2
-        else:
-            i += 1
-    return args
+    parser = argparse.ArgumentParser(description="Run resumable toilet-map scraping")
+    parser.add_argument("--city", default=FILTER_CITY)
+    parser.add_argument("--prefecture", default=FILTER_PREF)
+    parser.add_argument("--progress-file")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--max-queries", type=_positive_int)
+    namespace = parser.parse_args()
+    return vars(namespace)
 
 
 def detect_city_from_queries(queries_path: str) -> tuple[str, str]:
@@ -60,20 +46,20 @@ def detect_city_from_queries(queries_path: str) -> tuple[str, str]:
                     pref = line.split(":", 1)[1].strip()
                 elif line and not line.startswith("#"):
                     seen_in_line: set[str] = set()
-                    m = re.search(r'\bin\s+(\S+[市区町村])', line)
-                    if m:
-                        c = m.group(1)
-                        city_counts[c] = city_counts.get(c, 0) + 1
-                        seen_in_line.add(c)
-                    for m2 in re.finditer(r'(\S*[市区町村])', line):
-                        c = m2.group(1)
-                        if len(c) >= 2 and c not in seen_in_line:
-                            seen_in_line.add(c)
-                            city_counts[c] = city_counts.get(c, 0) + 1
-    except OSError as exc:
-        logger.warning(f"Failed to read query file: {queries_path} ({exc})")
+                    match = re.search(r"\bin\s+(\S+[市区町村])", line)
+                    if match:
+                        candidate = match.group(1)
+                        city_counts[candidate] = city_counts.get(candidate, 0) + 1
+                        seen_in_line.add(candidate)
+                    for match in re.finditer(r"(\S*[市区町村])", line):
+                        candidate = match.group(1)
+                        if len(candidate) >= 2 and candidate not in seen_in_line:
+                            seen_in_line.add(candidate)
+                            city_counts[candidate] = city_counts.get(candidate, 0) + 1
+    except OSError:
+        return city, pref
 
     if not city and city_counts:
-        city = max(city_counts, key=lambda k: city_counts[k])
+        city = max(city_counts, key=lambda key: city_counts[key])
 
     return city, pref
