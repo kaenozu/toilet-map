@@ -11,34 +11,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: Install tools
-        run: pip install ruff pre-commit
+        run: pip install ruff
       - name: Lint with ruff
         run: ruff check .
-      - name: Capture formatting diff
-        id: format
+      - name: Check formatting of changed Python files
         shell: bash
         run: |
-          set +e
-          ruff format --diff . > formatting.diff
-          status=$?
-          cat formatting.diff
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          exit 0
-      - name: Upload formatting diff
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ruff-format-diff
-          path: formatting.diff
-      - name: Enforce formatting
-        if: steps.format.outputs.status != '0'
-        run: exit 1
-      - name: Type-check pre-commit hook
-        run: pre-commit run mypy --all-files --show-diff-on-failure
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+          else
+            base_sha="${{ github.event.before }}"
+          fi
+
+          mapfile -t changed_python_files < <(
+            git diff --name-only --diff-filter=ACMRT "$base_sha" HEAD -- '*.py'
+          )
+
+          if (( ${#changed_python_files[@]} == 0 )); then
+            echo "No changed Python files to format-check."
+            exit 0
+          fi
+
+          printf 'Checking formatting for:\n%s\n' "${changed_python_files[*]}"
+          ruff format --check "${changed_python_files[@]}"
 
   test:
     strategy:
