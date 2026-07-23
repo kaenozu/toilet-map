@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 import gzip
+import importlib
 import json
 import os
 import sqlite3
 import tempfile
 from pathlib import Path
+from types import ModuleType
 
-try:
-    from . import db_utils as _db_utils
-    from . import to_sqlite as _to_sqlite
-except ImportError:
-    import db_utils as _db_utils
-    import to_sqlite as _to_sqlite
+
+def _load_module(name: str) -> ModuleType:
+    if __package__:
+        return importlib.import_module(f".{name}", package=__package__)
+    return importlib.import_module(name)
+
+
+_db_utils = _load_module("db_utils")
+_to_sqlite = _load_module("to_sqlite")
 
 DB_PATH = _db_utils.DB_PATH
 JSON_PATH = _db_utils.JSON_PATH
