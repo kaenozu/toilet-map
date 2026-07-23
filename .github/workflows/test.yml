@@ -18,11 +18,10 @@ jobs:
         run: pip install ruff pre-commit
       - name: Lint with ruff
         run: ruff check .
-      - name: Run pre-commit checks
-        env:
-          # pytest is executed in the test job after project dependencies are installed.
-          SKIP: pytest
-        run: pre-commit run --all-files --show-diff-on-failure
+      - name: Check formatting
+        run: pre-commit run ruff-format --all-files --show-diff-on-failure
+      - name: Type-check pre-commit hook
+        run: pre-commit run mypy --all-files --show-diff-on-failure
 
   test:
     strategy:
