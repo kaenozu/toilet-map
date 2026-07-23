@@ -37,13 +37,29 @@ def validate_dataset(dataset_version_id: int) -> None:
                    count(*) FILTER (WHERE btrim(name) = '') AS missing_name,
                    count(*) FILTER (WHERE NOT ST_IsValid(location::geometry)) AS invalid_location,
                    count(*) - count(DISTINCT stable_key) AS duplicate_keys,
-                   count(*) FILTER (WHERE toilet_score IS NOT NULL AND toilet_score NOT BETWEEN 0 AND 100) AS invalid_score
+                   count(*) FILTER (
+                     WHERE toilet_score IS NOT NULL AND toilet_score NOT BETWEEN 0 AND 100
+                   ) AS invalid_score,
+                   count(*) FILTER (WHERE facility_id IS NULL) AS missing_facility,
+                   count(*) FILTER (WHERE source_record_id IS NULL) AS missing_source_record
               FROM places WHERE dataset_version_id = %s
             """,
             (dataset_version_id,),
         ).fetchone()
         if result is None:
             raise RuntimeError("validation query returned no result")
+        unresolved = connection.execute(
+            """
+            SELECT count(*) AS total
+              FROM source_records sr
+              LEFT JOIN facility_source_links link ON link.source_record_id = sr.id
+             WHERE sr.dataset_version_id = %s
+               AND (link.id IS NULL OR link.status <> 'matched')
+            """,
+            (dataset_version_id,),
+        ).fetchone()
+        unresolved_count = int(unresolved["total"] if unresolved else 0)
+        report = {**dict(result), "unresolved_source_records": unresolved_count}
         valid = all(
             (
                 result["total"] > 0,
@@ -51,6 +67,9 @@ def validate_dataset(dataset_version_id: int) -> None:
                 result["invalid_location"] == 0,
                 result["duplicate_keys"] == 0,
                 result["invalid_score"] == 0,
+                result["missing_facility"] == 0,
+                result["missing_source_record"] == 0,
+                unresolved_count == 0,
             )
         )
         connection.execute(
@@ -63,20 +82,79 @@ def validate_dataset(dataset_version_id: int) -> None:
             (
                 "validated" if valid else "failed",
                 result["total"],
-                json.dumps(dict(result)),
+                json.dumps(report),
                 valid,
                 dataset_version_id,
             ),
         )
         connection.commit()
         if not valid:
-            raise ValueError(f"dataset validation failed: {dict(result)}")
+            raise ValueError(f"dataset validation failed: {report}")
 
 
 def publish_dataset(dataset_version_id: int) -> None:
     with database() as connection:
         connection.execute("SELECT publish_dataset(%s)", (dataset_version_id,))
         connection.commit()
+
+
+def detect_stale_source_records() -> int:
+    with database() as connection:
+        row = connection.execute(
+            """
+            WITH changed AS (
+              UPDATE source_records
+                 SET record_status = 'stale', verification_status = 'stale'
+               WHERE record_status = 'active'
+                 AND expires_at IS NOT NULL
+                 AND expires_at <= now()
+              RETURNING id
+            )
+            SELECT count(*) AS total FROM changed
+            """
+        ).fetchone()
+        connection.commit()
+    return int(row["total"] if row else 0)
+
+
+def resolve_source_records() -> int:
+    """Reuse a previous exact provider/external-id decision for a new observation."""
+    with database() as connection:
+        row = connection.execute(
+            """
+            WITH candidates AS (
+              SELECT DISTINCT ON (pending.source_record_id)
+                     pending.source_record_id,
+                     previous.facility_id
+                FROM facility_source_links pending
+                JOIN source_records current_record ON current_record.id = pending.source_record_id
+                JOIN source_records previous_record
+                  ON previous_record.provider = current_record.provider
+                 AND previous_record.external_id = current_record.external_id
+                 AND previous_record.id <> current_record.id
+                JOIN facility_source_links previous
+                  ON previous.source_record_id = previous_record.id
+                 AND previous.status = 'matched'
+               WHERE pending.status = 'pending'
+               ORDER BY pending.source_record_id, previous_record.fetched_at DESC, previous_record.id DESC
+            ), changed AS (
+              UPDATE facility_source_links link
+                 SET facility_id = candidates.facility_id,
+                     status = 'matched',
+                     match_method = 'provider_external_id',
+                     match_score = 1.0,
+                     decision_reason = 'Matched to a previously resolved provider external ID',
+                     decided_at = now(),
+                     decided_by = 'system'
+                FROM candidates
+               WHERE link.source_record_id = candidates.source_record_id
+              RETURNING link.id
+            )
+            SELECT count(*) AS total FROM changed
+            """
+        ).fetchone()
+        connection.commit()
+    return int(row["total"] if row else 0)
 
 
 def execute_job(job: dict[str, Any]) -> None:
@@ -86,6 +164,10 @@ def execute_job(job: dict[str, Any]) -> None:
         validate_dataset(dataset_id)
     elif job["kind"] == "publish_dataset":
         publish_dataset(dataset_id)
+    elif job["kind"] == "detect_stale_source_records":
+        detect_stale_source_records()
+    elif job["kind"] == "resolve_source_records":
+        resolve_source_records()
     else:
         raise ValueError(f"unsupported job kind: {job['kind']}")
 
