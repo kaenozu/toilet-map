@@ -114,6 +114,7 @@ TOILET_ABSENCE_PATTERNS = [
     r"トイレ\s*(?:なし|無い|ない|未設置)(?:\s|$|[。、])",
 ]
 TOILET_ABSENCE_RE = re.compile("|".join(TOILET_ABSENCE_PATTERNS), re.IGNORECASE)
+CLAUSE_SPLIT_RE = re.compile(r"(?<=[。.!！?？])|(?:が|けれど|けど|しかし|ただし|but|however)[、,\s]+", re.IGNORECASE)
 
 _POS_PATTERN = re.compile("|".join(re.escape(k) for k in sorted(POSITIVE_KEYWORDS, key=len, reverse=True)))
 _NEG_PATTERN = re.compile("|".join(re.escape(k) for k in sorted(NEGATIVE_KEYWORDS, key=len, reverse=True)))
@@ -133,10 +134,15 @@ def _coerce_float(value: object, default: float = 0.0) -> float:
     return result if math.isfinite(result) else default
 
 
+def _toilet_clauses(text: str) -> list[str]:
+    return [clause.strip() for clause in CLAUSE_SPLIT_RE.split(text) if clause.strip() and TOILET_MENTION_RE.search(clause)]
+
+
 def mentions_toilet(text: str) -> bool:
     if not text or not TOILET_MENTION_RE.search(text):
         return False
-    return not TOILET_ABSENCE_RE.search(text)
+    clauses = _toilet_clauses(text)
+    return any(not TOILET_ABSENCE_RE.search(clause) for clause in clauses)
 
 
 def _get_longitude(place: PlaceDict) -> float | None:
@@ -170,7 +176,16 @@ def extract_toilet_contexts(text: str) -> list[str]:
     for i, sentence in enumerate(sentences):
         if mentions_toilet(sentence):
             toilet_indices.update(range(max(0, i - 1), min(len(sentences), i + 2)))
-    return [sentences[i] for i in sorted(toilet_indices)]
+    contexts: list[str] = []
+    for i in sorted(toilet_indices):
+        sentence = sentences[i]
+        if TOILET_MENTION_RE.search(sentence):
+            valid_clauses = [clause for clause in _toilet_clauses(sentence) if not TOILET_ABSENCE_RE.search(clause)]
+            if valid_clauses:
+                contexts.extend(valid_clauses)
+                continue
+        contexts.append(sentence)
+    return contexts
 
 
 def _is_externally_negated(text: str, start: int, end: int) -> bool:
