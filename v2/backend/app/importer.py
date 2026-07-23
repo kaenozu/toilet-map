@@ -10,6 +10,7 @@ from typing import Any
 from psycopg import Connection
 
 from .db import database
+from .scoring import SCORING_VERSION, score_reviews
 
 
 def _records(payload: object) -> list[dict[str, Any]]:
@@ -63,6 +64,32 @@ def _coordinates(record: dict[str, Any]) -> tuple[float, float] | None:
     return lat, lon
 
 
+def _reviews(record: dict[str, Any]) -> list[dict[str, Any]]:
+    value = record.get("reviews") or record.get("sample_reviews") or []
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for index, review in enumerate(value):
+        if isinstance(review, str):
+            body = review.strip()
+            payload = {"body": body}
+        elif isinstance(review, dict):
+            body = str(review.get("text") or review.get("body") or review.get("review") or "").strip()
+            payload = review
+        else:
+            continue
+        if not body:
+            continue
+        result.append(
+            {
+                "external_id": str(payload.get("review_id") or payload.get("id") or index),
+                "body": body,
+                "rating": payload.get("rating") or payload.get("stars"),
+            }
+        )
+    return result
+
+
 def normalized_records(records: Iterable[dict[str, Any]]) -> Iterator[dict[str, Any]]:
     for record in records:
         coordinates = _coordinates(record)
@@ -70,10 +97,15 @@ def normalized_records(records: Iterable[dict[str, Any]]) -> Iterator[dict[str, 
         if not name or coordinates is None:
             continue
         lat, lon = coordinates
+        reviews = _reviews(record)
+        score_result = score_reviews(review["body"] for review in reviews)
+        imported_score = _first(record, "toilet_score", "score")
+        imported_confidence = _first(record, "confidence")
         known = {
             "stable_key", "source_id", "place_id", "data_id", "id", "name", "title",
             "address", "prefecture", "category", "latitude", "lat", "longitude", "lng", "lon",
             "toilet_score", "score", "confidence", "review_count", "user_ratings_total", "reviews",
+            "sample_reviews",
         }
         attributes = {key: value for key, value in record.items() if key not in known}
         yield {
@@ -84,9 +116,11 @@ def normalized_records(records: Iterable[dict[str, Any]]) -> Iterator[dict[str, 
             "category": str(_first(record, "category", default="")),
             "latitude": lat,
             "longitude": lon,
-            "toilet_score": _first(record, "toilet_score", "score"),
-            "confidence": _first(record, "confidence"),
-            "review_count": int(_first(record, "review_count", "user_ratings_total", default=0) or 0),
+            "toilet_score": imported_score if imported_score is not None else score_result.score,
+            "confidence": imported_confidence if imported_confidence is not None else score_result.confidence,
+            "review_count": int(_first(record, "review_count", "user_ratings_total", default=len(reviews)) or 0),
+            "reviews": reviews,
+            "score_explanation": score_result.explanation,
             "attributes": attributes,
             "raw_payload": record,
         }
@@ -134,14 +168,36 @@ def import_legacy(path: Path, *, source: str = "legacy-json") -> tuple[int, int]
                     json.dumps(item["attributes"], ensure_ascii=False),
                 ),
             ).fetchone()
+            if row is None:
+                raise RuntimeError("failed to insert place")
+            place_id = int(row["id"])
             connection.execute(
                 """
                 INSERT INTO provider_records (dataset_version_id, place_id, provider, external_id, raw_payload)
                 VALUES (%s, %s, %s, %s, %s::jsonb)
                 """,
                 (
-                    dataset_id, row["id"], source, item["stable_key"],
+                    dataset_id, place_id, source, item["stable_key"],
                     json.dumps(item["raw_payload"], ensure_ascii=False),
+                ),
+            )
+            for review in item["reviews"]:
+                connection.execute(
+                    """
+                    INSERT INTO reviews (place_id, provider, external_id, body, rating)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (place_id, provider, external_id) DO NOTHING
+                    """,
+                    (place_id, source, review["external_id"], review["body"], review["rating"]),
+                )
+            connection.execute(
+                """
+                INSERT INTO score_history (place_id, model_version, score, confidence, explanation)
+                VALUES (%s, %s, %s, %s, %s::jsonb)
+                """,
+                (
+                    place_id, SCORING_VERSION, item["toilet_score"], item["confidence"],
+                    json.dumps(item["score_explanation"], ensure_ascii=False),
                 ),
             )
         connection.execute(
