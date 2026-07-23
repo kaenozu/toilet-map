@@ -1,5 +1,6 @@
 """Streamlit toilet cleanliness map."""
 
+import logging
 from time import perf_counter
 from typing import cast
 
@@ -26,6 +27,8 @@ from ui.stats import render_stats
 from ui.styles import DARK_MODE_CSS, MOBILE_CSS
 from ui.types import ToiletDict
 
+logger = logging.getLogger(__name__)
+
 
 def _load_and_prepare() -> tuple[dict, pd.DataFrame, list[str], dict, dict, dict, list]:
     query_params = read_query_params()
@@ -48,13 +51,15 @@ def _process_filters(
     user_location: tuple | None,
     translations: dict,
 ) -> tuple[pd.DataFrame, float]:
+    if dataframe.empty:
+        return dataframe, 0.0
     user_lat, user_lng = user_location if user_location else (None, None)
     started_at = perf_counter()
     filtered = filter_toilets(dataframe, internal_filter, selected_prefecture, user_lat, user_lng)
     filtered = search_toilets(filtered, search_query)
-    if sort_order == translations["sort_near"] and user_location:
+    if sort_order == translations["sort_near"] and user_location and "distance" in filtered.columns:
         filtered = filtered.sort_values("distance", ascending=True)
-    else:
+    elif "toilet_score" in filtered.columns:
         filtered = filtered.sort_values("toilet_score", ascending=False)
     return filtered, (perf_counter() - started_at) * 1000
 
@@ -96,8 +101,9 @@ def _render_main_content(
             )
         )
         st_folium(map_object, height=500, returned_objects=[], use_container_width=True)
-    except Exception as exc:
-        st.error(f"Map rendering failed: {exc}")
+    except Exception:
+        logger.exception("Map rendering failed")
+        st.error(translations.get("map_render_failed", "地図を表示できませんでした。条件を変更して再試行してください。"))
 
     render_stats(metadata, map_items, translations)
     render_data_quality(metadata, toilets, translations)
