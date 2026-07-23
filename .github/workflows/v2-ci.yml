@@ -11,6 +11,10 @@ on:
       - 'v2/**'
       - '.github/workflows/v2-ci.yml'
 
+concurrency:
+  group: v2-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     runs-on: ubuntu-latest
