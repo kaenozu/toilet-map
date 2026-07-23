@@ -42,7 +42,10 @@ services:
   migrate:
     build: ./backend
     profiles: ["tools"]
-    command: ["python", "-m", "app.cli", "import-legacy", "/data/toilets.json.gz", "--publish"]
+    command:
+      - /bin/sh
+      - -c
+      - python -m app.cli init-db && python -m app.cli import-legacy /data/toilets.json.gz --publish
     environment:
       DATABASE_URL: postgresql://toilet_map:toilet_map@db:5432/toilet_map
     volumes:
