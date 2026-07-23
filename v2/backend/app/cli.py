@@ -5,7 +5,12 @@ from pathlib import Path
 
 from .db import apply_schema, database
 from .importer import import_legacy
-from .worker import publish_dataset, validate_dataset
+from .worker import (
+    detect_stale_source_records,
+    publish_dataset,
+    resolve_source_records,
+    validate_dataset,
+)
 
 
 def main() -> None:
@@ -21,6 +26,9 @@ def main() -> None:
     publish_parser = sub.add_parser("publish")
     publish_parser.add_argument("dataset_id", type=int)
     sub.add_parser("status")
+    sub.add_parser("data-quality")
+    sub.add_parser("resolve-sources")
+    sub.add_parser("expire-sources")
     args = parser.parse_args()
 
     if args.command == "init-db":
@@ -38,10 +46,28 @@ def main() -> None:
     elif args.command == "status":
         with database() as connection:
             rows = connection.execute(
-                "SELECT id, status, source, record_count, created_at, published_at FROM dataset_versions ORDER BY id DESC"
+                "SELECT id, status, source, record_count, created_at, published_at "
+                "FROM dataset_versions ORDER BY id DESC"
             ).fetchall()
         for row in rows:
             print(dict(row))
+    elif args.command == "data-quality":
+        with database() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                  (SELECT count(*) FROM facilities) AS facilities,
+                  (SELECT count(*) FROM source_records WHERE record_status = 'active') AS active_source_records,
+                  (SELECT count(*) FROM source_records WHERE record_status = 'stale') AS stale_source_records,
+                  (SELECT count(*) FROM facility_source_links WHERE status = 'pending') AS pending_links,
+                  (SELECT count(*) FROM facility_source_links WHERE status = 'rejected') AS rejected_links
+                """
+            ).fetchone()
+        print(dict(row or {}))
+    elif args.command == "resolve-sources":
+        print(f"resolved={resolve_source_records()}")
+    elif args.command == "expire-sources":
+        print(f"expired={detect_stale_source_records()}")
 
 
 if __name__ == "__main__":
