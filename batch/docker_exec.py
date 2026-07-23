@@ -9,7 +9,7 @@ import tempfile
 
 from utils import logger
 
-DOCKER_IMAGE = os.environ.get("SCRAPER_IMAGE", "gosom/google-maps-scraper")
+DOCKER_IMAGE = os.environ.get("SCRAPER_IMAGE", "gosom/google-maps-scraper:v1.12.1")
 SCRAPER_DEPTH = os.environ.get("SCRAPER_DEPTH", "2")
 SCRAPER_LANG = os.environ.get("SCRAPER_LANG", "ja")
 EXIT_ON_INACTIVITY = os.environ.get("EXIT_ON_INACTIVITY", "5m")
