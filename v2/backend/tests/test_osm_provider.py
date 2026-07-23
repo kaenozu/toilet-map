@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from app.osm_provider import OsmOverpassProvider
-from app.providers import FetchRequest, OSM_REGIONS, SourceType, VerificationStatus
+from app.providers import OSM_REGIONS, FetchRequest, SourceType, VerificationStatus
 
 
 def test_osm_provider_discovers_and_normalizes_bounded_records() -> None:
