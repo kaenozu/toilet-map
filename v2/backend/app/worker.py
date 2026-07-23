@@ -11,7 +11,7 @@ from .db import database
 from .ingestion import ingest_provider, ingestion_stats
 from .job_queue import claim_job, finish_job
 from .osm_provider import OsmOverpassProvider
-from .providers import FetchRequest, OSM_REGIONS
+from .providers import OSM_REGIONS, FetchRequest
 from .resolution import generate_match_candidates
 
 
