@@ -10,7 +10,7 @@ import pandas as pd
 import streamlit as st
 
 from app_config import DATA_PATH, DB_PATH, EQUIPMENT_KEYWORDS, ERROR_METADATA
-from batch.db_utils import ensure_database_current
+from batch.snapshot_integrity import ensure_snapshot_current
 
 from .types import ToiletDict
 
@@ -49,7 +49,7 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None) -> dict:
     connection: sqlite3.Connection | None = None
     try:
         if cache_token is not None:
-            ensure_database_current(DATA_PATH, DB_PATH)
+            ensure_snapshot_current(DATA_PATH, DB_PATH)
         connection = sqlite3.connect(DB_PATH)
         dataframe = pd.read_sql("SELECT * FROM toilets", connection)
         metadata_frame = pd.read_sql("SELECT * FROM metadata", connection)
@@ -64,15 +64,11 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None) -> dict:
         toilets = dataframe.to_dict("records")
         for toilet in toilets:
             try:
-                toilet["sample_reviews"] = json.loads(
-                    toilet.get("sample_reviews_json") or "[]"
-                )
+                toilet["sample_reviews"] = json.loads(toilet.get("sample_reviews_json") or "[]")
             except json.JSONDecodeError:
                 toilet["sample_reviews"] = []
             try:
-                toilet["top_keywords"] = json.loads(
-                    toilet.get("top_keywords") or "[]"
-                )
+                toilet["top_keywords"] = json.loads(toilet.get("top_keywords") or "[]")
             except json.JSONDecodeError:
                 toilet["top_keywords"] = []
 
@@ -84,20 +80,14 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None) -> dict:
                 continue
             if lat is None or lng is None or pd.isna(lat) or pd.isna(lng):
                 continue
-            stats = prefecture_stats.setdefault(
-                str(pref), {"count": 0, "lats": [], "lngs": []}
-            )
+            stats = prefecture_stats.setdefault(str(pref), {"count": 0, "lats": [], "lngs": []})
             stats["count"] += 1
             stats["lats"].append(lat)
             stats["lngs"].append(lng)
         for stats in prefecture_stats.values():
             stats["center_lat"] = sum(stats.pop("lats")) / stats["count"]
             stats["center_lng"] = sum(stats.pop("lngs")) / stats["count"]
-        return {
-            "metadata": metadata,
-            "toilets": toilets,
-            "pref_stats": prefecture_stats,
-        }
+        return {"metadata": metadata, "toilets": toilets, "pref_stats": prefecture_stats}
     except (sqlite3.Error, OSError, ValueError) as exc:
         st.error(f"データベース読み込みエラー: {exc}")
         return {"metadata": ERROR_METADATA, "toilets": [], "pref_stats": {}}

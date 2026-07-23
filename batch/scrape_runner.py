@@ -10,6 +10,7 @@ import time
 try:
     from .cli_parser import detect_city_from_queries, parse_args
     from .docker_exec import scrape_query
+    from .exceptions import DataError
     from .pipeline import run_postprocess_pipeline
     from .progress_tracker import PROGRESS_FILE as DEFAULT_PROGRESS_FILE
     from .progress_tracker import (
@@ -24,6 +25,7 @@ try:
 except ImportError:
     from cli_parser import detect_city_from_queries, parse_args
     from docker_exec import scrape_query
+    from exceptions import DataError
     from pipeline import run_postprocess_pipeline
     from progress_tracker import PROGRESS_FILE as DEFAULT_PROGRESS_FILE
     from progress_tracker import load_progress, load_queries, publish_expansion_status, query_fingerprint, save_progress
@@ -162,6 +164,32 @@ def _cleanup_on_success(failed: int, progress_file: str) -> None:
         logger.info(f"Cleaned up: {path}")
 
 
+def _publish_failed_run(
+    run_id: str,
+    *,
+    pref: str,
+    city: str,
+    total: int,
+    done: dict[int, str],
+    success: int,
+    failed: int,
+    started_at: float,
+    message: str,
+) -> None:
+    publish_expansion_status(
+        run_id,
+        pref=pref,
+        city=city,
+        total=total,
+        done=len(done),
+        success=success,
+        failed=failed,
+        started_at=started_at,
+        status="failed",
+        message=message,
+    )
+
+
 def run_batch() -> None:
     args = parse_args()
     queries = load_queries(QUERIES_FILE)
@@ -214,41 +242,39 @@ def run_batch() -> None:
     )
 
     logger.info(f"Scraping done  OK: {success} / Skip: {skipped} / Fail: {failed}")
-    try:
-        _sync_canonical_data(city, pref)
-    except RuntimeError as exc:
-        publish_expansion_status(
+    if failed > 0:
+        _publish_failed_run(
             run_id,
             pref=pref,
             city=city,
             total=total,
-            done=len(done),
+            done=done,
+            success=success,
+            failed=failed,
+            started_at=started_at,
+            message=f"{failed} queries failed; canonical snapshot was not changed",
+        )
+        logger.error(f"[ERROR] Scrape finished with {failed} failed queries; snapshot not published")
+        raise SystemExit(1)
+
+    try:
+        _sync_canonical_data(city, pref)
+    except (DataError, OSError) as exc:
+        _publish_failed_run(
+            run_id,
+            pref=pref,
+            city=city,
+            total=total,
+            done=done,
             success=success,
             failed=failed + 1,
             started_at=started_at,
-            status="failed",
             message=str(exc),
         )
         logger.error(f"[ERROR] {exc}")
         raise SystemExit(1) from exc
 
     _cleanup_on_success(failed, progress_file)
-    if failed > 0:
-        publish_expansion_status(
-            run_id,
-            pref=pref,
-            city=city,
-            total=total,
-            done=len(done),
-            success=success,
-            failed=failed,
-            started_at=started_at,
-            status="failed",
-            message=f"{failed} queries failed",
-        )
-        logger.error(f"[ERROR] Scrape finished with {failed} failed queries")
-        raise SystemExit(1)
-
     publish_expansion_status(
         run_id,
         pref=pref,

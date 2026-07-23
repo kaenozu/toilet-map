@@ -1,6 +1,6 @@
-pytest>=9.0.3
-pytest-cov>=7.1.0
-mypy>=2.1.0
-types-setuptools>=82.0.0.20260508
+pytest==9.0.3
+pytest-cov==7.1.0
+mypy==2.1.0
+types-setuptools==82.0.0.20260508
 # Required by Starlette TestClient.
-httpx2
+httpx2==2.7.0
