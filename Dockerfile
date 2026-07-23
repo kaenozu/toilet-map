@@ -1,15 +1,18 @@
-FROM python:3.11-slim
+FROM python:3.11.13-slim
 
 WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 10001 appuser
 
 COPY requirements-app.txt requirements-api.txt ./
 RUN pip install --no-cache-dir -r requirements-app.txt -r requirements-api.txt
 
-COPY . .
+COPY --chown=appuser:appuser . .
+
+USER appuser
 
 EXPOSE 8501
 
