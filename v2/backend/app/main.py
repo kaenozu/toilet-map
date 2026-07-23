@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from .db import database
 from .importer import import_legacy
 
-app = FastAPI(title="Toilet Map API", version="2.0.0")
+app = FastAPI(title="Toilet Map API", version="2.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -98,7 +98,7 @@ def list_places(
 
     where_sql = " AND ".join(conditions)
     select_sql = f"""
-        SELECT p.id, p.stable_key, p.name, p.address, p.prefecture, p.category,
+        SELECT p.id, p.facility_id, p.stable_key, p.name, p.address, p.prefecture, p.category,
                ST_Y(p.location::geometry) AS latitude,
                ST_X(p.location::geometry) AS longitude,
                p.toilet_score::float AS toilet_score,
@@ -129,7 +129,8 @@ def get_place(place_id: int) -> dict[str, Any]:
     with database() as connection:
         row = connection.execute(
             """
-            SELECT p.id, p.stable_key, p.name, p.address, p.prefecture, p.category,
+            SELECT p.id, p.facility_id, p.source_record_id, p.stable_key, p.name, p.address,
+                   p.prefecture, p.category,
                    ST_Y(p.location::geometry) AS latitude,
                    ST_X(p.location::geometry) AS longitude,
                    p.toilet_score::float AS toilet_score,
@@ -141,9 +142,69 @@ def get_place(place_id: int) -> dict[str, Any]:
             """,
             (place_id,),
         ).fetchone()
-    if row is None:
-        raise HTTPException(status_code=404, detail="place not found")
-    return row
+        if row is None:
+            raise HTTPException(status_code=404, detail="place not found")
+        facility_id = row["facility_id"]
+        sources = []
+        scores = []
+        if facility_id is not None:
+            sources = connection.execute(
+                """
+                SELECT sr.id, sr.source_type::text AS source_type, sr.provider, sr.external_id,
+                       sr.confidence::float AS confidence,
+                       sr.verification_status::text AS verification_status,
+                       sr.record_status::text AS record_status, sr.observed_at, sr.fetched_at, sr.expires_at,
+                       link.status::text AS link_status, link.match_method, link.match_score::float AS match_score
+                  FROM facility_source_links link
+                  JOIN source_records sr ON sr.id = link.source_record_id
+                 WHERE link.facility_id = %s AND link.status = 'matched'
+                 ORDER BY sr.fetched_at DESC, sr.id DESC
+                """,
+                (facility_id,),
+            ).fetchall()
+            scores = connection.execute(
+                """
+                SELECT dimension, score::float AS score, confidence::float AS confidence,
+                       evidence_count, model_version, last_observed_at, calculated_at
+                  FROM facility_scores
+                 WHERE facility_id = %s
+                 ORDER BY dimension, calculated_at DESC
+                """,
+                (facility_id,),
+            ).fetchall()
+    return {**row, "sources": sources, "dimension_scores": scores}
+
+
+@app.get("/api/v2/facilities/{facility_id}/provenance")
+def facility_provenance(facility_id: int) -> dict[str, Any]:
+    with database() as connection:
+        facility = connection.execute(
+            """
+            SELECT id, canonical_key, status::text AS status, name, address, prefecture, category,
+                   ST_Y(location::geometry) AS latitude, ST_X(location::geometry) AS longitude,
+                   attributes, last_verified_at, created_at, updated_at
+              FROM facilities WHERE id = %s
+            """,
+            (facility_id,),
+        ).fetchone()
+        if facility is None:
+            raise HTTPException(status_code=404, detail="facility not found")
+        sources = connection.execute(
+            """
+            SELECT sr.id, sr.source_type::text AS source_type, sr.provider, sr.external_id,
+                   sr.record_status::text AS record_status,
+                   sr.verification_status::text AS verification_status,
+                   sr.confidence::float AS confidence, sr.observed_at, sr.fetched_at, sr.expires_at,
+                   link.status::text AS link_status, link.match_method, link.match_score::float AS match_score,
+                   link.decision_reason, link.decided_at, link.decided_by
+              FROM facility_source_links link
+              JOIN source_records sr ON sr.id = link.source_record_id
+             WHERE link.facility_id = %s
+             ORDER BY sr.fetched_at DESC, sr.id DESC
+            """,
+            (facility_id,),
+        ).fetchall()
+    return {"facility": facility, "sources": sources}
 
 
 @app.get("/api/v2/stats")
@@ -190,6 +251,26 @@ def facets() -> dict[str, list[dict[str, Any]]]:
             """
         ).fetchall()
     return {"prefectures": prefectures, "categories": categories}
+
+
+@app.get("/api/v2/admin/data-quality", dependencies=[Depends(require_admin)])
+def admin_data_quality() -> dict[str, Any]:
+    with database() as connection:
+        row = connection.execute(
+            """
+            SELECT
+              (SELECT count(*) FROM facilities) AS facilities,
+              (SELECT count(*) FROM source_records WHERE record_status = 'active') AS active_source_records,
+              (SELECT count(*) FROM source_records WHERE record_status = 'stale') AS stale_source_records,
+              (SELECT count(*) FROM source_records WHERE verification_status = 'disputed') AS disputed_source_records,
+              (SELECT count(*) FROM facility_source_links WHERE status = 'pending') AS pending_links,
+              (SELECT count(*) FROM facility_source_links WHERE status = 'rejected') AS rejected_links,
+              (SELECT count(*) FROM published_place_snapshots snapshot
+                JOIN dataset_versions d ON d.id = snapshot.dataset_version_id
+               WHERE d.status = 'published') AS published_snapshots
+            """
+        ).fetchone()
+    return row or {}
 
 
 @app.post("/api/v2/admin/import", dependencies=[Depends(require_admin)])
