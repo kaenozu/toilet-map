@@ -9,10 +9,28 @@ on:
     branches: [main]
     paths:
       - 'v2/**'
+      - '.github/workflows/v2-ci.yml'
 
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_DB: toilet_map
+          POSTGRES_USER: toilet_map
+          POSTGRES_PASSWORD: toilet_map
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U toilet_map -d toilet_map"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://toilet_map:toilet_map@localhost:5432/toilet_map
+      ADMIN_API_KEY: ci-key
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -20,7 +38,39 @@ jobs:
           python-version: '3.12'
       - run: pip install './v2/backend[dev]'
       - run: ruff check v2/backend
-      - run: python -m compileall -q v2/backend/app
+      - run: pytest -q
+        working-directory: v2/backend
+      - run: python -m app.cli init-db
+        working-directory: v2/backend
+      - name: Verify transactional dataset publication
+        working-directory: v2/backend
+        run: |
+          python - <<'PY'
+          import gzip, json
+          from pathlib import Path
+          from app.importer import import_legacy
+          from app.worker import validate_dataset, publish_dataset
+          fixture = Path('/tmp/toilets.json.gz')
+          with gzip.open(fixture, 'wt', encoding='utf-8') as handle:
+              json.dump({'metadata': {'snapshot_id': 'ci'}, 'toilets': [
+                  {'place_id': 'ci-1', 'name': 'CI Toilet', 'latitude': 35.0, 'longitude': 139.0, 'toilet_score': 80}
+              ]}, handle)
+          dataset_id, count = import_legacy(fixture, source='ci')
+          assert count == 1
+          validate_dataset(dataset_id)
+          publish_dataset(dataset_id)
+          PY
+      - name: API smoke test
+        working-directory: v2/backend
+        run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+          server=$!
+          trap 'kill $server' EXIT
+          for i in $(seq 1 20); do
+            curl -fsS http://127.0.0.1:8000/health && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8000/api/v2/places | grep 'CI Toilet'
 
   frontend:
     runs-on: ubuntu-latest
@@ -32,9 +82,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: v2/frontend/package-lock.json
-      - run: npm install
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
       - run: npm run build
 
   compose:
