@@ -1,0 +1,115 @@
+name: Publish validated data PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful Data refresh validation run ID
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: publish-validated-data
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: ${{ inputs.run_id }}
+      REPOSITORY: ${{ github.repository }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate run ID
+        shell: bash
+        run: |
+          if ! [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "run_id must be a positive integer" >&2
+            exit 2
+          fi
+
+      - name: Validate source workflow run
+        shell: bash
+        run: |
+          run_json="$(gh api "repos/$REPOSITORY/actions/runs/$RUN_ID")"
+          test "$(jq -r '.name' <<<"$run_json")" = "Data refresh validation"
+          test "$(jq -r '.conclusion' <<<"$run_json")" = "success"
+          test "$(jq -r '.event' <<<"$run_json")" = "workflow_dispatch"
+          test "$(jq -r '.head_branch' <<<"$run_json")" = "main"
+          test "$(jq -r '.head_sha' <<<"$run_json")" = "$GITHUB_SHA"
+
+      - name: Download validation artifact
+        shell: bash
+        run: |
+          mkdir -p downloaded
+          gh run download "$RUN_ID" \
+            --repo "$REPOSITORY" \
+            --name "data-refresh-$RUN_ID" \
+            --dir downloaded
+
+      - name: Validate artifact report
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report_path = Path("downloaded/artifacts/snapshot-report.json")
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+
+          if report.get("refresh_outcome") != "success":
+              raise SystemExit("artifact refresh outcome is not successful")
+          if report.get("verify_outcome") != "success":
+              raise SystemExit("artifact verification outcome is not successful")
+
+          snapshot_ids = {
+              report.get("json_snapshot_id"),
+              report.get("sqlite_snapshot_id"),
+              report.get("manifest_snapshot_id"),
+          }
+          if None in snapshot_ids or len(snapshot_ids) != 1:
+              raise SystemExit("artifact snapshot IDs do not match")
+
+          if report.get("json_total") != report.get("sqlite_total"):
+              raise SystemExit("artifact JSON and SQLite totals do not match")
+          PY
+
+      - name: Stage validated snapshot
+        shell: bash
+        run: |
+          install -m 0644 downloaded/data/toilets.json.gz data/toilets.json.gz
+          install -m 0644 downloaded/data/toilets.db data/toilets.db
+          install -m 0644 downloaded/data/snapshot.json data/snapshot.json
+          python batch/verify_data.py
+
+          unexpected="$(git status --short | awk '{print $2}' | grep -Ev '^(data/toilets\.json\.gz|data/toilets\.db|data/snapshot\.json)$' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "Unexpected changed files:" >&2
+            echo "$unexpected" >&2
+            exit 1
+          fi
+
+      - name: Create reviewed data pull request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: data-refresh/run-${{ inputs.run_id }}
+          delete-branch: true
+          commit-message: "data: publish validated refresh run ${{ inputs.run_id }}"
+          title: "data: publish validated refresh run ${{ inputs.run_id }}"
+          body: |
+            Publishes the validated snapshot produced by Data refresh validation run `${{ inputs.run_id }}`.
+
+            The publisher rechecked the source workflow identity, successful conclusion, `main` SHA, snapshot IDs, row counts, and `batch/verify_data.py` before opening this PR.
+          add-paths: |
+            data/toilets.json.gz
+            data/toilets.db
+            data/snapshot.json
