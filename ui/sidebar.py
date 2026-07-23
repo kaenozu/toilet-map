@@ -31,7 +31,9 @@ class SidebarResult(NamedTuple):
     translated_to_internal: dict
 
 
-def get_translated_filters(lang: str) -> tuple[dict[str, str], dict[str, str]]:
+def get_translated_filters(
+    lang: str,
+) -> tuple[dict[str, str | None], dict[str, str]]:
     """
     フィルタ表示名と内部値のマッピングを生成する
     """
@@ -101,7 +103,12 @@ def _handle_gps_section(t: dict) -> tuple[tuple | None, bool]:
     return user_location, gps_enabled
 
 
-def _render_query_state_section(query_params: dict, prefectures: list[str], translated_to_internal: dict[str, str], t: dict) -> None:
+def _render_query_state_section(
+    query_params: dict,
+    prefectures: list[str],
+    translated_to_internal: dict[str, str],
+    t: dict,
+) -> None:
     ui_state = resolve_ui_state_from_query_params(
         query_params, prefectures, translated_to_internal, t
     )
@@ -110,10 +117,12 @@ def _render_query_state_section(query_params: dict, prefectures: list[str], tran
             st.session_state[key] = value
 
 
-def _render_filter_section(t: dict, prefectures: list[str], translated_filters: dict[str, str]) -> tuple[str, str, str, str]:
-    selected_pref = st.selectbox(
-        t["prefecture"], prefectures, key="pref_select"
-    )
+def _render_filter_section(
+    t: dict,
+    prefectures: list[str],
+    translated_filters: dict[str, str | None],
+) -> tuple[str, str, str, str]:
+    selected_pref = st.selectbox(t["prefecture"], prefectures, key="pref_select")
     filter_type = st.selectbox(
         t["filter"], list(translated_filters.keys()), key="filter_select"
     )
@@ -151,13 +160,17 @@ def render_sidebar(
         translated_filters, translated_to_internal = get_translated_filters(lang)
 
         st.divider()
-        _render_query_state_section(query_params, prefectures, translated_to_internal, t)
+        _render_query_state_section(
+            query_params, prefectures, translated_to_internal, t
+        )
 
         st.divider()
         user_location, gps_enabled = _handle_gps_section(t)
 
         st.divider()
-        selected_pref, filter_type, search_query, sort_order = _render_filter_section(t, prefectures, translated_filters)
+        selected_pref, filter_type, search_query, sort_order = _render_filter_section(
+            t, prefectures, translated_filters
+        )
 
         st.divider()
         dark_mode, selected_tile = _render_settings_section(t)
@@ -165,10 +178,15 @@ def render_sidebar(
         st.caption(t["shortcut_info"])
 
     return SidebarResult(
-        t=t, lang=lang,
-        selected_pref=selected_pref, filter_type=filter_type,
-        search_query=search_query, sort_order=sort_order,
-        user_location=user_location, gps_enabled=gps_enabled,
-        dark_mode=dark_mode, selected_tile=selected_tile,
+        t=t,
+        lang=lang,
+        selected_pref=selected_pref,
+        filter_type=filter_type,
+        search_query=search_query,
+        sort_order=sort_order,
+        user_location=user_location,
+        gps_enabled=gps_enabled,
+        dark_mode=dark_mode,
+        selected_tile=selected_tile,
         translated_to_internal=translated_to_internal,
     )

@@ -64,11 +64,15 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None) -> dict:
         toilets = dataframe.to_dict("records")
         for toilet in toilets:
             try:
-                toilet["sample_reviews"] = json.loads(toilet.get("sample_reviews_json") or "[]")
+                toilet["sample_reviews"] = json.loads(
+                    toilet.get("sample_reviews_json") or "[]"
+                )
             except json.JSONDecodeError:
                 toilet["sample_reviews"] = []
             try:
-                toilet["top_keywords"] = json.loads(toilet.get("top_keywords") or "[]")
+                toilet["top_keywords"] = json.loads(
+                    toilet.get("top_keywords") or "[]"
+                )
             except json.JSONDecodeError:
                 toilet["top_keywords"] = []
 
@@ -76,16 +80,24 @@ def load_toilet_data(cache_token: tuple[int, int] | None = None) -> dict:
         for toilet in toilets:
             pref = toilet.get("prefecture")
             lat, lng = toilet.get("lat"), toilet.get("lng")
-            if not pref or lat is None or lng is None:
+            if pref is None or pd.isna(pref) or not str(pref).strip():
                 continue
-            stats = prefecture_stats.setdefault(pref, {"count": 0, "lats": [], "lngs": []})
+            if lat is None or lng is None or pd.isna(lat) or pd.isna(lng):
+                continue
+            stats = prefecture_stats.setdefault(
+                str(pref), {"count": 0, "lats": [], "lngs": []}
+            )
             stats["count"] += 1
             stats["lats"].append(lat)
             stats["lngs"].append(lng)
         for stats in prefecture_stats.values():
             stats["center_lat"] = sum(stats.pop("lats")) / stats["count"]
             stats["center_lng"] = sum(stats.pop("lngs")) / stats["count"]
-        return {"metadata": metadata, "toilets": toilets, "pref_stats": prefecture_stats}
+        return {
+            "metadata": metadata,
+            "toilets": toilets,
+            "pref_stats": prefecture_stats,
+        }
     except (sqlite3.Error, OSError, ValueError) as exc:
         st.error(f"データベース読み込みエラー: {exc}")
         return {"metadata": ERROR_METADATA, "toilets": [], "pref_stats": {}}
@@ -112,11 +124,22 @@ def _add_equipment_columns(dataframe: pd.DataFrame) -> None:
     def check_keywords(keywords: object, targets: set[str]) -> bool:
         if not isinstance(keywords, list):
             return False
-        return any(isinstance(item, list | tuple) and item and str(item[0]).lstrip("+-~") in targets for item in keywords)
+        return any(
+            isinstance(item, list | tuple)
+            and item
+            and str(item[0]).lstrip("+-~") in targets
+            for item in keywords
+        )
 
-    dataframe["has_multi"] = dataframe["top_keywords"].apply(lambda values: check_keywords(values, EQUIPMENT_KEYWORDS["multi"]))
-    dataframe["has_diaper"] = dataframe["top_keywords"].apply(lambda values: check_keywords(values, EQUIPMENT_KEYWORDS["diaper"]))
-    dataframe["has_wheelchair"] = dataframe["top_keywords"].apply(lambda values: check_keywords(values, EQUIPMENT_KEYWORDS["wheelchair"]))
+    dataframe["has_multi"] = dataframe["top_keywords"].apply(
+        lambda values: check_keywords(values, EQUIPMENT_KEYWORDS["multi"])
+    )
+    dataframe["has_diaper"] = dataframe["top_keywords"].apply(
+        lambda values: check_keywords(values, EQUIPMENT_KEYWORDS["diaper"])
+    )
+    dataframe["has_wheelchair"] = dataframe["top_keywords"].apply(
+        lambda values: check_keywords(values, EQUIPMENT_KEYWORDS["wheelchair"])
+    )
 
 
 def get_prefectures(dataframe: pd.DataFrame) -> list[str]:
