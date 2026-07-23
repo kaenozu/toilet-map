@@ -1,0 +1,188 @@
+name: Data refresh validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      prefecture:
+        description: Prefecture used for the validation scrape
+        required: true
+        default: 埼玉県
+        type: string
+      max_queries:
+        description: Maximum number of queries to scrape
+        required: true
+        default: '1'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: data-refresh-validation
+  cancel-in-progress: false
+
+jobs:
+  refresh-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      PREFECTURE: ${{ inputs.prefecture }}
+      MAX_QUERIES: ${{ inputs.max_queries }}
+      SLEEP_BETWEEN: '0'
+      RETRY_SLEEP: '15'
+      MAX_RETRIES: '1'
+      SYNC_EVERY_SUCCESS: '0'
+      RAW_DIR: ${{ github.workspace }}/artifacts/raw_parts
+      RAW_OUTPUT: ${{ github.workspace }}/artifacts/raw_data.json
+      PROGRESS_FILE: ${{ github.workspace }}/artifacts/progress.json
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Validate inputs
+        shell: bash
+        run: |
+          if ! [[ "$MAX_QUERIES" =~ ^[1-9][0-9]*$ ]]; then
+            echo "max_queries must be a positive integer" >&2
+            exit 2
+          fi
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Record baseline snapshot
+        shell: bash
+        run: |
+          mkdir -p artifacts/logs
+          sha256sum data/toilets.json.gz data/toilets.db data/snapshot.json \
+            > artifacts/baseline-sha256.txt
+
+      - name: Generate query batches
+        run: python batch/generate_queries.py
+
+      - name: Select validation query batch
+        id: query
+        shell: bash
+        run: |
+          query_file="$(find "batch/queries.d/$PREFECTURE" -type f -name 'batch_*.txt' | sort | head -n 1)"
+          if [ -z "$query_file" ]; then
+            echo "No query batch found for prefecture: $PREFECTURE" >&2
+            exit 1
+          fi
+          echo "path=$query_file" >> "$GITHUB_OUTPUT"
+          echo "Selected query batch: $query_file"
+
+      - name: Scrape and build staged snapshot
+        id: refresh
+        continue-on-error: true
+        shell: bash
+        env:
+          QUERIES: ${{ github.workspace }}/${{ steps.query.outputs.path }}
+        run: |
+          set -o pipefail
+          python batch/scrape_runner.py \
+            --prefecture "$PREFECTURE" \
+            --max-queries "$MAX_QUERIES" \
+            --progress-file "$PROGRESS_FILE" \
+            2>&1 | tee artifacts/logs/refresh.log
+
+      - name: Verify JSON and SQLite snapshot
+        id: verify
+        if: steps.refresh.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python batch/verify_data.py 2>&1 | tee artifacts/logs/verify.log
+
+      - name: Write snapshot report
+        if: always()
+        shell: bash
+        env:
+          REFRESH_OUTCOME: ${{ steps.refresh.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+          QUERY_FILE: ${{ steps.query.outputs.path }}
+        run: |
+          python - <<'PY'
+          import gzip
+          import json
+          import os
+          import sqlite3
+          from pathlib import Path
+
+          report = {
+              "prefecture": os.environ.get("PREFECTURE"),
+              "max_queries": int(os.environ.get("MAX_QUERIES", "0")),
+              "query_file": os.environ.get("QUERY_FILE"),
+              "refresh_outcome": os.environ.get("REFRESH_OUTCOME"),
+              "verify_outcome": os.environ.get("VERIFY_OUTCOME") or "skipped",
+          }
+
+          try:
+              with gzip.open("data/toilets.json.gz", "rt", encoding="utf-8") as handle:
+                  payload = json.load(handle)
+              metadata = payload.get("metadata") or {}
+              report["json_snapshot_id"] = metadata.get("snapshot_id")
+              report["json_total"] = metadata.get("total", len(payload.get("toilets", [])))
+          except Exception as exc:
+              report["json_error"] = str(exc)
+
+          try:
+              with sqlite3.connect("data/toilets.db") as connection:
+                  metadata = dict(connection.execute("SELECT key, value FROM metadata"))
+                  report["sqlite_snapshot_id"] = metadata.get("snapshot_id")
+                  report["sqlite_total"] = connection.execute("SELECT COUNT(*) FROM toilets").fetchone()[0]
+          except Exception as exc:
+              report["sqlite_error"] = str(exc)
+
+          manifest = Path("data/snapshot.json")
+          if manifest.exists():
+              report["manifest_snapshot_id"] = json.loads(manifest.read_text(encoding="utf-8")).get("snapshot_id")
+
+          Path("artifacts").mkdir(exist_ok=True)
+          Path("artifacts/snapshot-report.json").write_text(
+              json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(report, ensure_ascii=False, indent=2))
+          PY
+          sha256sum data/toilets.json.gz data/toilets.db data/snapshot.json \
+            > artifacts/result-sha256.txt
+          git diff -- data/ > artifacts/data-changes.diff
+          git status --short > artifacts/git-status.txt
+
+      - name: Upload refresh evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-refresh-${{ github.run_id }}
+          path: |
+            artifacts/
+            data/toilets.json.gz
+            data/toilets.db
+            data/snapshot.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce refresh and quality gate
+        if: always()
+        shell: bash
+        env:
+          REFRESH_OUTCOME: ${{ steps.refresh.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: |
+          if [ "$REFRESH_OUTCOME" != "success" ]; then
+            echo "Scrape or snapshot build failed; repository data was not committed."
+            exit 1
+          fi
+          if [ "$VERIFY_OUTCOME" != "success" ]; then
+            echo "Data quality verification failed; repository data was not committed."
+            exit 1
+          fi
+          echo "Refresh validation succeeded. Review the artifact before enabling scheduled publication."
