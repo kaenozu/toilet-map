@@ -1,8 +1,11 @@
+"""Provider contracts and concrete Google Maps/OSM adapters."""
+
 from __future__ import annotations
 
 import json
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol
@@ -27,10 +30,34 @@ class VerificationStatus(StrEnum):
 
 
 @dataclass(frozen=True)
+class Region:
+    key: str
+    label: str
+    prefecture: str
+    city: str
+    south: float
+    west: float
+    north: float
+    east: float
+
+    @property
+    def bbox(self) -> tuple[float, float, float, float]:
+        return self.south, self.west, self.north, self.east
+
+
+OSM_REGIONS: dict[str, Region] = {
+    "kumagaya": Region("kumagaya", "熊谷市", "埼玉県", "熊谷市", 35.999, 139.275, 36.236, 139.491),
+    "gyoda": Region("gyoda", "行田市", "埼玉県", "行田市", 36.084, 139.397, 36.188, 139.546),
+    "fukaya": Region("fukaya", "深谷市", "埼玉県", "深谷市", 36.061, 139.163, 36.281, 139.364),
+}
+
+
+@dataclass(frozen=True)
 class FetchRequest:
     text: str = ""
     prefecture: str = ""
     city: str = ""
+    bbox: tuple[float, float, float, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -52,6 +79,9 @@ class NormalizedObservation:
     category: str = ""
     confidence: float | None = None
     verification_status: VerificationStatus = VerificationStatus.UNVERIFIED
+    observed_at: datetime | None = None
+    expires_at: datetime | None = None
+    attributes: dict[str, Any] = field(default_factory=dict)
     payload: dict[str, Any] | None = None
 
 
@@ -75,7 +105,6 @@ class SourceProvider(Protocol):
     def provenance(self) -> Provenance: ...
 
 
-# Compatibility contract retained while callers migrate to SourceProvider.
 SearchQuery = FetchRequest
 RawPlace = NormalizedObservation
 
@@ -139,16 +168,12 @@ class JsonlProvider:
             category=str(payload.get("category") or ""),
             confidence=0.6,
             verification_status=VerificationStatus.UNVERIFIED,
+            attributes={"opening_hours": payload.get("opening_hours")},
             payload=payload,
         )
 
     def provenance(self) -> Provenance:
-        return Provenance(
-            provider=self.name,
-            source_type=self.source_type,
-            default_confidence=0.6,
-            verification_status=VerificationStatus.UNVERIFIED,
-        )
+        return Provenance(self.name, self.source_type, 0.6, VerificationStatus.UNVERIFIED)
 
     def search(self, query: SearchQuery) -> list[RawPlace]:
         return [item for record in self.discover(query) if (item := self.normalize(record)) is not None]
