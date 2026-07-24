@@ -109,7 +109,7 @@ def _decode_json(value: object, fallback: list) -> list:
 def _rows_to_toilets(rows: Sequence[sqlite3.Row | Mapping[str, object]]) -> list[ToiletDict]:
     toilets: list[ToiletDict] = []
     for row in rows:
-        item = {key: row[key] for key in row.keys()} if isinstance(row, sqlite3.Row) else dict(row)
+        item = {key: row[key] for key in row} if isinstance(row, sqlite3.Row) else dict(row)
         item["sample_reviews"] = _decode_json(item.pop("sample_reviews_json", None), [])
         item["top_keywords"] = _decode_json(item.get("top_keywords"), [])
         item["is_public_toilet"] = bool(item.get("is_public_toilet"))
