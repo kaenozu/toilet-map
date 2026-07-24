@@ -60,9 +60,20 @@ MAP_COLUMNS = [
     "sample_reviews_json",
     "top_keywords",
 ]
-_MAP_ORDER_BY = (
-    " ORDER BY COALESCE(confidence, 0) DESC, COALESCE(review_count, 0) DESC, "
+_MAP_PRIORITY_SQL = (
+    "COALESCE(confidence, 0) DESC, COALESCE(review_count, 0) DESC, "
     "COALESCE(toilet_review_count, 0) DESC, COALESCE(toilet_score, 0) DESC, id ASC"
+)
+_MAP_ORDER_BY = f" ORDER BY {_MAP_PRIORITY_SQL}"
+_MAP_PRIORITY_PROJECTION = (
+    "COALESCE(confidence, 0) AS priority_confidence, "
+    "COALESCE(review_count, 0) AS priority_reviews, "
+    "COALESCE(toilet_review_count, 0) AS priority_toilet_reviews, "
+    "COALESCE(toilet_score, 0) AS priority_score"
+)
+_BALANCED_MAP_ORDER = (
+    "prefecture_rank ASC, priority_confidence DESC, priority_reviews DESC, "
+    "priority_toilet_reviews DESC, priority_score DESC, id ASC"
 )
 
 
@@ -80,6 +91,46 @@ def _normalize_bounds(bounds: object) -> tuple[float, float, float, float] | Non
     from .filters import _extract_bounds_coordinates
 
     return _extract_bounds_coordinates(bounds)
+
+
+def _use_balanced_initial_sampling(
+    bounds: tuple[float, float, float, float] | None,
+    filters: NormalizedFilters,
+) -> bool:
+    """Balance only the unfiltered nationwide first render."""
+    prefecture, filter_type, search_query, _, _ = filters
+    return bounds is None and prefecture == "全て" and filter_type == "すべて" and not search_query
+
+
+def _build_map_query(
+    where_sql: str,
+    coordinate_sql: str,
+    *,
+    balanced: bool,
+) -> str:
+    columns = ", ".join(MAP_COLUMNS)
+    if not balanced:
+        return f"SELECT {columns} FROM toilets{where_sql}{coordinate_sql}{_MAP_ORDER_BY} LIMIT ?"
+    # Rank only compact numeric keys before joining the selected 1,500 rows.
+    # This keeps the nationwide query bounded without sorting review text blobs.
+    selected_columns = ", ".join(f"toilets.{column}" for column in MAP_COLUMNS)
+    sampled_order = ", ".join(f"sampled.{term.strip()}" for term in _BALANCED_MAP_ORDER.split(","))
+    return (
+        "WITH ranked_ids AS ("
+        f" SELECT id, {_MAP_PRIORITY_PROJECTION},"
+        " ROW_NUMBER() OVER ("
+        " PARTITION BY COALESCE(NULLIF(TRIM(prefecture), ''), '(都道府県未設定)')"
+        f" ORDER BY {_MAP_PRIORITY_SQL}"
+        " ) AS prefecture_rank"
+        f" FROM toilets{where_sql}{coordinate_sql}"
+        "), sampled AS ("
+        " SELECT * FROM ranked_ids"
+        f" ORDER BY {_BALANCED_MAP_ORDER} LIMIT ?"
+        ")"
+        f" SELECT {selected_columns} FROM sampled"
+        " JOIN toilets ON toilets.id = sampled.id"
+        f" ORDER BY {sampled_order}"
+    )
 
 
 @st.cache_data(ttl=3600, max_entries=4, show_spinner=False)
@@ -139,8 +190,16 @@ def _load_map_items_cached(
     try:
         connection = _connect(cache_token)
         where_sql, params = build_where_clause(filters, bounds)
-        coordinate_sql = " AND lat IS NOT NULL AND lng IS NOT NULL" if where_sql else " WHERE lat IS NOT NULL AND lng IS NOT NULL"
-        sql = f"SELECT {', '.join(MAP_COLUMNS)} FROM toilets{where_sql}{coordinate_sql}{_MAP_ORDER_BY} LIMIT ?"
+        coordinate_sql = (
+            " AND lat IS NOT NULL AND lng IS NOT NULL"
+            if where_sql
+            else " WHERE lat IS NOT NULL AND lng IS NOT NULL"
+        )
+        sql = _build_map_query(
+            where_sql,
+            coordinate_sql,
+            balanced=_use_balanced_initial_sampling(bounds, filters),
+        )
         rows = connection.execute(sql, [*params, limit]).fetchall()
         return _rows_to_toilets(rows)
     except (sqlite3.Error, OSError, ValueError) as exc:
