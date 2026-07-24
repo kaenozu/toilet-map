@@ -3,6 +3,7 @@
 
 import L from "leaflet";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
+import { resolveMapViewport } from "./map-center";
 import type { Place, UserLocation } from "./types";
 
 const placeIcon = new L.Icon({
@@ -29,14 +30,17 @@ export default function MapView({
   places: Place[];
   userLocation: UserLocation | null;
 }) {
-  const center: [number, number] = userLocation
-    ? [userLocation.latitude, userLocation.longitude]
-    : places.length
-      ? [places[0].latitude, places[0].longitude]
-      : [36.2048, 138.2529];
+  const viewport = resolveMapViewport(places, userLocation);
   return (
     <div className="map">
-      <MapContainer key={`${center[0]}:${center[1]}`} center={center} zoom={places.length ? 13 : 5} scrollWheelZoom>
+      <MapContainer
+        key={viewport.key}
+        center={viewport.kind === "center" ? viewport.center : undefined}
+        zoom={viewport.kind === "center" ? viewport.zoom : undefined}
+        bounds={viewport.kind === "bounds" ? viewport.bounds : undefined}
+        boundsOptions={{ padding: [24, 24], maxZoom: 13 }}
+        scrollWheelZoom
+      >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
