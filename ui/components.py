@@ -6,7 +6,14 @@ from datetime import date, datetime
 
 import streamlit as st
 
-from .helpers import esc, format_score, get_confidence_percentage, get_score_style, safe_href
+from .helpers import (
+    esc,
+    format_score,
+    get_confidence_percentage,
+    get_equipment_tags,
+    get_score_style,
+    safe_href,
+)
 from .types import ToiletDict
 
 FRESH_DATA_MAX_AGE_DAYS = 7
@@ -140,12 +147,30 @@ def _build_links_html(t: ToiletDict) -> str:
     return "".join(parts)
 
 
+def _build_equipment_tags_html(tags: list[str]) -> str:
+    """口コミキーワード由来であることを明示した設備タグHTMLを返す。"""
+    if not tags:
+        return ""
+    badges = "".join(
+        f'<span style="background:#f3f4f6;color:#374151;padding:1px 5px;'
+        f'border-radius:3px;font-size:10px;">{esc(tag)}</span>'
+        for tag in tags
+    )
+    return (
+        '<div class="toilet-card-equipment" aria-hidden="true" '
+        'style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-top:3px;">'
+        '<span style="font-size:10px;color:#666666;">設備の言及:</span>'
+        f"{badges}</div>"
+    )
+
+
 def _build_toilet_card_aria_label(
     toilet: ToiletDict,
     rank: int | None,
     score_text: str,
     rating_text: object,
     confidence_text: str,
+    equipment_tags: list[str],
 ) -> str:
     """視覚的なカード情報を重複なく読み上げるアクセシブル名を返す。"""
     parts = []
@@ -159,6 +184,8 @@ def _build_toilet_card_aria_label(
     parts.append(f"信頼度 {confidence_text}")
     if toilet.get("is_public_toilet"):
         parts.append("公共トイレ")
+    if equipment_tags:
+        parts.append(f"口コミで設備の言及 {'、'.join(equipment_tags)}")
     address = str(toilet.get("address") or "").strip()
     if address:
         parts.append(f"住所 {address}")
@@ -173,6 +200,7 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
     confidence_pct = get_confidence_percentage(t.get("confidence"))
     confidence_text = f"{confidence_pct}%" if confidence_pct is not None else "—"
     rating_text = t["rating"] if t.get("rating") is not None else "-"
+    equipment_tags = get_equipment_tags(t.get("top_keywords"))
 
     rank_html = (
         f'<span aria-hidden="true" style="color:#999;font-weight:600;min-width:24px;">#{rank}</span>'
@@ -196,7 +224,15 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
     )
 
     links_html = _build_links_html(t)
-    aria_label = _build_toilet_card_aria_label(t, rank, score_text, rating_text, confidence_text)
+    equipment_tags_html = _build_equipment_tags_html(equipment_tags)
+    aria_label = _build_toilet_card_aria_label(
+        t,
+        rank,
+        score_text,
+        rating_text,
+        confidence_text,
+        equipment_tags,
+    )
     return f"""
     <div class="toilet-card" role="listitem" aria-label="{aria_label}"
         style="display:flex;align-items:center;gap:10px;padding:8px 12px;
@@ -218,6 +254,7 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
             <div class="toilet-card-meta" style="font-size:11px;color:#666666;">
                 <span aria-hidden="true">&#x2B50;</span> {rating_text} &#xB7; 口コミ {t.get('review_count', 0)}件 &#xB7; 信頼度 {confidence_text}
             </div>
+            {equipment_tags_html}
             <div style="font-size:11px;margin-top:4px;">
                 {links_html}
             </div>
