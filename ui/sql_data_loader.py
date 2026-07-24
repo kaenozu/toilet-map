@@ -60,10 +60,11 @@ MAP_COLUMNS = [
     "sample_reviews_json",
     "top_keywords",
 ]
-_MAP_ORDER_BY = (
-    " ORDER BY COALESCE(confidence, 0) DESC, COALESCE(review_count, 0) DESC, "
+_MAP_PRIORITY_ORDER = (
+    "COALESCE(confidence, 0) DESC, COALESCE(review_count, 0) DESC, "
     "COALESCE(toilet_review_count, 0) DESC, COALESCE(toilet_score, 0) DESC, id ASC"
 )
+_VALID_MAP_COORDINATES = "lat BETWEEN -90 AND 90 AND lng BETWEEN -180 AND 180"
 
 
 def get_data_cache_token() -> tuple[int, int]:
@@ -117,8 +118,28 @@ def _rows_to_toilets(rows: Sequence[sqlite3.Row | Mapping[str, object]]) -> list
     return toilets
 
 
+def _build_balanced_map_query(where_sql: str) -> str:
+    """Build a bounded query that fills each prefecture rank before taking the next."""
+    columns = ", ".join(MAP_COLUMNS)
+    coordinate_sql = (
+        f" AND {_VALID_MAP_COORDINATES}" if where_sql else f" WHERE {_VALID_MAP_COORDINATES}"
+    )
+    return (
+        "WITH ranked_map_items AS ("
+        f"SELECT {columns}, "
+        "ROW_NUMBER() OVER ("
+        "PARTITION BY COALESCE(NULLIF(TRIM(prefecture), ''), '') "
+        f"ORDER BY {_MAP_PRIORITY_ORDER}"
+        ") AS prefecture_rank "
+        f"FROM toilets{where_sql}{coordinate_sql}"
+        ") "
+        f"SELECT {columns} FROM ranked_map_items "
+        f"ORDER BY prefecture_rank ASC, {_MAP_PRIORITY_ORDER} LIMIT ?"
+    )
+
+
 def load_map_items(bounds: dict | None, filters: Mapping[str, object], limit: int = 1500) -> list[ToiletDict]:
-    """Load only the columns and rows needed for the bounded map result."""
+    """Load geographically balanced columns and rows for the bounded map result."""
     safe_limit = max(1, min(int(limit), 1500))
     return _load_map_items_cached(
         get_data_cache_token(),
@@ -139,9 +160,7 @@ def _load_map_items_cached(
     try:
         connection = _connect(cache_token)
         where_sql, params = build_where_clause(filters, bounds)
-        coordinate_sql = " AND lat IS NOT NULL AND lng IS NOT NULL" if where_sql else " WHERE lat IS NOT NULL AND lng IS NOT NULL"
-        sql = f"SELECT {', '.join(MAP_COLUMNS)} FROM toilets{where_sql}{coordinate_sql}{_MAP_ORDER_BY} LIMIT ?"
-        rows = connection.execute(sql, [*params, limit]).fetchall()
+        rows = connection.execute(_build_balanced_map_query(where_sql), [*params, limit]).fetchall()
         return _rows_to_toilets(rows)
     except (sqlite3.Error, OSError, ValueError) as exc:
         st.error(f"地図データ読み込みエラー: {exc}")
