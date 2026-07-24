@@ -13,6 +13,7 @@ from ui.components import (
     build_toilet_card_html,
     render_score_legend,
 )
+from ui.helpers import get_equipment_tags
 
 
 class TestBuildResultContextText:
@@ -112,6 +113,25 @@ class TestBuildDataFreshnessText:
         assert "⚪ データ鮮度: 更新日不明" in text
 
 
+class TestEquipmentTags:
+    def test_normalizes_synonyms_prefixes_and_duplicates(self):
+        tags = get_equipment_tags(
+            [
+                ["多目的トイレ", 3],
+                ["多機能", 1],
+                ["+おむつ交換", 2],
+                ["-車いす", 1],
+                ["清潔", 9],
+            ]
+        )
+
+        assert tags == ["多目的", "おむつ替え", "車椅子対応"]
+
+    @pytest.mark.parametrize("keywords", [None, "車椅子", {}, [[], [None], 123]])
+    def test_ignores_missing_or_malformed_keywords(self, keywords: object):
+        assert get_equipment_tags(keywords) == []
+
+
 class TestBuildToiletCardHtml:
     @staticmethod
     def toilet(**overrides):
@@ -195,6 +215,33 @@ class TestBuildToiletCardHtml:
         assert '<span aria-hidden="true">&#x1F4CD;</span>' in html
         assert '<span aria-hidden="true">&#x2B50;</span>' in html
         assert 'class="toilet-card-arrow" aria-hidden="true"' in html
+
+    def test_displays_review_derived_equipment_mentions(self):
+        html = build_toilet_card_html(
+            self.toilet(
+                top_keywords=[
+                    ["多目的", 4],
+                    ["おむつ交換", 2],
+                    ["車椅子", 1],
+                    ["清潔", 10],
+                ]
+            )
+        )
+
+        assert 'class="toilet-card-equipment" aria-hidden="true"' in html
+        assert "設備の言及:" in html
+        assert ">多目的</span>" in html
+        assert ">おむつ替え</span>" in html
+        assert ">車椅子対応</span>" in html
+        assert "口コミで設備の言及 多目的、おむつ替え、車椅子対応" in html
+        assert "清潔</span>" not in html
+
+    def test_hides_equipment_row_without_supported_mentions(self):
+        html = build_toilet_card_html(self.toilet(top_keywords=[["清潔", 10], ["広い", 3]]))
+
+        assert "toilet-card-equipment" not in html
+        assert "設備の言及:" not in html
+        assert "口コミで設備の言及" not in html
 
 
 class TestBuildScoreLegendHtml:
