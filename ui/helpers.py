@@ -7,9 +7,14 @@ import html
 import math
 from urllib.parse import urlparse
 
-from app_config import SCORE_RANGES
+from app_config import EQUIPMENT_KEYWORDS, SCORE_RANGES
 
 UNSCORED_STYLE = ("#6b7280", "○", "未採点 / Unscored")
+EQUIPMENT_TAG_LABELS = (
+    ("multi", "多目的"),
+    ("diaper", "おむつ替え"),
+    ("wheelchair", "車椅子対応"),
+)
 
 
 def esc(text: str | None) -> str:
@@ -27,6 +32,30 @@ def safe_href(url: str | None) -> str:
     if not parsed.netloc:
         return ""
     return html.escape(parsed.geturl(), quote=True)
+
+
+def get_equipment_tags(keywords: object) -> list[str]:
+    """口コミキーワードから、表示順が安定した設備言及タグを返す。"""
+    if not isinstance(keywords, list):
+        return []
+
+    normalized: set[str] = set()
+    for item in keywords:
+        if isinstance(item, str):
+            raw_keyword = item
+        elif isinstance(item, (list, tuple)) and item:
+            raw_keyword = str(item[0])
+        else:
+            continue
+        keyword = raw_keyword.lstrip("+-~").strip()
+        if keyword:
+            normalized.add(keyword)
+
+    return [
+        label
+        for group, label in EQUIPMENT_TAG_LABELS
+        if normalized.intersection(EQUIPMENT_KEYWORDS[group])
+    ]
 
 
 def coerce_finite_float(value: object) -> float | None:
