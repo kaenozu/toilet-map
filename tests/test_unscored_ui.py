@@ -5,6 +5,7 @@ import math
 from ui.components import build_toilet_card_html
 from ui.helpers import format_score, get_confidence_percentage, get_score_style
 from ui.popups import build_popup_html
+from ui.stats import calc_avg_score, calc_score_distribution
 
 
 def _unscored_toilet() -> dict:
@@ -47,3 +48,11 @@ def test_unscored_map_popup_explains_missing_score():
     assert "信頼度 —" in html
     assert "採点結果なし" in html
     assert "現在は未採点です" in html
+
+
+def test_unscored_values_are_excluded_from_statistics():
+    toilets = [_unscored_toilet(), {"toilet_score": float("nan")}, {"toilet_score": 80.0}]
+
+    assert calc_avg_score(toilets) == 80.0
+    distribution = calc_score_distribution(toilets)
+    assert sum(int(bucket["count"]) for bucket in distribution) == 1
