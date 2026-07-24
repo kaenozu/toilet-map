@@ -23,6 +23,23 @@ def _calc_missing_stats(toilets: list[ToiletDict]) -> dict[str, int]:
     }
 
 
+def _coerce_count(value: object) -> int:
+    if not isinstance(value, (int, float, str)):
+        return 0
+    try:
+        return max(0, int(value))
+    except (OverflowError, ValueError):
+        return 0
+
+
+def _format_missing_metric(count: object, total: object) -> str:
+    missing_count = _coerce_count(count)
+    total_count = _coerce_count(total)
+    if total_count == 0:
+        return f"{missing_count} (—)"
+    return f"{missing_count} ({missing_count / total_count:.1%})"
+
+
 def _legacy_summary(toilets: list[ToiletDict]) -> dict[str, object]:
     pref_counts: dict[str, int] = {}
     for toilet in toilets:
@@ -45,17 +62,27 @@ def render_data_quality(meta: dict, data: list[ToiletDict] | dict[str, object], 
     missing = missing_value if isinstance(missing_value, dict) else {}
     pref_counts = pref_counts_value if isinstance(pref_counts_value, dict) else {}
     score_bins = score_bins_value if isinstance(score_bins_value, list) else []
+    total = _coerce_count(missing.get("total", 0))
 
     with st.expander(t.get("data_quality", "📊 データ品質")):
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric(t.get("dq_total", "Total"), missing.get("total", 0))
-        with col2:
-            st.metric(t.get("dq_missing_score", "スコア欠損"), missing.get("no_score", 0))
-        with col3:
-            st.metric(t.get("dq_missing_address", "住所欠損"), missing.get("no_address", 0))
-        with col4:
-            st.metric(t.get("dq_missing_reviews", "口コミ0"), missing.get("no_reviews", 0))
+        metric_rows = (
+            (
+                (t.get("dq_total", "Total"), str(total)),
+                (t.get("dq_missing_score", "スコア欠損"), _format_missing_metric(missing.get("no_score"), total)),
+                (t.get("dq_missing_reviews", "口コミ0"), _format_missing_metric(missing.get("no_reviews"), total)),
+            ),
+            (
+                (t.get("dq_missing_address", "住所欠損"), _format_missing_metric(missing.get("no_address"), total)),
+                (
+                    t.get("dq_missing_prefecture", "都道府県欠損"),
+                    _format_missing_metric(missing.get("no_prefecture"), total),
+                ),
+            ),
+        )
+        for metrics in metric_rows:
+            for column, (label, value) in zip(st.columns(len(metrics)), metrics, strict=True):
+                with column:
+                    st.metric(label, value)
 
         if pref_counts:
             pref_df = pd.DataFrame(
