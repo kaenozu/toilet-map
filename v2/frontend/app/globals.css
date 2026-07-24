@@ -26,6 +26,7 @@ a { color: #155ea8; }
 .content { display: grid; grid-template-columns: minmax(320px, 410px) 1fr; min-height: 0; }
 .sidebar { padding: 16px; overflow: auto; border-right: 1px solid #dfe3e7; background: #fff; }
 .filters { display: grid; gap: 9px; margin-bottom: 14px; }
+.filter-help { margin: 0; padding: 8px 10px; border-left: 3px solid #8fb4d6; background: #f5f9fc; color: #53616c; font-size: .84rem; line-height: 1.45; }
 .filters input, .filters select, .report-form select, .report-form textarea, .admin-auth input { width: 100%; padding: 10px; border: 1px solid #cbd2d8; border-radius: 8px; background: #fff; }
 .filter-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 9px; background: #f7f9fa; border-radius: 8px; }
