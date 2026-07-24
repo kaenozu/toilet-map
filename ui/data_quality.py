@@ -37,6 +37,43 @@ def _legacy_summary(toilets: list[ToiletDict]) -> dict[str, object]:
     return {"missing": _calc_missing_stats(toilets), "pref_counts": pref_counts, "score_bins": score_bins}
 
 
+def _to_non_negative_int(value: object) -> int:
+    """Convert supported scalar values while keeping invalid aggregates neutral."""
+    if not isinstance(value, (str, bytes, bytearray, int, float)):
+        return 0
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def _missing_percentage(total: object, missing: object) -> int:
+    """Return a bounded whole-number missing-data percentage."""
+    total_count = _to_non_negative_int(total)
+    missing_count = _to_non_negative_int(missing)
+    if total_count == 0:
+        return 0
+    return round(min(missing_count, total_count) * 100 / total_count)
+
+
+def _build_data_quality_summary_text(missing: dict, t: dict) -> str:
+    """Add ratios to the quality counts without introducing another dense chart."""
+    total = _to_non_negative_int(missing.get("total", 0))
+    if total == 0:
+        return f"{t.get('dq_total', 'Total')}: 0"
+
+    dimensions = (
+        (t.get("dq_missing_score", "Missing Score"), missing.get("no_score", 0)),
+        (t.get("dq_missing_address", "Missing Address"), missing.get("no_address", 0)),
+        (t.get("dq_missing_reviews", "Zero Reviews"), missing.get("no_reviews", 0)),
+    )
+    parts = []
+    for label, value in dimensions:
+        count = _to_non_negative_int(value)
+        parts.append(f"{label}: {_missing_percentage(total, count)}% ({min(count, total)}/{total})")
+    return " · ".join(parts)
+
+
 def render_data_quality(meta: dict, data: list[ToiletDict] | dict[str, object], t: dict) -> None:
     summary = data if isinstance(data, dict) else _legacy_summary(data)
     missing_value = summary.get("missing", {}) if isinstance(summary, dict) else {}
@@ -47,6 +84,7 @@ def render_data_quality(meta: dict, data: list[ToiletDict] | dict[str, object], 
     score_bins = score_bins_value if isinstance(score_bins_value, list) else []
 
     with st.expander(t.get("data_quality", "📊 データ品質")):
+        st.caption(_build_data_quality_summary_text(missing, t))
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric(t.get("dq_total", "Total"), missing.get("total", 0))

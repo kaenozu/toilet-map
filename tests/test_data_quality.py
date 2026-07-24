@@ -2,7 +2,12 @@
 tests/test_data_quality.py
 ui/data_quality.py のユニットテスト
 """
-from ui.data_quality import _calc_missing_stats, render_data_quality
+from ui.data_quality import (
+    _build_data_quality_summary_text,
+    _calc_missing_stats,
+    _missing_percentage,
+    render_data_quality,
+)
 
 
 class TestCalcMissingStats:
@@ -53,6 +58,30 @@ class TestCalcMissingStats:
         assert result["total"] == 2
         assert result["no_score"] == 1
         assert result["no_address"] >= 1
+
+
+class TestDataQualitySummary:
+    def test_missing_percentage_is_bounded(self):
+        assert _missing_percentage(4, 1) == 25
+        assert _missing_percentage(4, 8) == 100
+        assert _missing_percentage(0, 1) == 0
+        assert _missing_percentage("invalid", 1) == 0
+
+    def test_builds_localized_ratio_summary(self):
+        text = _build_data_quality_summary_text(
+            {"total": 4, "no_score": 1, "no_address": 0, "no_reviews": 3},
+            {
+                "dq_total": "総数",
+                "dq_missing_score": "スコア欠損",
+                "dq_missing_address": "住所欠損",
+                "dq_missing_reviews": "口コミ0",
+            },
+        )
+
+        assert text == "スコア欠損: 25% (1/4) · 住所欠損: 0% (0/4) · 口コミ0: 75% (3/4)"
+
+    def test_empty_summary_uses_total_label(self):
+        assert _build_data_quality_summary_text({}, {"dq_total": "総数"}) == "総数: 0"
 
 
 class TestRenderDataQuality:
