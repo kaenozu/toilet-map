@@ -4,6 +4,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import FacilityCard from "./FacilityCard";
+import { buildResultStatus } from "./result-status";
 import type { Place, UserLocation } from "./types";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false });
@@ -34,6 +35,7 @@ export default function Dashboard() {
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [locationStatus, setLocationStatus] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const params = useMemo(() => {
     const value = new URLSearchParams({ limit: "2000" });
@@ -57,15 +59,19 @@ export default function Dashboard() {
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       setLoading(true);
+      setLoadFailed(false);
       try {
         const response = await fetch(`/api/v2/places?${params}`, { signal: controller.signal });
         if (!response.ok) throw new Error(`API ${response.status}`);
         const body = await response.json();
         setPlaces(body.items ?? []);
       } catch (error) {
-        if ((error as Error).name !== "AbortError") setPlaces([]);
+        if ((error as Error).name !== "AbortError") {
+          setPlaces([]);
+          setLoadFailed(true);
+        }
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }, 250);
     return () => {
@@ -101,6 +107,9 @@ export default function Dashboard() {
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
     );
   }
+
+  const resultStatus = buildResultStatus({ loading, failed: loadFailed, count: places.length });
+  const resultStatusClass = loading || loadFailed || places.length === 0 ? "empty" : "sr-only";
 
   return (
     <div className="shell">
@@ -149,7 +158,11 @@ export default function Dashboard() {
               <button type="button" onClick={locateUser}>現在地から探す</button>
               {userLocation && <button type="button" className="secondary" onClick={() => setUserLocation(null)}>解除</button>}
             </div>
-            {locationStatus && <p className="location-status">{locationStatus}</p>}
+            {locationStatus && (
+              <p className="location-status" role="status" aria-live="polite">
+                {locationStatus}
+              </p>
+            )}
           </div>
           <div className="stats">
             {stats
@@ -158,10 +171,11 @@ export default function Dashboard() {
                 }`
               : "統計を読み込み中"}
           </div>
-          <div className="cards">
-            {loading && <p className="empty">読み込み中...</p>}
-            {!loading && places.map((place) => <FacilityCard place={place} key={place.id} />)}
-            {!loading && places.length === 0 && <p className="empty">条件に一致する施設がありません。</p>}
+          <p className={resultStatusClass} role="status" aria-live="polite" aria-atomic="true">
+            {resultStatus}
+          </p>
+          <div className="cards" role="list" aria-label="検索結果" aria-busy={loading}>
+            {!loading && !loadFailed && places.map((place) => <FacilityCard place={place} key={place.id} />)}
           </div>
         </aside>
         <MapView places={places} userLocation={userLocation} />

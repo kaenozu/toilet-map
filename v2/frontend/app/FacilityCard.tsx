@@ -35,7 +35,7 @@ export default function FacilityCard({ place }: { place: Place }) {
 
   const directions = `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`;
   return (
-    <article className="card">
+    <article className="card" role="listitem">
       <h2>{place.name}</h2>
       <p>{place.address || place.prefecture}</p>
       <div className="badges">
