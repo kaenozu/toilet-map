@@ -147,7 +147,8 @@ def build_list_order_clause(
     near_sort = normalized_sort in {"near", "distance", "距離順"} or "near" in normalized_sort
     if near_sort and user_lat is not None and user_lng is not None:
         return (
-            " ORDER BY ((lat - ?) * (lat - ?) + (lng - ?) * (lng - ?)) ASC, "
+            " ORDER BY CASE WHEN lat IS NULL OR lng IS NULL THEN 1 ELSE 0 END ASC, "
+            "((lat - ?) * (lat - ?) + (lng - ?) * (lng - ?)) ASC, "
             "COALESCE(toilet_score, 0) DESC, id ASC",
             [user_lat, user_lat, user_lng, user_lng],
         )
