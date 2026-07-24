@@ -93,7 +93,7 @@ def _build_score_rationale_html(t: ToiletDict) -> str:
     keywords_html = _build_keyword_tags(t.get("top_keywords", []))
     reviews_html = _build_review_html(t.get("sample_reviews", []))
 
-    if "toilet_score" in t and format_score(t.get("toilet_score")) == "—":
+    if format_score(t.get("toilet_score")) == "—":
         basis = "採点結果なし"
         method = "採点に必要な口コミ・星評価が不足しているため、現在は未採点です。"
     elif review_count > 0:
@@ -168,6 +168,7 @@ def build_popup_html(t: ToiletDict) -> str:
     confidence_text = f"{confidence_pct}%" if confidence_pct is not None else "—"
     confidence_bar_width = confidence_pct or 0
     toilet_review_count = max(0, int(t.get("toilet_review_count", 0) or 0))
+    rating_text = t["rating"] if t.get("rating") is not None else "-"
     phone_html = f'<span style="margin-right:6px;"><span aria-label="phone" role="img">📞</span>{esc(t["phone"])}</span>' if t.get("phone") else ""
     score_rationale_html = _build_score_rationale_html(t)
     link_html = _build_link_html(t.get("link", ""))
@@ -199,7 +200,7 @@ def build_popup_html(t: ToiletDict) -> str:
       </div>
 
       <div style="font-size:10px;color:#555;margin-bottom:1px;">📍 {addr_esc}</div>
-      <div style="font-size:10px;color:#555;"><span aria-label="rating" role="img">⭐</span>{t.get('rating', '-')} ({t.get('review_count', 0)}件) {phone_html}</div>
+      <div style="font-size:10px;color:#555;"><span aria-label="rating" role="img">⭐</span>{rating_text} ({t.get('review_count', 0)}件) {phone_html}</div>
       {score_rationale_html}
       {confidence_note_html}
       {link_html}
