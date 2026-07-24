@@ -175,7 +175,9 @@ def test_main_writes_success_and_failure_reports(monkeypatch: pytest.MonkeyPatch
     module = load_module()
     report_dir = tmp_path / "reports"
     monkeypatch.setattr(module, "build_report", lambda branch, sha: {"status": "passed"})
-    assert module.main(["--report-dir", str(report_dir)]) == 0
+    assert module.main(
+        ["--expected-branch", "main", "--expected-sha", "a" * 40, "--report-dir", str(report_dir)]
+    ) == 0
     assert json.loads(next(report_dir.glob("*.json")).read_text(encoding="utf-8"))["status"] == "passed"
 
     module = load_module()
@@ -185,5 +187,7 @@ def test_main_writes_success_and_failure_reports(monkeypatch: pytest.MonkeyPatch
         raise module.PreflightError("blocked")
 
     monkeypatch.setattr(module, "build_report", fail_report)
-    assert module.main(["--report-dir", str(report_dir)]) == 1
+    assert module.main(
+        ["--expected-branch", "main", "--expected-sha", "a" * 40, "--report-dir", str(report_dir)]
+    ) == 1
     assert json.loads(next(report_dir.glob("*.json")).read_text(encoding="utf-8"))["error"] == "blocked"
