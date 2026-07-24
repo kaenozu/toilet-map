@@ -53,6 +53,9 @@ data/.toilet_sync.lock
 data/*.bak
 batch/expansion_status.json
 
+# Preview rehearsal evidence
+/artifacts/preview-rehearsal/
+
 # IDE
 .idea/
 
