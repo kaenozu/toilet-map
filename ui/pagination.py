@@ -1,8 +1,7 @@
-"""
-ui/pagination.py
-ページネーション状態管理
-app.py から分離
-"""
+"""Pagination state and SQL offset helpers."""
+
+from __future__ import annotations
+
 import streamlit as st
 
 PER_PAGE = 20
@@ -19,10 +18,19 @@ def reset_page(filter_key: str) -> None:
     st.session_state.page_filter_key = filter_key
 
 
-def calc_pagination(total: int, page: int) -> tuple[int, int, int, int]:
-    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
-    start_idx = (page - 1) * PER_PAGE
-    end_idx = min(start_idx + PER_PAGE, total)
+def normalize_page(page: int, total_pages: int) -> int:
+    return min(max(1, int(page)), max(1, int(total_pages)))
+
+
+def calc_offset(page: int, per_page: int = PER_PAGE) -> int:
+    return (max(1, int(page)) - 1) * max(1, int(per_page))
+
+
+def calc_pagination(total: int, page: int, per_page: int = PER_PAGE) -> tuple[int, int, int, int]:
+    safe_per_page = max(1, per_page)
+    total_pages = max(1, (total + safe_per_page - 1) // safe_per_page)
+    start_idx = (page - 1) * safe_per_page
+    end_idx = min(start_idx + safe_per_page, total)
     return total_pages, start_idx, end_idx, page
 
 
@@ -47,4 +55,3 @@ def render_pagination(total: int, page: int, total_pages: int, t: dict[str, str]
         if st.button(t["next"], disabled=page >= total_pages, key="pagination_next", use_container_width=True):
             st.session_state.page = min(total_pages, page + 1)
             st.rerun()
-
