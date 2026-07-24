@@ -37,8 +37,8 @@ def _legacy_summary(toilets: list[ToiletDict]) -> dict[str, object]:
     return {"missing": _calc_missing_stats(toilets), "pref_counts": pref_counts, "score_bins": score_bins}
 
 
-def _coverage_percentage(total: object, missing: object) -> int:
-    """Return a bounded whole-number coverage percentage for one quality dimension."""
+def _missing_percentage(total: object, missing: object) -> int:
+    """Return a bounded whole-number missing-data percentage."""
     try:
         total_count = max(0, int(total))
         missing_count = max(0, int(missing))
@@ -46,30 +46,31 @@ def _coverage_percentage(total: object, missing: object) -> int:
         return 0
     if total_count == 0:
         return 0
-    complete_count = max(0, total_count - min(missing_count, total_count))
-    return round(complete_count * 100 / total_count)
+    return round(min(missing_count, total_count) * 100 / total_count)
 
 
 def _build_data_quality_summary_text(missing: dict, t: dict) -> str:
-    """Summarize field coverage so raw missing counts have immediate context."""
-    total = missing.get("total", 0)
+    """Add ratios to the quality counts without introducing another dense chart."""
     try:
-        total_count = max(0, int(total))
+        total = max(0, int(missing.get("total", 0)))
     except (TypeError, ValueError):
-        total_count = 0
-    if total_count == 0:
-        return t.get("dq_coverage_empty", "Coverage cannot be calculated because no data is available.")
+        total = 0
+    if total == 0:
+        return f"{t.get('dq_total', 'Total')}: 0"
 
-    template = t.get(
-        "dq_coverage_summary",
-        "Coverage: score {score}% · address {address}% · prefecture {prefecture}% · reviews {reviews}%",
+    dimensions = (
+        (t.get("dq_missing_score", "Missing Score"), missing.get("no_score", 0)),
+        (t.get("dq_missing_address", "Missing Address"), missing.get("no_address", 0)),
+        (t.get("dq_missing_reviews", "Zero Reviews"), missing.get("no_reviews", 0)),
     )
-    return template.format(
-        score=_coverage_percentage(total_count, missing.get("no_score", 0)),
-        address=_coverage_percentage(total_count, missing.get("no_address", 0)),
-        prefecture=_coverage_percentage(total_count, missing.get("no_prefecture", 0)),
-        reviews=_coverage_percentage(total_count, missing.get("no_reviews", 0)),
-    )
+    parts = []
+    for label, value in dimensions:
+        try:
+            count = max(0, int(value))
+        except (TypeError, ValueError):
+            count = 0
+        parts.append(f"{label}: {_missing_percentage(total, count)}% ({min(count, total)}/{total})")
+    return " · ".join(parts)
 
 
 def render_data_quality(meta: dict, data: list[ToiletDict] | dict[str, object], t: dict) -> None:
