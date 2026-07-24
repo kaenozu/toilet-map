@@ -1,28 +1,40 @@
-"""Streamlit toilet cleanliness map."""
+"""Streamlit toilet cleanliness map backed by bounded SQLite queries."""
 
+from __future__ import annotations
+
+import csv
+import io
+import json
 import logging
 from time import perf_counter
-from typing import cast
 
-import pandas as pd
 import streamlit as st
 from streamlit_folium import st_folium
 
 from app_config import TILE_OPTIONS
 from ui.components import build_data_freshness_text, build_result_context_text, render_score_legend, render_toilet_card
-from ui.data_loader import get_data_cache_token, get_prefectures, load_toilet_data, toilets_to_dataframe
 from ui.data_quality import render_data_quality
-from ui.filters import filter_toilets, search_toilets
+from ui.filters import _extract_bounds_coordinates
 from ui.i18n import APP_TITLE, DEFAULT_LANGUAGE, get_language_strings
-from ui.map_builder import build_map, calc_map_center
-from ui.pagination import calc_pagination, init_page_state, render_pagination, reset_page
+from ui.map_builder import MAX_MAP_MARKERS, build_map, calc_map_center
+from ui.pagination import PER_PAGE, calc_pagination, init_page_state, normalize_page, render_pagination, reset_page
 from ui.query_params import (
     apply_language_query_param,
     build_query_params_from_state,
     read_query_params,
     write_query_params,
 )
-from ui.sidebar import render_sidebar
+from ui.sidebar import SidebarResult, render_sidebar
+from ui.sql_data_loader import (
+    TOILET_COLUMNS,
+    count_items,
+    load_data_quality_summary,
+    load_list_items,
+    load_map_items,
+    load_metadata,
+    load_prefecture_stats,
+    load_prefectures,
+)
 from ui.stats import render_stats
 from ui.styles import DARK_MODE_CSS, MOBILE_CSS
 from ui.types import ToiletDict
@@ -30,64 +42,104 @@ from ui.types import ToiletDict
 logger = logging.getLogger(__name__)
 
 
-def _load_and_prepare() -> tuple[dict, pd.DataFrame, list[str], dict, dict, dict, list]:
+def _load_base_data() -> tuple[dict, list[str], dict, dict, dict, dict]:
     query_params = read_query_params()
     apply_language_query_param(query_params)
     current_lang = st.session_state.get("lang_select", DEFAULT_LANGUAGE)
     translations = get_language_strings(current_lang)
-    data = load_toilet_data(get_data_cache_token())
-    metadata = data["metadata"]
-    toilets = data["toilets"]
-    dataframe = toilets_to_dataframe(toilets)
-    return metadata, dataframe, get_prefectures(dataframe), data.get("pref_stats", {}), translations, query_params, toilets
+    return (
+        load_metadata(),
+        load_prefectures(),
+        load_prefecture_stats(),
+        load_data_quality_summary(),
+        translations,
+        query_params,
+    )
 
 
-def _process_filters(
-    dataframe: pd.DataFrame,
-    selected_prefecture: str,
-    internal_filter: str,
-    search_query: str,
-    sort_order: str,
-    user_location: tuple | None,
-    translations: dict,
-) -> tuple[pd.DataFrame, float]:
-    if dataframe.empty:
-        return dataframe, 0.0
-    user_lat, user_lng = user_location if user_location else (None, None)
-    started_at = perf_counter()
-    filtered = filter_toilets(dataframe, internal_filter, selected_prefecture, user_lat, user_lng)
-    filtered = search_toilets(filtered, search_query)
-    if sort_order == translations["sort_near"] and user_location and "distance" in filtered.columns:
-        filtered = filtered.sort_values("distance", ascending=True)
-    elif "toilet_score" in filtered.columns:
-        filtered = filtered.sort_values("toilet_score", ascending=False)
-    return filtered, (perf_counter() - started_at) * 1000
+def _build_filters(sidebar: SidebarResult, internal_filter: str) -> dict[str, object]:
+    return {
+        "prefecture": sidebar.selected_pref,
+        "filter_type": internal_filter,
+        "search_query": sidebar.search_query,
+        "user_location": sidebar.user_location,
+    }
+
+
+def _filter_key(filters: dict[str, object], sort_key: str) -> str:
+    location = filters.get("user_location")
+    location_key = ""
+    if isinstance(location, tuple) and len(location) >= 2:
+        location_key = f"{float(location[0]):.5f},{float(location[1]):.5f}"
+    return "|".join(
+        [
+            str(filters.get("prefecture") or "全て"),
+            str(filters.get("filter_type") or "すべて"),
+            str(filters.get("search_query") or ""),
+            sort_key,
+            location_key,
+        ]
+    )
+
+
+def _prepare_page(filter_key: str, total_items: int) -> tuple[int, int]:
+    init_page_state()
+    reset_page(filter_key)
+    requested_page = int(st.session_state.get("page", 1))
+    total_pages, _, _, _ = calc_pagination(total_items, requested_page, PER_PAGE)
+    page = normalize_page(requested_page, total_pages)
+    if page != requested_page:
+        st.session_state.page = page
+    return page, total_pages
+
+
+def _current_map_bounds(filter_key: str) -> dict | None:
+    if st.session_state.get("map_filter_key") != filter_key:
+        st.session_state["map_filter_key"] = filter_key
+        st.session_state.pop("map_bounds", None)
+    bounds = st.session_state.get("map_bounds")
+    return bounds if isinstance(bounds, dict) else None
+
+
+def _remember_map_bounds(map_state: object) -> None:
+    if not isinstance(map_state, dict):
+        return
+    bounds = map_state.get("bounds")
+    if isinstance(bounds, dict) and _extract_bounds_coordinates(bounds):
+        st.session_state["map_bounds"] = bounds
+
+
+def _items_to_csv(items: list[ToiletDict]) -> bytes:
+    output = io.StringIO(newline="")
+    fieldnames = [column for column in TOILET_COLUMNS if column not in {"sample_reviews_json"}]
+    if any("distance" in item for item in items):
+        fieldnames.append("distance")
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    for item in items:
+        row = dict(item)
+        if "top_keywords" in row:
+            row["top_keywords"] = json.dumps(row["top_keywords"], ensure_ascii=False)
+        writer.writerow(row)
+    return output.getvalue().encode("utf-8-sig")
 
 
 def _render_main_content(
-    filtered: pd.DataFrame,
+    total_items: int,
+    total_pages: int,
+    page: int,
+    list_items: list[ToiletDict],
     map_items: list[ToiletDict],
     metadata: dict,
+    data_quality_summary: dict,
     translations: dict,
     selected_prefecture: str,
-    sort_order: str,
     dark_mode: bool,
     selected_tile: str,
-    toilets: list,
-    filter_elapsed_ms: float,
+    query_elapsed_ms: float,
     prefecture_stats: dict,
-    internal_filter: str,
-    search_query: str,
-) -> tuple[bool, int, pd.DataFrame]:
-    del sort_order
+) -> bool:
     map_lat, map_lng, map_zoom = calc_map_center(selected_prefecture, metadata, prefecture_stats)
-    total_items = len(filtered)
-    init_page_state()
-    reset_page(f"{selected_prefecture}|{internal_filter}|{search_query}")
-    page = st.session_state.get("page", 1)
-    total_pages, start_index, end_index, page = calc_pagination(total_items, page)
-    display_items = filtered.iloc[start_index:end_index] if total_items else filtered
-
     st.markdown(f"**{total_items}{translations['showing']}**")
     render_score_legend()
 
@@ -97,27 +149,34 @@ def _render_main_content(
         map_elapsed_ms = (perf_counter() - map_started_at) * 1000
         st.caption(
             build_result_context_text(
-                len(display_items), len(map_items), filter_elapsed_ms, map_elapsed_ms, translations
+                len(list_items), len(map_items), query_elapsed_ms, map_elapsed_ms, translations
             )
         )
-        st_folium(map_object, height=500, returned_objects=[], use_container_width=True)
+        map_state = st_folium(
+            map_object,
+            height=500,
+            returned_objects=["bounds"],
+            use_container_width=True,
+        )
+        _remember_map_bounds(map_state)
     except Exception:
         logger.exception("Map rendering failed")
         st.error(translations.get("map_render_failed", "地図を表示できませんでした。条件を変更して再試行してください。"))
 
     render_stats(metadata, map_items, translations)
-    render_data_quality(metadata, toilets, translations)
+    render_data_quality(metadata, data_quality_summary, translations)
     if total_items:
         render_pagination(total_items, page, total_pages, translations)
-    if display_items.empty:
+    if not list_items:
         st.info(translations["no_results"])
     else:
         st.divider()
         st.markdown('<div role="list">', unsafe_allow_html=True)
-        for rank, (_, row) in enumerate(display_items.iterrows(), 1):
-            render_toilet_card(row.to_dict(), rank=rank, meta=metadata)
+        rank_offset = (page - 1) * PER_PAGE
+        for rank, item in enumerate(list_items, rank_offset + 1):
+            render_toilet_card(item, rank=rank, meta=metadata)
         st.markdown("</div>", unsafe_allow_html=True)
-    return dark_mode, page, display_items
+    return dark_mode
 
 
 def _inject_html() -> None:
@@ -153,46 +212,48 @@ def _inject_html() -> None:
 def main() -> None:
     st.set_page_config(page_title=APP_TITLE, page_icon="🚽", layout="wide")
     _inject_html()
-    metadata, dataframe, prefectures, prefecture_stats, translations, query_params, toilets = _load_and_prepare()
+    metadata, prefectures, prefecture_stats, data_quality_summary, translations, query_params = _load_base_data()
     sidebar = render_sidebar(translations, prefectures, query_params)
     translations = sidebar.t
     internal_filter = sidebar.translated_to_internal[sidebar.filter_type]
-    filtered, filter_elapsed_ms = _process_filters(
-        dataframe,
-        sidebar.selected_pref,
-        internal_filter,
-        sidebar.search_query,
-        sidebar.sort_order,
-        sidebar.user_location,
-        translations,
-    )
+    filters = _build_filters(sidebar, internal_filter)
+    sort_key = "near" if sidebar.sort_order == translations["sort_near"] else "score"
+    filter_key = _filter_key(filters, sort_key)
+
+    query_started_at = perf_counter()
+    total_items = count_items(filters)
+    page, total_pages = _prepare_page(filter_key, total_items)
+    map_bounds = _current_map_bounds(filter_key)
+    list_items = load_list_items(filters, sort_key, page=page, per_page=PER_PAGE)
+    map_items = load_map_items(map_bounds, filters, limit=MAX_MAP_MARKERS)
+    query_elapsed_ms = (perf_counter() - query_started_at) * 1000
+
     st.title(translations["title"])
     st.caption(build_data_freshness_text(metadata, translations))
-    dark_mode, page, display_items = _render_main_content(
-        filtered,
-        cast(list[ToiletDict], filtered.to_dict("records")),
+    dark_mode = _render_main_content(
+        total_items,
+        total_pages,
+        page,
+        list_items,
+        map_items,
         metadata,
+        data_quality_summary,
         translations,
         sidebar.selected_pref,
-        sidebar.sort_order,
         sidebar.dark_mode,
         sidebar.selected_tile,
-        toilets,
-        filter_elapsed_ms,
+        query_elapsed_ms,
         prefecture_stats,
-        internal_filter,
-        sidebar.search_query,
     )
     if dark_mode:
         st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
     if st.session_state.get("_show_shortcuts", False):
         st.info(translations["shortcut_info"])
-    if not display_items.empty:
-        csv_data = filtered.to_csv(index=False).encode("utf-8-sig")
+    if list_items:
         st.download_button(
-            translations.get("csv_download", "📥 CSVダウンロード"),
-            csv_data,
-            f"toilets_{sidebar.selected_pref}.csv",
+            f"{translations.get('csv_download', '📥 CSVダウンロード')}（このページ）",
+            _items_to_csv(list_items),
+            f"toilets_{sidebar.selected_pref}_page_{page}.csv",
             "text/csv",
             use_container_width=True,
         )
