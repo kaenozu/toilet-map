@@ -9,26 +9,36 @@ import streamlit as st
 
 from app_config import SCORE_DISTRIBUTION_RANGES
 
+from .helpers import coerce_finite_float
 from .types import ToiletDict
 
 
+def _positive_scores(toilets: list[ToiletDict]) -> list[float]:
+    """平均・分布の対象となる有限の正スコアだけを返す。"""
+    scores: list[float] = []
+    for toilet in toilets:
+        score = coerce_finite_float(toilet.get("toilet_score"))
+        if score is not None and score > 0:
+            scores.append(score)
+    return scores
+
+
 def calc_avg_score(toilets: list[ToiletDict]) -> float:
-    scored = [t for t in toilets if t.get("toilet_score") is not None and t.get("toilet_score", 0) > 0]
+    scored = _positive_scores(toilets)
     if not scored:
         return 0.0
-    return sum(t["toilet_score"] for t in scored) / len(scored)
+    return sum(scored) / len(scored)
 
 
 def calc_score_distribution(toilets: list[ToiletDict]) -> list[dict[str, object]]:
-    scored = [t for t in toilets if t.get("toilet_score", 0) > 0]
+    scored = _positive_scores(toilets)
     if not scored:
         return []
     total = len(scored)
     counts = [0] * len(SCORE_DISTRIBUTION_RANGES)
-    for t in scored:
-        s = t["toilet_score"]
+    for score in scored:
         for i, (lo, hi, _, _) in enumerate(SCORE_DISTRIBUTION_RANGES):
-            if lo <= s < hi:
+            if lo <= score < hi:
                 counts[i] += 1
                 break
     result = []
