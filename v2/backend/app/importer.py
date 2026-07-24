@@ -1,3 +1,5 @@
+"""Legacy snapshot importer with compatibility and canonical dual writes."""
+
 from __future__ import annotations
 
 import gzip
@@ -10,7 +12,10 @@ from typing import Any
 from psycopg import Connection
 
 from .db import database
-from .scoring import SCORING_VERSION, score_reviews
+from .entities import upsert_legacy_entity
+from .legacy_identity import resolve_stable_key_collisions
+from .score_storage import store_dimension_observations
+from .scoring import SCORING_VERSION, score_review_dimensions, score_reviews
 
 
 def _records(payload: object) -> list[dict[str, Any]]:
@@ -78,15 +83,14 @@ def _reviews(record: dict[str, Any]) -> list[dict[str, Any]]:
             payload = review
         else:
             continue
-        if not body:
-            continue
-        result.append(
-            {
-                "external_id": str(payload.get("review_id") or payload.get("id") or index),
-                "body": body,
-                "rating": payload.get("rating") or payload.get("stars"),
-            }
-        )
+        if body:
+            result.append(
+                {
+                    "external_id": str(payload.get("review_id") or payload.get("id") or index),
+                    "body": body,
+                    "rating": payload.get("rating") or payload.get("stars"),
+                }
+            )
     return result
 
 
@@ -98,7 +102,9 @@ def normalized_records(records: Iterable[dict[str, Any]]) -> Iterator[dict[str, 
             continue
         lat, lon = coordinates
         reviews = _reviews(record)
-        score_result = score_reviews(review["body"] for review in reviews)
+        review_bodies = [review["body"] for review in reviews]
+        score_result = score_reviews(review_bodies)
+        dimension_scores = score_review_dimensions(review_bodies)
         imported_score = _first(record, "toilet_score", "score")
         imported_confidence = _first(record, "confidence")
         known = {
@@ -120,7 +126,20 @@ def normalized_records(records: Iterable[dict[str, Any]]) -> Iterator[dict[str, 
             "confidence": imported_confidence if imported_confidence is not None else score_result.confidence,
             "review_count": int(_first(record, "review_count", "user_ratings_total", default=len(reviews)) or 0),
             "reviews": reviews,
-            "score_explanation": score_result.explanation,
+            "score_explanation": {
+                **score_result.explanation,
+                "dimensions": {
+                    dimension.value: {
+                        "score": result.score,
+                        "confidence": result.confidence,
+                        "evidence_count": result.evidence_count,
+                        "positive_matches": result.positive_matches,
+                        "negative_matches": result.negative_matches,
+                    }
+                    for dimension, result in dimension_scores.items()
+                },
+            },
+            "dimension_scores": dimension_scores,
             "attributes": attributes,
             "raw_payload": record,
         }
@@ -140,32 +159,52 @@ def create_dataset(connection: Connection, *, source: str, source_metadata: dict
     return int(row["id"])
 
 
+def _insert_reviews(
+    connection: Connection,
+    *,
+    place_id: int,
+    source: str,
+    reviews: list[dict[str, Any]],
+) -> None:
+    for review in reviews:
+        connection.execute(
+            """
+            INSERT INTO reviews (place_id, provider, external_id, body, rating)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (place_id, provider, external_id) DO NOTHING
+            """,
+            (place_id, source, review["external_id"], review["body"], review["rating"]),
+        )
+
+
 def import_legacy(path: Path, *, source: str = "legacy-json") -> tuple[int, int]:
     records, metadata = load_legacy_snapshot(path)
-    normalized = list(normalized_records(records))
+    normalized = resolve_stable_key_collisions(normalized_records(records))
     if not normalized:
         raise ValueError("snapshot contains no valid places")
 
     with database() as connection:
         dataset_id = create_dataset(connection, source=source, source_metadata=metadata)
         for item in normalized:
+            entity_ids = upsert_legacy_entity(connection, dataset_id=dataset_id, provider=source, item=item)
             row = connection.execute(
                 """
                 INSERT INTO places (
-                    dataset_version_id, stable_key, name, address, prefecture, category,
-                    location, toilet_score, confidence, review_count, attributes
+                  dataset_version_id, stable_key, name, address, prefecture, category,
+                  location, toilet_score, confidence, review_count, attributes,
+                  facility_id, source_record_id
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s,
-                    ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
-                    %s, %s, %s, %s::jsonb
-                )
-                RETURNING id
+                  %s, %s, %s, %s, %s, %s,
+                  ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
+                  %s, %s, %s, %s::jsonb, %s, %s
+                ) RETURNING id
                 """,
                 (
                     dataset_id, item["stable_key"], item["name"], item["address"],
                     item["prefecture"], item["category"], item["longitude"], item["latitude"],
                     item["toilet_score"], item["confidence"], item["review_count"],
                     json.dumps(item["attributes"], ensure_ascii=False),
+                    entity_ids.facility_id, entity_ids.source_record_id,
                 ),
             ).fetchone()
             if row is None:
@@ -181,15 +220,7 @@ def import_legacy(path: Path, *, source: str = "legacy-json") -> tuple[int, int]
                     json.dumps(item["raw_payload"], ensure_ascii=False),
                 ),
             )
-            for review in item["reviews"]:
-                connection.execute(
-                    """
-                    INSERT INTO reviews (place_id, provider, external_id, body, rating)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (place_id, provider, external_id) DO NOTHING
-                    """,
-                    (place_id, source, review["external_id"], review["body"], review["rating"]),
-                )
+            _insert_reviews(connection, place_id=place_id, source=source, reviews=item["reviews"])
             connection.execute(
                 """
                 INSERT INTO score_history (place_id, model_version, score, confidence, explanation)
@@ -199,6 +230,12 @@ def import_legacy(path: Path, *, source: str = "legacy-json") -> tuple[int, int]
                     place_id, SCORING_VERSION, item["toilet_score"], item["confidence"],
                     json.dumps(item["score_explanation"], ensure_ascii=False),
                 ),
+            )
+            store_dimension_observations(
+                connection,
+                facility_id=entity_ids.facility_id,
+                source_record_id=entity_ids.source_record_id,
+                dimension_scores=item["dimension_scores"],
             )
         connection.execute(
             "UPDATE dataset_versions SET record_count = %s WHERE id = %s",

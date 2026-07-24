@@ -20,8 +20,24 @@ jobs:
           python-version: '3.11'
       - name: Install Ruff
         run: pip install ruff
-      - name: Lint with Ruff
-        run: ruff check .
+      - name: Capture Ruff output
+        id: ruff
+        shell: bash
+        run: |
+          set +e
+          ruff check . --output-format=concise 2>&1 | tee ruff-output.txt
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload Ruff output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruff-output
+          path: ruff-output.txt
+      - name: Enforce Ruff
+        if: steps.ruff.outputs.status != '0'
+        run: exit 1
 
   test:
     strategy:
@@ -34,12 +50,45 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
+      - name: Capture dependency installation
+        id: dependencies
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: Type check with mypy
-        run: mypy app.py app_config.py ui/ batch/ --ignore-missing-imports --follow-imports=silent
+          set +e
+          {
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt
+          } 2>&1 | tee dependency-output.txt
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload dependency output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-output-${{ matrix.python-version }}
+          path: dependency-output.txt
+      - name: Enforce dependency installation
+        if: steps.dependencies.outputs.status != '0'
+        run: exit 1
+      - name: Capture mypy output
+        id: mypy
+        shell: bash
+        run: |
+          set +e
+          mypy app.py app_config.py ui/ batch/ --ignore-missing-imports --follow-imports=silent 2>&1 | tee mypy-output.txt
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload mypy output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mypy-output-${{ matrix.python-version }}
+          path: mypy-output.txt
+      - name: Enforce mypy
+        if: steps.mypy.outputs.status != '0'
+        run: exit 1
       - name: Capture test output
         id: pytest
         shell: bash

@@ -1,3 +1,5 @@
+"""Database connection and schema migration entrypoints."""
+
 from __future__ import annotations
 
 import os
@@ -7,6 +9,8 @@ from pathlib import Path
 
 from psycopg import Connection, connect
 from psycopg.rows import dict_row
+
+from .migrations import apply_migrations
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
@@ -20,9 +24,9 @@ def database() -> Iterator[Connection]:
         yield connection
 
 
-def apply_schema(schema_path: Path | None = None) -> None:
-    path = schema_path or Path(__file__).resolve().parents[1] / "schema.sql"
-    sql = path.read_text(encoding="utf-8")
+def apply_schema(migrations_path: Path | None = None) -> list[str]:
+    """Apply all pending versioned migrations and return their versions."""
     with database() as connection:
-        connection.execute(sql)
+        applied = apply_migrations(connection, migrations_path)
         connection.commit()
+    return applied

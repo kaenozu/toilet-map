@@ -3,18 +3,28 @@
 from __future__ import annotations
 
 import gzip
+import importlib
 import json
 import os
 import sqlite3
 import tempfile
 from pathlib import Path
+from types import ModuleType
 
-try:
-    from .db_utils import DB_PATH, JSON_PATH, database_requires_rebuild
-    from .to_sqlite import _convert_core
-except ImportError:
-    from db_utils import DB_PATH, JSON_PATH, database_requires_rebuild
-    from to_sqlite import _convert_core
+
+def _load_module(name: str) -> ModuleType:
+    if __package__:
+        return importlib.import_module(f".{name}", package=__package__)
+    return importlib.import_module(name)
+
+
+_db_utils = _load_module("db_utils")
+_to_sqlite = _load_module("to_sqlite")
+
+DB_PATH = _db_utils.DB_PATH
+JSON_PATH = _db_utils.JSON_PATH
+database_requires_rebuild = _db_utils.database_requires_rebuild
+_convert_core = _to_sqlite._convert_core
 
 MANIFEST_PATH = os.path.join(os.path.dirname(DB_PATH), "snapshot.json")
 

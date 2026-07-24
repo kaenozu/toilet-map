@@ -2,9 +2,14 @@
 batch/cli_parser.py
 scrape_runner.py の CLI 引数解析とクエリファイルからの都市・県自動検出
 """
+
 import argparse
+import logging
 import os
 import re
+import sys
+
+logger = logging.getLogger(__name__)
 
 FILTER_CITY = os.environ.get("CITY", "")
 FILTER_PREF = os.environ.get("PREFECTURE", "")
@@ -20,14 +25,34 @@ def _positive_int(value: str) -> int:
     return parsed
 
 
-def parse_args() -> dict:
+def parse_args(*, strict: bool | None = None) -> dict:
+    """Parse CLI options with package-strict and direct-script compatible modes.
+
+    Package imports are used by the maintained runner and reject malformed limits.
+    The legacy direct-script import path keeps its historical warning-and-continue
+    behavior so existing Windows automation does not abort unexpectedly.
+    """
+    if strict is None:
+        strict = bool(__package__)
     parser = argparse.ArgumentParser(description="Run resumable toilet-map scraping")
     parser.add_argument("--city", default=FILTER_CITY)
     parser.add_argument("--prefecture", default=FILTER_PREF)
     parser.add_argument("--progress-file")
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--max-queries", type=_positive_int)
-    namespace = parser.parse_args()
+    parser.add_argument("--max-queries")
+    namespace, unknown = parser.parse_known_args(sys.argv[1:])
+    if unknown:
+        logger.warning("Ignoring unknown CLI arguments: %s", " ".join(unknown))
+
+    raw_max_queries = namespace.max_queries
+    if raw_max_queries is not None:
+        try:
+            namespace.max_queries = _positive_int(raw_max_queries)
+        except argparse.ArgumentTypeError as exc:
+            if strict:
+                parser.error(f"argument --max-queries: {exc}")
+            logger.warning("Invalid --max-queries value: %s", raw_max_queries)
+            namespace.max_queries = None
     return vars(namespace)
 
 
@@ -56,7 +81,8 @@ def detect_city_from_queries(queries_path: str) -> tuple[str, str]:
                         if len(candidate) >= 2 and candidate not in seen_in_line:
                             seen_in_line.add(candidate)
                             city_counts[candidate] = city_counts.get(candidate, 0) + 1
-    except OSError:
+    except OSError as exc:
+        logger.warning("Failed to read query file %s: %s", queries_path, exc)
         return city, pref
 
     if not city and city_counts:

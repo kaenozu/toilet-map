@@ -1,8 +1,10 @@
+// Main public search dashboard for the immutable published read model.
 "use client";
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
-import type { Place } from "./MapView";
+import FacilityCard from "./FacilityCard";
+import type { Place, UserLocation } from "./types";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false });
 
@@ -12,16 +14,25 @@ type Stats = {
   average_score: number | null;
   published_at?: string | null;
 };
-
-type Facets = { prefectures: { value: string; count: number }[] };
+type Facets = {
+  prefectures: { value: string; count: number }[];
+  categories: { value: string; count: number }[];
+};
 
 export default function Dashboard() {
   const [places, setPlaces] = useState<Place[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [facets, setFacets] = useState<Facets>({ prefectures: [] });
+  const [facets, setFacets] = useState<Facets>({ prefectures: [], categories: [] });
   const [query, setQuery] = useState("");
   const [prefecture, setPrefecture] = useState("");
   const [minScore, setMinScore] = useState("");
+  const [minTrust, setMinTrust] = useState("");
+  const [wheelchair, setWheelchair] = useState(false);
+  const [changingTable, setChangingTable] = useState(false);
+  const [freeOnly, setFreeOnly] = useState(false);
+  const [open24h, setOpen24h] = useState(false);
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+  const [locationStatus, setLocationStatus] = useState("");
   const [loading, setLoading] = useState(true);
 
   const params = useMemo(() => {
@@ -29,17 +40,25 @@ export default function Dashboard() {
     if (query.trim()) value.set("q", query.trim());
     if (prefecture) value.set("prefecture", prefecture);
     if (minScore) value.set("min_score", minScore);
+    if (minTrust) value.set("min_trust", minTrust);
+    if (wheelchair) value.set("wheelchair", "true");
+    if (changingTable) value.set("changing_table", "true");
+    if (freeOnly) value.set("fee", "false");
+    if (open24h) value.set("open_24h", "true");
+    if (userLocation) {
+      value.set("latitude", String(userLocation.latitude));
+      value.set("longitude", String(userLocation.longitude));
+      value.set("radius_m", "10000");
+    }
     return value.toString();
-  }, [query, prefecture, minScore]);
+  }, [query, prefecture, minScore, minTrust, wheelchair, changingTable, freeOnly, open24h, userLocation]);
 
   useEffect(() => {
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const response = await fetch(`/api/v2/places?${params}`, {
-          signal: controller.signal,
-        });
+        const response = await fetch(`/api/v2/places?${params}`, { signal: controller.signal });
         if (!response.ok) throw new Error(`API ${response.status}`);
         const body = await response.json();
         setPlaces(body.items ?? []);
@@ -67,11 +86,30 @@ export default function Dashboard() {
       .catch(() => undefined);
   }, []);
 
+  function locateUser() {
+    if (!navigator.geolocation) {
+      setLocationStatus("このブラウザでは現在地を取得できません。");
+      return;
+    }
+    setLocationStatus("現在地を取得中...");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+        setLocationStatus("現在地から10km以内を近い順に表示しています。");
+      },
+      () => setLocationStatus("現在地を取得できませんでした。ブラウザの権限を確認してください。"),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    );
+  }
+
   return (
     <div className="shell">
       <header className="header">
-        <h1>トイレきれい度マップ</h1>
-        <p>公開済みデータセットから、近くの清潔なトイレを探せます。</p>
+        <div>
+          <h1>トイレきれい度マップ</h1>
+          <p>清潔度だけでなく、情報の新しさと信頼度を確認できます。</p>
+        </div>
+        <a className="admin-link" href="/admin">データ管理</a>
       </header>
       <div className="content">
         <aside className="sidebar">
@@ -82,28 +120,36 @@ export default function Dashboard() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
-            <select
-              aria-label="都道府県"
-              value={prefecture}
-              onChange={(event) => setPrefecture(event.target.value)}
-            >
+            <select aria-label="都道府県" value={prefecture} onChange={(event) => setPrefecture(event.target.value)}>
               <option value="">すべての都道府県</option>
               {facets.prefectures.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.value} ({item.count})
-                </option>
+                <option key={item.value} value={item.value}>{item.value} ({item.count})</option>
               ))}
             </select>
-            <select
-              aria-label="最低スコア"
-              value={minScore}
-              onChange={(event) => setMinScore(event.target.value)}
-            >
-              <option value="">スコア指定なし</option>
-              <option value="80">80点以上</option>
-              <option value="65">65点以上</option>
-              <option value="50">50点以上</option>
-            </select>
+            <div className="filter-row">
+              <select aria-label="最低スコア" value={minScore} onChange={(event) => setMinScore(event.target.value)}>
+                <option value="">清潔度指定なし</option>
+                <option value="80">80点以上</option>
+                <option value="65">65点以上</option>
+                <option value="50">50点以上</option>
+              </select>
+              <select aria-label="最低信頼度" value={minTrust} onChange={(event) => setMinTrust(event.target.value)}>
+                <option value="">信頼度指定なし</option>
+                <option value="80">信頼度 高</option>
+                <option value="55">信頼度 中以上</option>
+              </select>
+            </div>
+            <div className="checks">
+              <label><input type="checkbox" checked={wheelchair} onChange={(event) => setWheelchair(event.target.checked)} />車椅子対応</label>
+              <label><input type="checkbox" checked={changingTable} onChange={(event) => setChangingTable(event.target.checked)} />おむつ交換台</label>
+              <label><input type="checkbox" checked={freeOnly} onChange={(event) => setFreeOnly(event.target.checked)} />無料</label>
+              <label><input type="checkbox" checked={open24h} onChange={(event) => setOpen24h(event.target.checked)} />24時間</label>
+            </div>
+            <div className="location-row">
+              <button type="button" onClick={locateUser}>現在地から探す</button>
+              {userLocation && <button type="button" className="secondary" onClick={() => setUserLocation(null)}>解除</button>}
+            </div>
+            {locationStatus && <p className="location-status">{locationStatus}</p>}
           </div>
           <div className="stats">
             {stats
@@ -114,22 +160,11 @@ export default function Dashboard() {
           </div>
           <div className="cards">
             {loading && <p className="empty">読み込み中...</p>}
-            {!loading &&
-              places.map((place) => (
-                <article className="card" key={place.id}>
-                  <h2>{place.name}</h2>
-                  <p>{place.address || place.prefecture}</p>
-                  <p className="score">
-                    きれい度: {place.toilet_score == null ? "未評価" : `${place.toilet_score}点`}
-                  </p>
-                </article>
-              ))}
-            {!loading && places.length === 0 && (
-              <p className="empty">条件に一致する施設がありません。</p>
-            )}
+            {!loading && places.map((place) => <FacilityCard place={place} key={place.id} />)}
+            {!loading && places.length === 0 && <p className="empty">条件に一致する施設がありません。</p>}
           </div>
         </aside>
-        <MapView places={places} />
+        <MapView places={places} userLocation={userLocation} />
       </div>
     </div>
   );

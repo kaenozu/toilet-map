@@ -1,0 +1,78 @@
+# Validate that a clean Docker Compose environment can initialize, import, and serve v2.
+name: V2 Compose Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'v2/**'
+      - '.github/workflows/v2-compose-smoke.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'v2/**'
+      - '.github/workflows/v2-compose-smoke.yml'
+
+concurrency:
+  group: v2-compose-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate Compose configuration
+        run: docker compose -f v2/docker-compose.yml config --quiet
+      - name: Build images
+        run: docker compose -f v2/docker-compose.yml build --quiet
+      - name: Start clean PostgreSQL/PostGIS
+        run: docker compose -f v2/docker-compose.yml up -d db
+      - name: Import and publish the canonical dataset
+        shell: bash
+        run: |
+          set +e
+          docker compose -f v2/docker-compose.yml --profile tools run --rm migrate \
+            >v2-compose-migrate.log 2>&1
+          status=$?
+          tail -n 100 v2-compose-migrate.log
+          exit "$status"
+      - name: Upload migration diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-compose-migrate-log
+          path: v2-compose-migrate.log
+          if-no-files-found: error
+      - name: Start backend and frontend
+        run: docker compose -f v2/docker-compose.yml up -d backend frontend
+      - name: Verify backend health and published data
+        shell: bash
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8000/health
+          curl -fsS 'http://127.0.0.1:8000/api/v2/places?limit=1' \
+            | python -c 'import json, sys; payload = json.load(sys.stdin); assert payload["total"] > 0; assert payload["items"]'
+      - name: Verify frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000 >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:3000 >/dev/null
+      - name: Show container logs
+        if: failure()
+        run: docker compose -f v2/docker-compose.yml logs --no-color --tail=100
+      - name: Clean up Compose resources
+        if: always()
+        run: docker compose -f v2/docker-compose.yml down -v --remove-orphans
