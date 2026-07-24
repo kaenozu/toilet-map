@@ -133,6 +133,7 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
     color, emoji, _ = get_score_style(t.get("toilet_score"))
     confidence_pct = get_confidence_percentage(t.get("confidence"))
     confidence_text = f"{confidence_pct}%" if confidence_pct is not None else "—"
+    rating_text = t["rating"] if t.get("rating") is not None else "-"
 
     rank_html = f'<span style="color:#999;font-weight:600;min-width:24px;">#{rank}</span>' if rank else ""
 
@@ -174,7 +175,7 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
                 &#x1F4CD; {esc(t.get('address', ''))}{freshness_badge}
             </div>
             <div class="toilet-card-meta" style="font-size:11px;color:#666666;">
-                &#x2B50; {t.get('rating', '-')} &#xB7; 口コミ {t.get('review_count', 0)}件 &#xB7; 信頼度 {confidence_text}
+                &#x2B50; {rating_text} &#xB7; 口コミ {t.get('review_count', 0)}件 &#xB7; 信頼度 {confidence_text}
             </div>
             <div style="font-size:11px;margin-top:4px;">
                 {links_html}
