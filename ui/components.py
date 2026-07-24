@@ -6,7 +6,7 @@ from datetime import date, datetime
 
 import streamlit as st
 
-from .helpers import esc, get_score_style, safe_href
+from .helpers import esc, format_score, get_confidence_percentage, get_score_style, safe_href
 from .types import ToiletDict
 
 FRESH_DATA_MAX_AGE_DAYS = 7
@@ -129,8 +129,10 @@ def _build_links_html(t: ToiletDict) -> str:
 def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: dict | None = None) -> str:
     """トイレカードのHTMLを返す"""
     t = toilet
-    color, emoji, _ = get_score_style(t["toilet_score"])
-    confidence_pct = int(t["confidence"] * 100)
+    score_text = format_score(t.get("toilet_score"))
+    color, emoji, _ = get_score_style(t.get("toilet_score"))
+    confidence_pct = get_confidence_percentage(t.get("confidence"))
+    confidence_text = f"{confidence_pct}%" if confidence_pct is not None else "—"
 
     rank_html = f'<span style="color:#999;font-weight:600;min-width:24px;">#{rank}</span>' if rank else ""
 
@@ -151,7 +153,8 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
 
     links_html = _build_links_html(t)
 
-    aria_label = f"{esc(t['title'])} - {t['toilet_score']:.0f}点"
+    score_aria = f"{score_text}点" if score_text != "—" else "未採点"
+    aria_label = f"{esc(t['title'])} - {score_aria}"
     return f"""
     <div class="toilet-card" role="listitem" aria-label="{aria_label}"
         style="display:flex;align-items:center;gap:10px;padding:8px 12px;
@@ -161,7 +164,7 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
         {rank_html}
         <div style="min-width:50px;text-align:center;">
             <div aria-hidden="true" style="font-size:24px;font-weight:800;color:{color};line-height:1;">{emoji}</div>
-            <div style="font-size:14px;font-weight:700;color:{color};">{t['toilet_score']:.0f}</div>
+            <div style="font-size:14px;font-weight:700;color:{color};">{score_text}</div>
         </div>
         <div style="flex:1;min-width:0;color:#222222;">
             <div class="toilet-card-title" style="font-size:14px;font-weight:600;color:#222222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
@@ -171,7 +174,7 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
                 &#x1F4CD; {esc(t.get('address', ''))}{freshness_badge}
             </div>
             <div class="toilet-card-meta" style="font-size:11px;color:#666666;">
-                &#x2B50; {t.get('rating', '-')} &#xB7; 口コミ {t.get('review_count', 0)}件 &#xB7; 信頼度 {confidence_pct}%
+                &#x2B50; {t.get('rating', '-')} &#xB7; 口コミ {t.get('review_count', 0)}件 &#xB7; 信頼度 {confidence_text}
             </div>
             <div style="font-size:11px;margin-top:4px;">
                 {links_html}
