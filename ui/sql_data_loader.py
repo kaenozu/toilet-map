@@ -61,7 +61,7 @@ MAP_COLUMNS = [
     "top_keywords",
 ]
 _MAP_ORDER_BY = (
-    " ORDER BY COALESCE(confidence, 0) DESC, "
+    " ORDER BY COALESCE(confidence, 0) DESC, COALESCE(review_count, 0) DESC, "
     "COALESCE(toilet_review_count, 0) DESC, COALESCE(toilet_score, 0) DESC, id ASC"
 )
 
@@ -82,9 +82,15 @@ def _normalize_bounds(bounds: object) -> tuple[float, float, float, float] | Non
     return _extract_bounds_coordinates(bounds)
 
 
-def _connect(cache_token: tuple[int, int]) -> sqlite3.Connection:
+@st.cache_data(ttl=3600, max_entries=4, show_spinner=False)
+def _ensure_snapshot_cached(cache_token: tuple[int, int]) -> bool:
     del cache_token
     ensure_snapshot_current(DATA_PATH, DB_PATH)
+    return True
+
+
+def _connect(cache_token: tuple[int, int]) -> sqlite3.Connection:
+    _ensure_snapshot_cached(cache_token)
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     return connection
@@ -103,7 +109,7 @@ def _decode_json(value: object, fallback: list) -> list:
 def _rows_to_toilets(rows: Sequence[sqlite3.Row | Mapping[str, object]]) -> list[ToiletDict]:
     toilets: list[ToiletDict] = []
     for row in rows:
-        item = dict(row)
+        item = {key: row[key] for key in row.keys()} if isinstance(row, sqlite3.Row) else dict(row)
         item["sample_reviews"] = _decode_json(item.pop("sample_reviews_json", None), [])
         item["top_keywords"] = _decode_json(item.get("top_keywords"), [])
         item["is_public_toilet"] = bool(item.get("is_public_toilet"))
@@ -357,6 +363,7 @@ def _load_data_quality_summary_cached(cache_token: tuple[int, int]) -> dict[str,
 
 def clear_query_caches() -> None:
     for cached in (
+        _ensure_snapshot_cached,
         _load_map_items_cached,
         _load_list_items_cached,
         _count_items_cached,
