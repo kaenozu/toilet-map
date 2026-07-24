@@ -6,9 +6,9 @@ import argparse
 import json
 import sqlite3
 from collections import Counter, defaultdict
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Sequence
 
 DEFAULT_DB_PATH = Path("data/toilets.db")
 DEFAULT_LIMIT = 1500
