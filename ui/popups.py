@@ -2,6 +2,8 @@
 ui/popups.py
 Popup HTML builders for toilet map markers
 """
+import math
+
 from app_config import MAX_SAMPLE_REVIEWS, REVIEW_TEXT_MAX_LENGTH
 
 from .helpers import esc, get_score_style, safe_href
@@ -74,6 +76,60 @@ def _build_review_html(reviews: list[dict]) -> str:
     return "".join(parts)
 
 
+def _format_rating(value: object) -> str:
+    try:
+        rating = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return ""
+    if not math.isfinite(rating) or rating <= 0:
+        return ""
+    return f"{rating:g}"
+
+
+def _build_score_rationale_html(t: ToiletDict) -> str:
+    """初期表示は短く保ち、算出方法・語句・口コミ例を折りたたんで示す。"""
+    review_count = max(0, int(t.get("toilet_review_count", 0) or 0))
+    rating = _format_rating(t.get("rating"))
+    keywords_html = _build_keyword_tags(t.get("top_keywords", []))
+    reviews_html = _build_review_html(t.get("sample_reviews", []))
+
+    if review_count > 0:
+        basis = f"トイレ関連口コミ {review_count}件"
+        if rating:
+            basis += f" + 施設評価 ★{rating}"
+        method = (
+            "トイレに言及した口コミの語句傾向を主軸に、"
+            "施設全体の星評価で補正して0〜100点に換算しています。"
+        )
+    elif rating:
+        basis = f"施設評価 ★{rating}（トイレ関連口コミなし）"
+        method = "トイレ関連口コミがないため、施設全体の星評価のみから低信頼度の参考値を算出しています。"
+    else:
+        basis = "根拠となる口コミ・星評価なし"
+        method = "根拠データがないため、中立値50点を表示しています。"
+
+    evidence_parts = [
+        '<div style="font-size:10px;line-height:1.5;color:#666;margin:5px 0;">'
+        f"{method}</div>"
+    ]
+    if keywords_html:
+        evidence_parts.append('<div style="font-size:10px;font-weight:600;margin-top:4px;">検出した語句</div>')
+        evidence_parts.append(keywords_html)
+    if reviews_html:
+        evidence_parts.append('<div style="font-size:10px;font-weight:600;margin-top:5px;">判定に使った口コミ例</div>')
+        evidence_parts.append(reviews_html)
+
+    summary = "算出方法と口コミを見る" if keywords_html or reviews_html else "算出方法を見る"
+    return (
+        '<div style="font-size:10px;color:#555;margin:4px 0;">'
+        f'<strong>スコア根拠:</strong> {basis}</div>'
+        '<details style="font-size:10px;margin:2px 0 5px;">'
+        f'<summary style="cursor:pointer;color:#1a73e8;font-weight:600;">{summary}</summary>'
+        + "".join(evidence_parts)
+        + "</details>"
+    )
+
+
 def _build_link_html(link: str) -> str:
     safe_link = safe_href(link)
     if not safe_link:
@@ -105,18 +161,9 @@ def build_popup_html(t: ToiletDict) -> str:
     badge = _build_public_badge(t["is_public_toilet"])
     confidence_pct = int(t["confidence"] * 100)
     phone_html = f'<span style="margin-right:6px;"><span aria-label="phone" role="img">📞</span>{esc(t["phone"])}</span>' if t.get("phone") else ""
-    kw_html = _build_keyword_tags(t.get("top_keywords", []))
-    rev_html = _build_review_html(t.get("sample_reviews", []))
+    score_rationale_html = _build_score_rationale_html(t)
     link_html = _build_link_html(t.get("link", ""))
     confidence_note_html = _build_confidence_note(t.get("confidence", 0), t.get("toilet_review_count", 0))
-
-    review_section = ""
-    if rev_html:
-        review_section = (
-            '<hr style="margin:4px 0;border:none;border-top:1px dashed #ccc;">'
-            '<div style="font-size:10px;font-weight:600;margin-bottom:2px;">🚽 口コミ:</div>'
-            + rev_html
-        )
 
     title_esc = clean(t['title'])
     addr_esc = clean(t.get('address', ''))
@@ -146,9 +193,8 @@ def build_popup_html(t: ToiletDict) -> str:
 
       <div style="font-size:10px;color:#555;margin-bottom:1px;">📍 {addr_esc}</div>
       <div style="font-size:10px;color:#555;"><span aria-label="rating" role="img">⭐</span>{t.get('rating', '-')} ({t.get('review_count', 0)}件) {phone_html}</div>
-    {confidence_note_html}
-      {kw_html}
-      {review_section}
+      {score_rationale_html}
+      {confidence_note_html}
       {link_html}
     </div>
     """
