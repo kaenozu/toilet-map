@@ -2,6 +2,8 @@
 tests/test_ui_components.py
 ui/components.py のユニットテスト（app_config テストは test_app_config.py に集約）
 """
+from datetime import date
+
 import pytest
 
 from ui.components import (
@@ -43,20 +45,28 @@ class TestBuildResultContextText:
 
 
 class TestBuildDataFreshnessText:
+    @staticmethod
+    def translations() -> dict[str, str]:
+        return {
+            "freshness": "データ鮮度",
+            "source_updated": "生成",
+            "db_synced": "DB同期",
+            "freshness_current": "最新",
+            "freshness_aging": "更新から時間が経過",
+            "freshness_stale": "古いデータ",
+            "freshness_unknown": "更新日不明",
+            "freshness_age_days": "{days}日前",
+        }
+
     def test_includes_generated_and_synced_times(self):
         meta = {
             "last_updated": "2026-05-10 21:27:30",
             "db_synced_at": "2026-05-10 21:28:05",
         }
-        t = {
-            "freshness": "データ鮮度",
-            "source_updated": "生成",
-            "db_synced": "DB同期",
-        }
 
-        text = build_data_freshness_text(meta, t)
+        text = build_data_freshness_text(meta, self.translations(), today=date(2026, 5, 17))
 
-        assert "データ鮮度" in text
+        assert "🟢 データ鮮度: 最新 (7日前)" in text
         assert "生成 2026-05-10 21:27:30" in text
         assert "DB同期 2026-05-10 21:28:05" in text
 
@@ -66,12 +76,39 @@ class TestBuildDataFreshnessText:
             "freshness": "Freshness",
             "source_updated": "Generated",
             "db_synced": "DB synced",
+            "freshness_current": "Current",
+            "freshness_age_days": "{days} days ago",
         }
 
-        text = build_data_freshness_text(meta, t)
+        text = build_data_freshness_text(meta, t, today=date(2026, 5, 10))
 
+        assert "🟢 Freshness: Current (0 days ago)" in text
         assert "Generated 2026-05-10 21:27:30" in text
         assert "DB synced N/A" in text
+
+    @pytest.mark.parametrize(
+        ("today", "expected"),
+        [
+            (date(2026, 5, 18), "🟡 データ鮮度: 更新から時間が経過 (8日前)"),
+            (date(2026, 6, 10), "🔴 データ鮮度: 古いデータ (31日前)"),
+        ],
+    )
+    def test_marks_aging_and_stale_data(self, today: date, expected: str):
+        text = build_data_freshness_text(
+            {"last_updated": "2026-05-10T21:27:30+09:00"},
+            self.translations(),
+            today=today,
+        )
+        assert expected in text
+
+    @pytest.mark.parametrize("value", [None, "", "not-a-date", "2026-05-18"])
+    def test_marks_missing_invalid_or_future_dates_unknown(self, value: object):
+        text = build_data_freshness_text(
+            {"last_updated": value},
+            self.translations(),
+            today=date(2026, 5, 17),
+        )
+        assert "⚪ データ鮮度: 更新日不明" in text
 
 
 class TestBuildToiletCardHtml:
