@@ -56,6 +56,17 @@ test("wires result updates to one polite live region and busy list", () => {
   assert.match(dashboardSource, /failed: loadFailed/);
 });
 
+test("clears a previous location when geolocation is unavailable or fails", () => {
+  assert.match(
+    dashboardSource,
+    /if \(!navigator\.geolocation\) \{\s*setUserLocation\(null\);/,
+  );
+  assert.match(
+    dashboardSource,
+    /\(\) => \{\s*setUserLocation\(null\);\s*setLocationStatus\("現在地を取得できませんでした。/,
+  );
+});
+
 test("marks each facility card as a result list item", () => {
   assert.match(facilityCardSource, /<article className="card" role="listitem">/);
 });
