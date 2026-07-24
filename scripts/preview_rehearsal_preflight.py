@@ -152,8 +152,8 @@ def build_report(expected_branch: str | None, expected_sha: str | None) -> dict[
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
-    result.add_argument("--expected-branch", help="approved branch name, usually main")
-    result.add_argument("--expected-sha", help="approved full commit SHA")
+    result.add_argument("--expected-branch", required=True, help="approved branch name, usually main")
+    result.add_argument("--expected-sha", required=True, help="approved full commit SHA")
     result.add_argument("--report-dir", type=Path, default=DEFAULT_REPORT_DIR)
     return result
 
