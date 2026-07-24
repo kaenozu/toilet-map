@@ -56,6 +56,23 @@ def build_geolocation_js() -> str:
     )
 
 
+def build_first_use_guide(t: dict[str, str]) -> str:
+    """既存の翻訳ラベルを使い、初回操作の順序を短く案内する。"""
+    return (
+        f"1️⃣ **{t['prefecture']} / {t['filter']} / {t['search_label']}**\n\n"
+        f"2️⃣ **{t['gps']}** — {t['gps_hint']}\n\n"
+        f"3️⃣ **{t['sort_label']}: {t['sort_near']}**"
+    )
+
+
+def _render_first_use_guide(t: dict[str, str], query_params: dict) -> None:
+    """初回の素のURLだけで操作ガイドを表示し、以後の再実行では繰り返さない。"""
+    if query_params or st.session_state.get("_first_use_guide_seen", False):
+        return
+    st.info(build_first_use_guide(t))
+    st.session_state["_first_use_guide_seen"] = True
+
+
 def _handle_gps_section(t: dict) -> tuple[tuple | None, bool]:
     user_location = None
     gps_enabled = st.checkbox(t["gps"], key="gps_enabled")
@@ -158,6 +175,7 @@ def render_sidebar(
         lang = st.selectbox(t["language_label"], LANGUAGE_OPTIONS, key="lang_select")
         t = get_language_strings(lang)
         translated_filters, translated_to_internal = get_translated_filters(lang)
+        _render_first_use_guide(t, query_params)
 
         st.divider()
         _render_query_state_section(
