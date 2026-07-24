@@ -89,19 +89,28 @@ def build_result_context_text(
     return " | ".join(parts)
 
 
+def build_score_legend_html() -> str:
+    """採点済みの色勾配と未採点状態を説明する凡例HTMLを返す。"""
+    return """
+    <div class="score-legend-mobile" role="group" aria-label="スコア凡例 / Score legend"
+        style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;font-size:12px;margin-bottom:4px;">
+        <span aria-hidden="true">💩</span>
+        <div class="bar" aria-label="低スコアから高スコア / Low to high score"
+            style="width:200px;height:14px;border-radius:7px;
+            background:linear-gradient(to right,#e74c3c,#f39c12,#f1c40f,#2ecc71,#27ae60);"></div>
+        <span aria-hidden="true">✨</span>
+        <span class="unscored-legend"
+            style="display:inline-flex;align-items:center;gap:3px;margin-left:6px;white-space:nowrap;">
+            <span aria-hidden="true" style="font-size:16px;font-weight:700;color:#6b7280;">○</span>
+            <span>未採点 / Unscored</span>
+        </span>
+    </div>
+    """.strip()
+
+
 def render_score_legend() -> None:
     """スコア凡例を表示（レスポンシブ）"""
-    st.markdown(
-        """
-    <div class="score-legend-mobile" style="display:flex;align-items:center;gap:4px;font-size:12px;margin-bottom:4px;">
-        <span>💩</span>
-        <div class="bar" style="width:200px;height:14px;border-radius:7px;
-            background:linear-gradient(to right,#e74c3c,#f39c12,#f1c40f,#2ecc71,#27ae60);"></div>
-        <span>✨</span>
-    </div>
-    """,
-        unsafe_allow_html=True,
-    )
+    st.markdown(build_score_legend_html(), unsafe_allow_html=True)
 
 
 def _build_links_html(t: ToiletDict) -> str:
