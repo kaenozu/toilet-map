@@ -37,13 +37,20 @@ def _legacy_summary(toilets: list[ToiletDict]) -> dict[str, object]:
     return {"missing": _calc_missing_stats(toilets), "pref_counts": pref_counts, "score_bins": score_bins}
 
 
+def _to_non_negative_int(value: object) -> int:
+    """Convert supported scalar values while keeping invalid aggregates neutral."""
+    if not isinstance(value, (str, bytes, bytearray, int, float)):
+        return 0
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
 def _missing_percentage(total: object, missing: object) -> int:
     """Return a bounded whole-number missing-data percentage."""
-    try:
-        total_count = max(0, int(total))
-        missing_count = max(0, int(missing))
-    except (TypeError, ValueError):
-        return 0
+    total_count = _to_non_negative_int(total)
+    missing_count = _to_non_negative_int(missing)
     if total_count == 0:
         return 0
     return round(min(missing_count, total_count) * 100 / total_count)
@@ -51,10 +58,7 @@ def _missing_percentage(total: object, missing: object) -> int:
 
 def _build_data_quality_summary_text(missing: dict, t: dict) -> str:
     """Add ratios to the quality counts without introducing another dense chart."""
-    try:
-        total = max(0, int(missing.get("total", 0)))
-    except (TypeError, ValueError):
-        total = 0
+    total = _to_non_negative_int(missing.get("total", 0))
     if total == 0:
         return f"{t.get('dq_total', 'Total')}: 0"
 
@@ -65,10 +69,7 @@ def _build_data_quality_summary_text(missing: dict, t: dict) -> str:
     )
     parts = []
     for label, value in dimensions:
-        try:
-            count = max(0, int(value))
-        except (TypeError, ValueError):
-            count = 0
+        count = _to_non_negative_int(value)
         parts.append(f"{label}: {_missing_percentage(total, count)}% ({min(count, total)}/{total})")
     return " · ".join(parts)
 
