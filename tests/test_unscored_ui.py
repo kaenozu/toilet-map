@@ -38,6 +38,8 @@ def test_unscored_list_card_is_rendered_without_numeric_formatting():
 
     assert 'aria-label="未採点施設 - 未採点"' in html
     assert "信頼度 —" in html
+    assert "&#x2B50; - &#xB7;" in html
+    assert "None" not in html
     assert "未採点施設" in html
 
 
@@ -46,8 +48,21 @@ def test_unscored_map_popup_explains_missing_score():
 
     assert "未採点 / Unscored" in html
     assert "信頼度 —" in html
+    assert '<span aria-label="rating" role="img">⭐</span>- (0件)' in html
     assert "採点結果なし" in html
     assert "現在は未採点です" in html
+    assert "None" not in html
+
+
+def test_missing_score_key_is_treated_as_unscored():
+    toilet = _unscored_toilet()
+    toilet.pop("toilet_score")
+
+    html = build_popup_html(toilet)
+
+    assert "採点結果なし" in html
+    assert "現在は未採点です" in html
+    assert "中立値50点" not in html
 
 
 def test_unscored_values_are_excluded_from_statistics():
