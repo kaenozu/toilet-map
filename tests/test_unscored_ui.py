@@ -36,9 +36,12 @@ def test_nullable_numeric_helpers_use_neutral_display():
 def test_unscored_list_card_is_rendered_without_numeric_formatting():
     html = build_toilet_card_html(_unscored_toilet())
 
-    assert 'aria-label="未採点施設 - 未採点"' in html
+    assert (
+        'aria-label="未採点施設、未採点、口コミ 0件、信頼度 —、公共トイレ、住所 埼玉県熊谷市"'
+        in html
+    )
     assert "信頼度 —" in html
-    assert "&#x2B50; - &#xB7;" in html
+    assert '<span aria-hidden="true">&#x2B50;</span> - &#xB7;' in html
     assert "None" not in html
     assert "未採点施設" in html
 

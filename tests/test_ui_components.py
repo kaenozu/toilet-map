@@ -113,14 +113,19 @@ class TestBuildDataFreshnessText:
 
 
 class TestBuildToiletCardHtml:
-    def test_basic_card(self):
+    @staticmethod
+    def toilet(**overrides):
         toilet = {
             "title": "テストトイレ", "category": "公園", "address": "東京都",
             "toilet_score": 80.0, "confidence": 0.8, "is_public_toilet": True,
             "rating": 4.5, "review_count": 100, "lat": 35.0, "lng": 139.0,
-            "link": "", "sample_reviews": [], "top_keywords": [],
+            "link": "https://maps.google.com/", "sample_reviews": [], "top_keywords": [],
         }
-        html = build_toilet_card_html(toilet)
+        toilet.update(overrides)
+        return toilet
+
+    def test_basic_card(self):
+        html = build_toilet_card_html(self.toilet(link=""))
         assert "テストトイレ" in html
 
     def test_with_link(self):
@@ -161,6 +166,35 @@ class TestBuildToiletCardHtml:
         html = build_toilet_card_html(toilet)
         assert "Google Maps" not in html
         assert "ルート検索" not in html
+
+    def test_accessible_name_includes_rank_and_quality_context(self):
+        html = build_toilet_card_html(self.toilet(), rank=3)
+
+        assert (
+            'aria-label="順位 3位、テストトイレ、スコア 80点、評価 4.5、'
+            '口コミ 100件、信頼度 80%、公共トイレ、住所 東京都"'
+        ) in html
+
+    def test_map_links_have_destination_specific_accessible_names(self):
+        html = build_toilet_card_html(self.toilet())
+
+        assert (
+            'aria-label="テストトイレをGoogle Mapsで開く（新しいタブ） / '
+            'Open テストトイレ in Google Maps (new tab)"'
+        ) in html
+        assert (
+            'aria-label="テストトイレへのルートを検索（新しいタブ） / '
+            'Get directions to テストトイレ (new tab)"'
+        ) in html
+
+    def test_accessibility_labels_escape_title_and_hide_decorative_content(self):
+        html = build_toilet_card_html(self.toilet(title='A "B" & C'), rank=1)
+
+        assert "A &quot;B&quot; &amp; C" in html
+        assert '<span aria-hidden="true" style="color:#999' in html
+        assert '<span aria-hidden="true">&#x1F4CD;</span>' in html
+        assert '<span aria-hidden="true">&#x2B50;</span>' in html
+        assert 'class="toilet-card-arrow" aria-hidden="true"' in html
 
 
 class TestBuildScoreLegendHtml:
