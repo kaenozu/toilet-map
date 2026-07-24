@@ -27,9 +27,11 @@ def _calc_missing_stats(toilets: list[ToiletDict]) -> dict[str, int]:
 
 def _as_count(value: object, total: int | None = None) -> int:
     """Convert aggregate values to safe non-negative counts."""
+    if not isinstance(value, (int, float, str)):
+        return 0
     try:
-        count = max(0, int(value))  # type: ignore[arg-type]
-    except (TypeError, ValueError, OverflowError):
+        count = max(0, int(value))
+    except (ValueError, OverflowError):
         count = 0
     return min(count, total) if total is not None else count
 
