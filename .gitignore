@@ -30,6 +30,10 @@ batch/analyze_*.py
 batch/fix_and_*.py
 batch/final_check.py
 
+# One-off root repair scripts
+/_rebuild.py
+/fix_snapshot.py
+
 # Legacy UI (not deployed)
 ui/index.html
 ui/data/

@@ -6,12 +6,11 @@ import gzip
 import json
 import sqlite3
 
-import pandas as pd
-
 import app
 from batch import pipeline, scoring
 from ui.data_loader import toilets_to_dataframe
 from ui.map_builder import MAX_MAP_MARKERS, _select_map_toilets
+from ui.sidebar import SidebarResult
 
 
 def test_empty_toilet_dataframe_has_required_columns():
@@ -27,21 +26,27 @@ def test_empty_toilet_dataframe_has_required_columns():
     }.issubset(dataframe.columns)
 
 
-def test_process_filters_accepts_empty_dataframe():
-    dataframe = toilets_to_dataframe([])
-
-    filtered, elapsed = app._process_filters(
-        dataframe,
-        "全て",
-        "すべて",
-        "",
-        "score",
-        None,
-        {"sort_near": "near"},
+def test_build_filters_preserves_empty_optional_values():
+    sidebar = SidebarResult(
+        t={},
+        lang="ja",
+        selected_pref="全て",
+        filter_type="すべて",
+        search_query="",
+        sort_order="score",
+        user_location=None,
+        gps_enabled=False,
+        dark_mode=False,
+        selected_tile="OpenStreetMap（標準）",
+        translated_to_internal={},
     )
 
-    assert filtered.empty
-    assert elapsed == 0.0
+    assert app._build_filters(sidebar, "すべて") == {
+        "prefecture": "全て",
+        "filter_type": "すべて",
+        "search_query": "",
+        "user_location": None,
+    }
 
 
 def test_map_items_are_bounded_and_prioritize_confidence():
@@ -106,30 +111,26 @@ def test_map_error_message_does_not_include_exception(monkeypatch):
     monkeypatch.setattr(app, "render_score_legend", lambda: None)
     monkeypatch.setattr(app, "render_stats", lambda *args, **kwargs: None)
     monkeypatch.setattr(app, "render_data_quality", lambda *args, **kwargs: None)
-    monkeypatch.setattr(app, "init_page_state", lambda: None)
-    monkeypatch.setattr(app, "reset_page", lambda *args: None)
-    monkeypatch.setattr(app, "calc_pagination", lambda *args: (0, 0, 0, 1))
     monkeypatch.setattr(app, "calc_map_center", lambda *args: (35.0, 139.0, 10))
-    monkeypatch.setattr(app.st, "session_state", {"page": 1})
 
     app._render_main_content(
-        pd.DataFrame(),
-        [],
-        {"center_lat": 35.0, "center_lng": 139.0, "zoom": 10},
-        {
+        total_items=0,
+        total_pages=0,
+        page=1,
+        list_items=[],
+        map_items=[],
+        metadata={"center_lat": 35.0, "center_lng": 139.0, "zoom": 10},
+        data_quality_summary={},
+        translations={
             "showing": "件",
             "no_results": "none",
             "map_render_failed": "safe message",
         },
-        "全て",
-        "score",
-        False,
-        "OpenStreetMap（標準）",
-        [],
-        0.0,
-        {},
-        "すべて",
-        "",
+        selected_prefecture="全て",
+        dark_mode=False,
+        selected_tile="OpenStreetMap（標準）",
+        query_elapsed_ms=0.0,
+        prefecture_stats={},
     )
 
     assert messages == ["safe message"]
