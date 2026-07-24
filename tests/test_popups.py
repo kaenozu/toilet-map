@@ -63,6 +63,7 @@ class TestReviewHtml:
 class TestScoreRationaleHtml:
     def test_reviews_and_rating_are_summarized_before_collapsed_details(self):
         toilet = {
+            "toilet_score": 85.0,
             "toilet_review_count": 5,
             "rating": 4.5,
             "top_keywords": [("+清潔", 3)],
@@ -79,7 +80,13 @@ class TestScoreRationaleHtml:
 
     def test_rating_only_explains_low_confidence_fallback(self):
         html = _build_score_rationale_html(
-            {"toilet_review_count": 0, "rating": 4.0, "top_keywords": [], "sample_reviews": []}
+            {
+                "toilet_score": 65.0,
+                "toilet_review_count": 0,
+                "rating": 4.0,
+                "top_keywords": [],
+                "sample_reviews": [],
+            }
         )
 
         assert "施設評価 ★4（トイレ関連口コミなし）" in html
@@ -88,7 +95,13 @@ class TestScoreRationaleHtml:
 
     def test_no_evidence_explains_neutral_score(self):
         html = _build_score_rationale_html(
-            {"toilet_review_count": 0, "rating": 0.0, "top_keywords": [], "sample_reviews": []}
+            {
+                "toilet_score": 50.0,
+                "toilet_review_count": 0,
+                "rating": 0.0,
+                "top_keywords": [],
+                "sample_reviews": [],
+            }
         )
 
         assert "根拠となる口コミ・星評価なし" in html
