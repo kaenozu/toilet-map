@@ -9,6 +9,7 @@ import pytest
 from ui.components import (
     build_data_freshness_text,
     build_result_context_text,
+    build_score_legend_html,
     build_toilet_card_html,
     render_score_legend,
 )
@@ -160,6 +161,18 @@ class TestBuildToiletCardHtml:
         html = build_toilet_card_html(toilet)
         assert "Google Maps" not in html
         assert "ルート検索" not in html
+
+
+class TestBuildScoreLegendHtml:
+    def test_explains_unscored_state_accessibly(self):
+        html = build_score_legend_html()
+
+        assert 'role="group"' in html
+        assert 'aria-label="スコア凡例 / Score legend"' in html
+        assert 'aria-label="低スコアから高スコア / Low to high score"' in html
+        assert "未採点 / Unscored" in html
+        assert "color:#6b7280" in html
+        assert "flex-wrap:wrap" in html
 
 
 class TestRenderScoreLegend:
