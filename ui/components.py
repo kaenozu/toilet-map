@@ -114,12 +114,15 @@ def render_score_legend() -> None:
 
 
 def _build_links_html(t: ToiletDict) -> str:
-    """トイレカード内の外部リンクを返す"""
+    """トイレカード内の外部リンクを返す。リンク目的を施設名込みで読み上げ可能にする。"""
     parts = []
+    title = esc(str(t.get("title") or "トイレ / Toilet"))
     link_href = safe_href(t.get("link"))
     if link_href:
         parts.append(
             f'<a href="{link_href}" target="_blank" rel="noopener noreferrer" '
+            f'aria-label="{title}をGoogle Mapsで開く（新しいタブ） / '
+            f'Open {title} in Google Maps (new tab)" '
             f'style="font-size:11px;color:#1a73e8;text-decoration:none;margin-right:10px;">'
             f"Google Maps で開く</a>"
         )
@@ -129,10 +132,37 @@ def _build_links_html(t: ToiletDict) -> str:
         dirs_url = f"https://www.google.com/maps/dir/?api=1&destination={lat},{lng}"
         parts.append(
             f'<a href="{dirs_url}" target="_blank" rel="noopener noreferrer" '
+            f'aria-label="{title}へのルートを検索（新しいタブ） / '
+            f'Get directions to {title} (new tab)" '
             f'style="font-size:11px;color:#1a73e8;text-decoration:none;">'
             f"&#x1F4CD; ルート検索</a>"
         )
     return "".join(parts)
+
+
+def _build_toilet_card_aria_label(
+    toilet: ToiletDict,
+    rank: int | None,
+    score_text: str,
+    rating_text: object,
+    confidence_text: str,
+) -> str:
+    """視覚的なカード情報を重複なく読み上げるアクセシブル名を返す。"""
+    parts = []
+    if rank is not None:
+        parts.append(f"順位 {rank}位")
+    parts.append(str(toilet.get("title") or "トイレ"))
+    parts.append(f"スコア {score_text}点" if score_text != "—" else "未採点")
+    if rating_text != "-":
+        parts.append(f"評価 {rating_text}")
+    parts.append(f"口コミ {toilet.get('review_count', 0)}件")
+    parts.append(f"信頼度 {confidence_text}")
+    if toilet.get("is_public_toilet"):
+        parts.append("公共トイレ")
+    address = str(toilet.get("address") or "").strip()
+    if address:
+        parts.append(f"住所 {address}")
+    return esc("、".join(parts))
 
 
 def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: dict | None = None) -> str:
@@ -144,7 +174,11 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
     confidence_text = f"{confidence_pct}%" if confidence_pct is not None else "—"
     rating_text = t["rating"] if t.get("rating") is not None else "-"
 
-    rank_html = f'<span style="color:#999;font-weight:600;min-width:24px;">#{rank}</span>' if rank else ""
+    rank_html = (
+        f'<span aria-hidden="true" style="color:#999;font-weight:600;min-width:24px;">#{rank}</span>'
+        if rank
+        else ""
+    )
 
     freshness_badge = ""
     if meta and meta.get("updated_at"):
@@ -152,7 +186,7 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
         freshness_badge = (
             f'<span style="background:#fff3e0;color:#e65100;padding:1px 6px;'
             f'border-radius:3px;font-size:10px;margin-left:6px;">'
-            f'📅 データ: {date_part}</span>'
+            f"📅 データ: {date_part}</span>"
         )
 
     public_tag = (
@@ -162,9 +196,7 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
     )
 
     links_html = _build_links_html(t)
-
-    score_aria = f"{score_text}点" if score_text != "—" else "未採点"
-    aria_label = f"{esc(t['title'])} - {score_aria}"
+    aria_label = _build_toilet_card_aria_label(t, rank, score_text, rating_text, confidence_text)
     return f"""
     <div class="toilet-card" role="listitem" aria-label="{aria_label}"
         style="display:flex;align-items:center;gap:10px;padding:8px 12px;
@@ -181,16 +213,16 @@ def build_toilet_card_html(toilet: ToiletDict, rank: int | None = None, meta: di
                 {public_tag} {esc(t['title'])}
             </div>
             <div class="toilet-card-subtitle" style="font-size:11px;color:#666666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                &#x1F4CD; {esc(t.get('address', ''))}{freshness_badge}
+                <span aria-hidden="true">&#x1F4CD;</span> {esc(t.get('address', ''))}{freshness_badge}
             </div>
             <div class="toilet-card-meta" style="font-size:11px;color:#666666;">
-                &#x2B50; {rating_text} &#xB7; 口コミ {t.get('review_count', 0)}件 &#xB7; 信頼度 {confidence_text}
+                <span aria-hidden="true">&#x2B50;</span> {rating_text} &#xB7; 口コミ {t.get('review_count', 0)}件 &#xB7; 信頼度 {confidence_text}
             </div>
             <div style="font-size:11px;margin-top:4px;">
                 {links_html}
             </div>
         </div>
-        <div class="toilet-card-arrow" style="font-size:18px;color:#aaaaaa;">&#x203A;</div>
+        <div class="toilet-card-arrow" aria-hidden="true" style="font-size:18px;color:#aaaaaa;">&#x203A;</div>
     </div>
     """.strip()
 
