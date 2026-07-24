@@ -9,6 +9,7 @@ from ui.popups import (
     _build_link_html,
     _build_public_badge,
     _build_review_html,
+    _build_score_rationale_html,
     build_popup_html,
 )
 
@@ -59,6 +60,41 @@ class TestReviewHtml:
         assert html.count("同じテキストです") == 1
 
 
+class TestScoreRationaleHtml:
+    def test_reviews_and_rating_are_summarized_before_collapsed_details(self):
+        toilet = {
+            "toilet_review_count": 5,
+            "rating": 4.5,
+            "top_keywords": [("+清潔", 3)],
+            "sample_reviews": [{"text": "きれいです", "name": "A", "rating": 5, "score": 2}],
+        }
+
+        html = _build_score_rationale_html(toilet)
+
+        assert "スコア根拠:" in html
+        assert "トイレ関連口コミ 5件 + 施設評価 ★4.5" in html
+        assert "語句傾向を主軸" in html
+        assert "<details" in html and "<details open" not in html
+        assert html.index("<details") < html.index("きれいです")
+
+    def test_rating_only_explains_low_confidence_fallback(self):
+        html = _build_score_rationale_html(
+            {"toilet_review_count": 0, "rating": 4.0, "top_keywords": [], "sample_reviews": []}
+        )
+
+        assert "施設評価 ★4（トイレ関連口コミなし）" in html
+        assert "低信頼度の参考値" in html
+        assert "算出方法を見る" in html
+
+    def test_no_evidence_explains_neutral_score(self):
+        html = _build_score_rationale_html(
+            {"toilet_review_count": 0, "rating": 0.0, "top_keywords": [], "sample_reviews": []}
+        )
+
+        assert "根拠となる口コミ・星評価なし" in html
+        assert "中立値50点" in html
+
+
 class TestLinkHtml:
     def test_with_link(self):
         html = _build_link_html("https://maps.google.com/")
@@ -83,6 +119,7 @@ class TestBuildPopupHtml:
         html = build_popup_html(toilet)
         assert "テストトイレ" in html and "85" in html
         assert "東京都渋谷区" in html and "公共トイレ" in html and "信頼度" in html
+        assert "スコア根拠" in html and "<details" in html
 
     def test_private_no_badge(self):
         toilet = {
