@@ -139,7 +139,8 @@ def _load_map_items_cached(
     try:
         connection = _connect(cache_token)
         where_sql, params = build_where_clause(filters, bounds)
-        sql = f"SELECT {', '.join(MAP_COLUMNS)} FROM toilets{where_sql}{_MAP_ORDER_BY} LIMIT ?"
+        coordinate_sql = " AND lat IS NOT NULL AND lng IS NOT NULL" if where_sql else " WHERE lat IS NOT NULL AND lng IS NOT NULL"
+        sql = f"SELECT {', '.join(MAP_COLUMNS)} FROM toilets{where_sql}{coordinate_sql}{_MAP_ORDER_BY} LIMIT ?"
         rows = connection.execute(sql, [*params, limit]).fetchall()
         return _rows_to_toilets(rows)
     except (sqlite3.Error, OSError, ValueError) as exc:
