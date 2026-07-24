@@ -123,8 +123,12 @@ export default function Dashboard() {
       <div className="content">
         <aside className="sidebar">
           <div className="filters">
+            <p id="search-guidance" className="filter-help">
+              条件を組み合わせて絞り込めます。現在地を使うと10km以内の施設を近い順に表示します。
+            </p>
             <input
               aria-label="施設を検索"
+              aria-describedby="search-guidance"
               placeholder="施設名・住所で検索"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -155,7 +159,7 @@ export default function Dashboard() {
               <label><input type="checkbox" checked={open24h} onChange={(event) => setOpen24h(event.target.checked)} />24時間</label>
             </div>
             <div className="location-row">
-              <button type="button" onClick={locateUser}>現在地から探す</button>
+              <button type="button" aria-describedby="search-guidance" onClick={locateUser}>現在地から探す</button>
               {userLocation && <button type="button" className="secondary" onClick={() => setUserLocation(null)}>解除</button>}
             </div>
             {locationStatus && (
