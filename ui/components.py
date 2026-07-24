@@ -2,17 +2,66 @@
 ui/components.py
 Streamlit UI components for toilet map
 """
+from datetime import date, datetime
+
 import streamlit as st
 
 from .helpers import esc, get_score_style, safe_href
 from .types import ToiletDict
 
+FRESH_DATA_MAX_AGE_DAYS = 7
+STALE_DATA_MIN_AGE_DAYS = 31
 
-def build_data_freshness_text(meta: dict[str, object], t: dict[str, str]) -> str:
-    """生成日時と SQLite 同期日時を短い1行で返す。"""
+
+def _parse_metadata_date(value: object) -> date | None:
+    """Metadata timestampを日付へ変換し、解釈できない値はNoneにする。"""
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).date()
+    except ValueError:
+        try:
+            return date.fromisoformat(raw[:10])
+        except ValueError:
+            return None
+
+
+def _freshness_status(generated_on: date | None, today: date, t: dict[str, str]) -> tuple[str, str]:
+    """生成日から表示用の鮮度ステータスと経過日数を返す。"""
+    if generated_on is None:
+        return "⚪", t.get("freshness_unknown", "Update date unknown")
+
+    age_days = (today - generated_on).days
+    if age_days < 0:
+        return "⚪", t.get("freshness_unknown", "Update date unknown")
+
+    age_text = t.get("freshness_age_days", "{days} days ago").format(days=age_days)
+    if age_days <= FRESH_DATA_MAX_AGE_DAYS:
+        label = t.get("freshness_current", "Current")
+        return "🟢", f"{label} ({age_text})"
+    if age_days < STALE_DATA_MIN_AGE_DAYS:
+        label = t.get("freshness_aging", "Aging")
+        return "🟡", f"{label} ({age_text})"
+    label = t.get("freshness_stale", "Stale")
+    return "🔴", f"{label} ({age_text})"
+
+
+def build_data_freshness_text(
+    meta: dict[str, object],
+    t: dict[str, str],
+    today: date | None = None,
+) -> str:
+    """生成日時・SQLite同期日時と、更新経過日数に応じた鮮度状態を返す。"""
     generated_at = meta.get("last_updated") or "N/A"
     synced_at = meta.get("db_synced_at") or "N/A"
-    return f"{t['freshness']} | {t['source_updated']} {generated_at} / {t['db_synced']} {synced_at}"
+    icon, status = _freshness_status(_parse_metadata_date(meta.get("last_updated")), today or date.today(), t)
+    return (
+        f"{icon} {t['freshness']}: {status} | "
+        f"{t['source_updated']} {generated_at} / {t['db_synced']} {synced_at}"
+    )
 
 
 def build_result_context_text(
