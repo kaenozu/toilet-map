@@ -83,8 +83,13 @@ def _filters(**overrides):
     return values
 
 
-def test_map_query_applies_confidence_order_limit_and_bounds(sql_db):
-    assert [item["id"] for item in sql_db.load_map_items(None, _filters(), limit=3)] == [5, 2, 3]
+def test_initial_map_balances_prefectures_but_scoped_queries_keep_priority(sql_db):
+    assert [item["id"] for item in sql_db.load_map_items(None, _filters(), limit=3)] == [5, 3, 2]
+
+    assert [
+        item["id"]
+        for item in sql_db.load_map_items(None, _filters(prefecture="東京都"), limit=3)
+    ] == [5, 2, 1]
 
     bounds = {
         "_southWest": {"lat": 35.64, "lng": 139.69},
