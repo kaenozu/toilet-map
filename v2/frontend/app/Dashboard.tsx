@@ -94,6 +94,7 @@ export default function Dashboard() {
 
   function locateUser() {
     if (!navigator.geolocation) {
+      setUserLocation(null);
       setLocationStatus("このブラウザでは現在地を取得できません。");
       return;
     }
@@ -103,7 +104,10 @@ export default function Dashboard() {
         setUserLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude });
         setLocationStatus("現在地から10km以内を近い順に表示しています。");
       },
-      () => setLocationStatus("現在地を取得できませんでした。ブラウザの権限を確認してください。"),
+      () => {
+        setUserLocation(null);
+        setLocationStatus("現在地を取得できませんでした。ブラウザの権限を確認してください。");
+      },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
     );
   }
