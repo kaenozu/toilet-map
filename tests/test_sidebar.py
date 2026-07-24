@@ -6,7 +6,13 @@ from unittest.mock import MagicMock
 
 import streamlit as st
 
-from ui.sidebar import SidebarResult, build_geolocation_js, get_translated_filters, render_sidebar
+from ui.sidebar import (
+    SidebarResult,
+    build_first_use_guide,
+    build_geolocation_js,
+    get_translated_filters,
+    render_sidebar,
+)
 
 
 class TestGetTranslatedFilters:
@@ -59,6 +65,14 @@ class TestBuildGeolocationJs:
         assert "</script" not in js
 
 
+class TestBuildFirstUseGuide:
+    def test_uses_existing_translated_labels(self):
+        guide = build_first_use_guide(_make_minimal_t_dict())
+        assert "Pref / Filter / Search" in guide
+        assert "GPS" in guide
+        assert "Sort: Near" in guide
+
+
 class TestRenderSidebar:
     def test_returns_sidebar_result_type(self, monkeypatch):
         _mock_streamlit(monkeypatch)
@@ -68,6 +82,28 @@ class TestRenderSidebar:
         assert result.lang == "日本語"
         assert result.gps_enabled is False
         assert result.user_location is None
+
+    def test_shows_first_use_guide_once_for_plain_url(self, monkeypatch):
+        _mock_streamlit(monkeypatch)
+        messages = []
+        monkeypatch.setattr(st, "info", lambda message, *a, **kw: messages.append(message))
+
+        render_sidebar(_make_minimal_t_dict(), ["全て"], {})
+        render_sidebar(_make_minimal_t_dict(), ["全て"], {})
+
+        assert len(messages) == 1
+        assert "都道府県 / フィルタ / 検索" in messages[0]
+        assert st.session_state["_first_use_guide_seen"] is True
+
+    def test_skips_first_use_guide_for_shared_query_url(self, monkeypatch):
+        _mock_streamlit(monkeypatch)
+        messages = []
+        monkeypatch.setattr(st, "info", lambda message, *a, **kw: messages.append(message))
+
+        render_sidebar(_make_minimal_t_dict(), ["全て"], {"lang": "ja"})
+
+        assert messages == []
+        assert "_first_use_guide_seen" not in st.session_state
 
     def test_gps_disabled_clears_session_state(self, monkeypatch):
         _mock_streamlit(monkeypatch)
