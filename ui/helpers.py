@@ -4,9 +4,12 @@ UI helper functions (esc, safe_href, get_score_style)
 Extracted from app_config.py to reduce coupling and keep config clean.
 """
 import html
+import math
 from urllib.parse import urlparse
 
 from app_config import SCORE_RANGES
+
+UNSCORED_STYLE = ("#6b7280", "○", "未採点 / Unscored")
 
 
 def esc(text: str | None) -> str:
@@ -26,9 +29,35 @@ def safe_href(url: str | None) -> str:
     return html.escape(parsed.geturl(), quote=True)
 
 
-def get_score_style(score: float) -> tuple[str, str, str]:
-    """スコアに基づいて (色, 絵文字, ラベル) を返す"""
+def coerce_finite_float(value: object) -> float | None:
+    """UI表示用の有限数へ変換し、欠損・不正値はNoneにする。"""
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def format_score(value: object) -> str:
+    """スコアを整数表示へ整形し、未採点はダッシュで示す。"""
+    score = coerce_finite_float(value)
+    return f"{score:.0f}" if score is not None else "—"
+
+
+def get_confidence_percentage(value: object) -> int | None:
+    """0〜1の信頼度を0〜100へ変換し、欠損・不正値はNoneにする。"""
+    confidence = coerce_finite_float(value)
+    if confidence is None:
+        return None
+    return int(max(0.0, min(confidence, 1.0)) * 100)
+
+
+def get_score_style(score: object) -> tuple[str, str, str]:
+    """スコアに基づいて (色, 絵文字, ラベル) を返す。未採点は中立表示にする。"""
+    numeric_score = coerce_finite_float(score)
+    if numeric_score is None:
+        return UNSCORED_STYLE
     for threshold, color, emoji, label in SCORE_RANGES:
-        if score >= threshold:
+        if numeric_score >= threshold:
             return color, emoji, label
     return SCORE_RANGES[-1][1:]
