@@ -83,14 +83,30 @@ def _filters(**overrides):
     return values
 
 
-def test_map_query_applies_confidence_order_limit_and_bounds(sql_db):
-    assert [item["id"] for item in sql_db.load_map_items(None, _filters(), limit=3)] == [5, 2, 3]
+def test_map_query_balances_prefectures_then_applies_bounds(sql_db):
+    assert [item["id"] for item in sql_db.load_map_items(None, _filters(), limit=3)] == [5, 3, 2]
+    assert [item["id"] for item in sql_db.load_map_items(None, _filters(prefecture="東京都"), limit=3)] == [
+        5,
+        2,
+        1,
+    ]
 
     bounds = {
         "_southWest": {"lat": 35.64, "lng": 139.69},
         "_northEast": {"lat": 35.70, "lng": 139.72},
     }
     assert [item["id"] for item in sql_db.load_map_items(bounds, _filters())] == [2, 4]
+
+
+def test_map_query_excludes_out_of_range_coordinates(sql_db):
+    with sqlite3.connect(sql_db.DB_PATH) as connection:
+        connection.execute(
+            "INSERT INTO toilets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (6, "f", "異常座標", "店舗", "北海道", 999.0, 141.0, "", 5.0, 100, "", 0, 100, 1.0, 50, "北海道", "[]", "[]"),
+        )
+    sql_db.clear_query_caches()
+
+    assert [item["id"] for item in sql_db.load_map_items(None, _filters(), limit=10)] == [5, 3, 2, 1, 4]
 
 
 def test_list_and_count_queries_apply_filters_search_and_pagination(sql_db):
