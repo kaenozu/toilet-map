@@ -6,7 +6,7 @@ import math
 
 from app_config import MAX_SAMPLE_REVIEWS, REVIEW_TEXT_MAX_LENGTH
 
-from .helpers import esc, get_score_style, safe_href
+from .helpers import esc, format_score, get_confidence_percentage, get_score_style, safe_href
 from .types import ToiletDict
 
 
@@ -93,7 +93,10 @@ def _build_score_rationale_html(t: ToiletDict) -> str:
     keywords_html = _build_keyword_tags(t.get("top_keywords", []))
     reviews_html = _build_review_html(t.get("sample_reviews", []))
 
-    if review_count > 0:
+    if "toilet_score" in t and format_score(t.get("toilet_score")) == "—":
+        basis = "採点結果なし"
+        method = "採点に必要な口コミ・星評価が不足しているため、現在は未採点です。"
+    elif review_count > 0:
         basis = f"トイレ関連口コミ {review_count}件"
         if rating:
             basis += f" + 施設評価 ★{rating}"
@@ -143,8 +146,8 @@ def _build_link_html(link: str) -> str:
     )
 
 
-def _build_confidence_note(confidence: float, toilet_review_count: int) -> str:
-    if confidence >= 0.4 and toilet_review_count >= 3:
+def _build_confidence_note(confidence_pct: int | None, toilet_review_count: int) -> str:
+    if confidence_pct is not None and confidence_pct >= 40 and toilet_review_count >= 3:
         return ""
     return (
         '<div style="margin-top:6px;font-size:10px;line-height:1.5;'
@@ -157,13 +160,18 @@ def _build_confidence_note(confidence: float, toilet_review_count: int) -> str:
 
 def build_popup_html(t: ToiletDict) -> str:
     """1トイレ地点のポップアップHTMLを構築（コンパクト・スクロール対応）"""
-    color, emoji, label = get_score_style(t["toilet_score"])
-    badge = _build_public_badge(t["is_public_toilet"])
-    confidence_pct = int(t["confidence"] * 100)
+    score_text = format_score(t.get("toilet_score"))
+    score_display = f"{score_text}点" if score_text != "—" else score_text
+    color, emoji, label = get_score_style(t.get("toilet_score"))
+    badge = _build_public_badge(t.get("is_public_toilet", False))
+    confidence_pct = get_confidence_percentage(t.get("confidence"))
+    confidence_text = f"{confidence_pct}%" if confidence_pct is not None else "—"
+    confidence_bar_width = confidence_pct or 0
+    toilet_review_count = max(0, int(t.get("toilet_review_count", 0) or 0))
     phone_html = f'<span style="margin-right:6px;"><span aria-label="phone" role="img">📞</span>{esc(t["phone"])}</span>' if t.get("phone") else ""
     score_rationale_html = _build_score_rationale_html(t)
     link_html = _build_link_html(t.get("link", ""))
-    confidence_note_html = _build_confidence_note(t.get("confidence", 0), t.get("toilet_review_count", 0))
+    confidence_note_html = _build_confidence_note(confidence_pct, toilet_review_count)
 
     title_esc = clean(t['title'])
     addr_esc = clean(t.get('address', ''))
@@ -178,17 +186,16 @@ def build_popup_html(t: ToiletDict) -> str:
       </div>
       <div style="font-size:10px;color:#888;margin-bottom:4px;">{cat_esc}</div>
 
-
       <div style="text-align:center;margin:4px 0;">
-        <span style="font-size:24px;font-weight:800;color:{color};">{emoji} {t['toilet_score']:.0f}点</span>
+        <span style="font-size:24px;font-weight:800;color:{color};">{emoji} {score_display}</span>
         <span style="font-size:11px;color:#888;">（{label}）</span>
       </div>
 
       <div style="text-align:center;font-size:10px;color:#888;margin-bottom:2px;">
-        信頼度 {confidence_pct}% | {t['toilet_review_count']}件
+        信頼度 {confidence_text} | {toilet_review_count}件
       </div>
       <div style="height:3px;border-radius:2px;background:#e0e0e0;margin-bottom:4px;overflow:hidden;">
-        <div style="height:100%;width:{confidence_pct}%;background:{color};border-radius:2px;"></div>
+        <div style="height:100%;width:{confidence_bar_width}%;background:{color};border-radius:2px;"></div>
       </div>
 
       <div style="font-size:10px;color:#555;margin-bottom:1px;">📍 {addr_esc}</div>
