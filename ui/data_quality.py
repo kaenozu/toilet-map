@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import pandas as pd
 import streamlit as st
 
@@ -21,6 +23,43 @@ def _calc_missing_stats(toilets: list[ToiletDict]) -> dict[str, int]:
         "no_prefecture": no_prefecture,
         "no_reviews": no_reviews,
     }
+
+
+def _as_count(value: object, total: int | None = None) -> int:
+    """Convert aggregate values to safe non-negative counts."""
+    if not isinstance(value, (int, float, str)):
+        return 0
+    try:
+        count = max(0, int(value))
+    except (ValueError, OverflowError):
+        count = 0
+    return min(count, total) if total is not None else count
+
+
+def build_data_quality_summary(missing: Mapping[str, object], t: Mapping[str, str]) -> str | None:
+    """Build a concise, screen-reader-friendly explanation of data coverage."""
+    total = _as_count(missing.get("total"))
+    if total == 0:
+        return None
+
+    no_score = _as_count(missing.get("no_score"), total)
+    no_address = _as_count(missing.get("no_address"), total)
+    no_prefecture = _as_count(missing.get("no_prefecture"), total)
+    scored = total - no_score
+    coverage = round(scored * 100 / total)
+    scored_label = t.get("scored", "Scored")
+
+    summary = f"{scored_label}: {scored}/{total} ({coverage}%) · 未採点 / Unscored: {no_score}."
+    if no_score:
+        summary += " 未採点は低評価ではありません / Unscored does not mean a low rating."
+    if no_address or no_prefecture:
+        summary += (
+            f" 住所欠損 / Missing address: {no_address} · "
+            f"都道府県欠損 / Missing prefecture: {no_prefecture}. "
+            "位置情報の欠損は検索・集計精度に影響します / "
+            "Missing location fields may affect search and aggregation accuracy."
+        )
+    return summary
 
 
 def _legacy_summary(toilets: list[ToiletDict]) -> dict[str, object]:
@@ -89,11 +128,15 @@ def render_data_quality(meta: dict, data: list[ToiletDict] | dict[str, object], 
         with col1:
             st.metric(t.get("dq_total", "Total"), missing.get("total", 0))
         with col2:
-            st.metric(t.get("dq_missing_score", "スコア欠損"), missing.get("no_score", 0))
+            st.metric("未採点 / Unscored", missing.get("no_score", 0))
         with col3:
             st.metric(t.get("dq_missing_address", "住所欠損"), missing.get("no_address", 0))
         with col4:
             st.metric(t.get("dq_missing_reviews", "口コミ0"), missing.get("no_reviews", 0))
+
+        quality_summary = build_data_quality_summary(missing, t)
+        if quality_summary:
+            st.caption(quality_summary)
 
         if pref_counts:
             pref_df = pd.DataFrame(
