@@ -37,6 +37,41 @@ def _legacy_summary(toilets: list[ToiletDict]) -> dict[str, object]:
     return {"missing": _calc_missing_stats(toilets), "pref_counts": pref_counts, "score_bins": score_bins}
 
 
+def _coverage_percentage(total: object, missing: object) -> int:
+    """Return a bounded whole-number coverage percentage for one quality dimension."""
+    try:
+        total_count = max(0, int(total))
+        missing_count = max(0, int(missing))
+    except (TypeError, ValueError):
+        return 0
+    if total_count == 0:
+        return 0
+    complete_count = max(0, total_count - min(missing_count, total_count))
+    return round(complete_count * 100 / total_count)
+
+
+def _build_data_quality_summary_text(missing: dict, t: dict) -> str:
+    """Summarize field coverage so raw missing counts have immediate context."""
+    total = missing.get("total", 0)
+    try:
+        total_count = max(0, int(total))
+    except (TypeError, ValueError):
+        total_count = 0
+    if total_count == 0:
+        return t.get("dq_coverage_empty", "Coverage cannot be calculated because no data is available.")
+
+    template = t.get(
+        "dq_coverage_summary",
+        "Coverage: score {score}% · address {address}% · prefecture {prefecture}% · reviews {reviews}%",
+    )
+    return template.format(
+        score=_coverage_percentage(total_count, missing.get("no_score", 0)),
+        address=_coverage_percentage(total_count, missing.get("no_address", 0)),
+        prefecture=_coverage_percentage(total_count, missing.get("no_prefecture", 0)),
+        reviews=_coverage_percentage(total_count, missing.get("no_reviews", 0)),
+    )
+
+
 def render_data_quality(meta: dict, data: list[ToiletDict] | dict[str, object], t: dict) -> None:
     summary = data if isinstance(data, dict) else _legacy_summary(data)
     missing_value = summary.get("missing", {}) if isinstance(summary, dict) else {}
@@ -47,6 +82,7 @@ def render_data_quality(meta: dict, data: list[ToiletDict] | dict[str, object], 
     score_bins = score_bins_value if isinstance(score_bins_value, list) else []
 
     with st.expander(t.get("data_quality", "📊 データ品質")):
+        st.caption(_build_data_quality_summary_text(missing, t))
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric(t.get("dq_total", "Total"), missing.get("total", 0))
