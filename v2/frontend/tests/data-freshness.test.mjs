@@ -45,7 +45,13 @@ test("uses a same-day label in Japan even across UTC dates", () => {
 });
 
 test("does not present missing, invalid, or future timestamps as fresh", () => {
-  for (const value of [null, "", "not-a-date", "2026-07-26T00:00:00+09:00"]) {
+  for (const value of [
+    null,
+    "",
+    "not-a-date",
+    "2026-07-25T04:00:00.000Z",
+    "2026-07-26T00:00:00+09:00",
+  ]) {
     assert.deepEqual(buildDatasetFreshness(value, now), {
       state: "unknown",
       text: "⚪ 公開データの更新日を確認できません。",
