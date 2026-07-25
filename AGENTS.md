@@ -23,7 +23,7 @@ v2 の変更で v1 の公開API、安定ID、SQLite配信データ、Streamlit�
 
 ### v2
 
-- Frontend: Node.js 22 / Next.js 16.2.11 / React 19.1.0 / TypeScript / Leaflet / react-leaflet
+- Frontend: Node.js 22 / Next.js 16.2.11 / React 19.2.8 / TypeScript / Leaflet / react-leaflet
 - Backend: Python 3.12 / FastAPI / psycopg / PostgreSQL 17 / PostGIS / pg_trgm
 - Schema: `v2/backend/migrations/*.sql` の順序付き・チェックサム付きマイグレーション
 - Runtime: Frontend、Backend、Worker、PostgreSQL/PostGIS を Docker Compose で統合
