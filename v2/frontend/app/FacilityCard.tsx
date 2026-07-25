@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { buildFacilityEvidence } from "./facility-evidence";
+import { submitFacilityReport } from "./facility-report";
 import type { Place } from "./types";
 
 function trustLabel(place: Place): string {
@@ -14,28 +15,36 @@ function trustLabel(place: Place): string {
 
 export default function FacilityCard({ place }: { place: Place }) {
   const [reporting, setReporting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [reportType, setReportType] = useState("broken");
   const [note, setNote] = useState("");
   const [status, setStatus] = useState("");
 
   async function submitReport() {
+    if (submitting) return;
+
+    setSubmitting(true);
     setStatus("送信中...");
-    const response = await fetch(`/api/v2/facilities/${place.facility_id}/reports`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ report_type: reportType, note }),
-    });
-    if (response.ok) {
-      setStatus("報告を受け付けました。確認後に反映します。");
-      setNote("");
-      return;
+    try {
+      const result = await submitFacilityReport({
+        facilityId: place.facility_id,
+        reportType,
+        note,
+      });
+      if (result.ok) {
+        setStatus("報告を受け付けました。確認後に反映します。");
+        setNote("");
+        return;
+      }
+      setStatus(result.message);
+    } finally {
+      setSubmitting(false);
     }
-    const body = await response.json().catch(() => ({}));
-    setStatus(body.detail ?? "報告を送信できませんでした。");
   }
 
   const directions = `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`;
   const evidence = buildFacilityEvidence(place);
+  const reportFormId = `report-form-${place.facility_id}`;
 
   return (
     <article className="card" role="listitem">
@@ -84,13 +93,23 @@ export default function FacilityCard({ place }: { place: Place }) {
       </details>
       <div className="card-actions">
         <a href={directions} target="_blank" rel="noreferrer">ここへ案内</a>
-        <button type="button" onClick={() => setReporting((value) => !value)}>
+        <button
+          type="button"
+          aria-expanded={reporting}
+          aria-controls={reportFormId}
+          onClick={() => setReporting((value) => !value)}
+        >
           情報を報告
         </button>
       </div>
       {reporting && (
-        <div className="report-form">
-          <select value={reportType} onChange={(event) => setReportType(event.target.value)}>
+        <div className="report-form" id={reportFormId}>
+          <select
+            aria-label="報告の種類"
+            value={reportType}
+            disabled={submitting}
+            onChange={(event) => setReportType(event.target.value)}
+          >
             <option value="closed">閉鎖している</option>
             <option value="temporarily_closed">一時利用不能</option>
             <option value="broken">故障している</option>
@@ -104,10 +123,15 @@ export default function FacilityCard({ place }: { place: Place }) {
             placeholder="状況を入力してください"
             value={note}
             maxLength={1000}
+            disabled={submitting}
             onChange={(event) => setNote(event.target.value)}
           />
-          <button type="button" onClick={submitReport}>報告を送信</button>
-          {status && <p className="form-status">{status}</p>}
+          <button type="button" disabled={submitting} onClick={submitReport}>
+            {submitting ? "送信中..." : "報告を送信"}
+          </button>
+          <p className="form-status" role="status" aria-live="polite" aria-atomic="true">
+            {status}
+          </p>
         </div>
       )}
     </article>
