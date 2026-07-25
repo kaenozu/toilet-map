@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import { buildFacilityEvidence } from "./facility-evidence";
 import type { Place } from "./types";
 
 function trustLabel(place: Place): string {
@@ -34,20 +35,53 @@ export default function FacilityCard({ place }: { place: Place }) {
   }
 
   const directions = `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`;
+  const evidence = buildFacilityEvidence(place);
+
   return (
     <article className="card" role="listitem">
       <h2>{place.name}</h2>
       <p>{place.address || place.prefecture}</p>
       <div className="badges">
         <span className="badge score-badge">
-          きれい度 {place.toilet_score == null ? "未評価" : `${place.toilet_score}点`}
+          きれい度 {evidence.cleanliness}
         </span>
         <span className="badge trust-badge">{trustLabel(place)}</span>
       </div>
       <p className="meta">
-        情報源 {place.source_count || 1}件
+        情報源 {evidence.sources}
         {place.distance_m == null ? "" : `・約${Math.round(place.distance_m)}m`}
       </p>
+      <details className="score-rationale">
+        <summary>評価の根拠を見る</summary>
+        <div className="score-rationale-body">
+          <p>
+            きれい度は清潔さの評価、信頼度は情報源の確度・確認状態・更新時期をもとにした情報の確からしさです。
+          </p>
+          <dl>
+            <div>
+              <dt>きれい度</dt>
+              <dd>{evidence.cleanliness}</dd>
+            </div>
+            <div>
+              <dt>信頼度</dt>
+              <dd>{evidence.trust}</dd>
+            </div>
+            <div>
+              <dt>確認状態</dt>
+              <dd>{evidence.verification}</dd>
+            </div>
+            <div>
+              <dt>最終確認</dt>
+              <dd>{evidence.verifiedAt}</dd>
+            </div>
+            <div>
+              <dt>情報源</dt>
+              <dd>{evidence.sources}</dd>
+            </div>
+          </dl>
+          {evidence.caution && <p className="evidence-caution">{evidence.caution}</p>}
+        </div>
+      </details>
       <div className="card-actions">
         <a href={directions} target="_blank" rel="noreferrer">ここへ案内</a>
         <button type="button" onClick={() => setReporting((value) => !value)}>
