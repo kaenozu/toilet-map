@@ -34,7 +34,7 @@ Compatibility tables (`places`, `provider_records`, `reviews`, `score_history`) 
 
 ## Frontend runtime
 
-The accepted frontend baseline is Node.js 22, Next.js 16.2.11, React 19.1.0 and TypeScript 5.8.3. Exact dependency versions are defined in `frontend/package.json`.
+The accepted frontend baseline is Node.js 22, Next.js 16.2.11, React 19.2.8 and TypeScript 5.8.3. Exact dependency versions are defined in `frontend/package.json`.
 
 The repository intentionally does not use `frontend/package-lock.json`. Local development, Docker and CI install dependencies with:
 
