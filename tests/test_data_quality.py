@@ -69,16 +69,20 @@ class TestDataQualitySummary:
 
     def test_builds_localized_ratio_summary(self):
         text = _build_data_quality_summary_text(
-            {"total": 4, "no_score": 1, "no_address": 0, "no_reviews": 3},
+            {"total": 4, "no_score": 1, "no_address": 0, "no_prefecture": 2, "no_reviews": 3},
             {
                 "dq_total": "総数",
                 "dq_missing_score": "スコア欠損",
                 "dq_missing_address": "住所欠損",
+                "dq_missing_prefecture": "都道府県欠損",
                 "dq_missing_reviews": "口コミ0",
             },
         )
 
-        assert text == "スコア欠損: 25% (1/4) · 住所欠損: 0% (0/4) · 口コミ0: 75% (3/4)"
+        assert text == (
+            "スコア欠損: 25% (1/4) · 住所欠損: 0% (0/4) · "
+            "都道府県欠損: 50% (2/4) · 口コミ0: 75% (3/4)"
+        )
 
     def test_empty_summary_uses_total_label(self):
         assert _build_data_quality_summary_text({}, {"dq_total": "総数"}) == "総数: 0"
@@ -129,10 +133,29 @@ class TestRenderDataQuality:
 
     def test_uses_provided_translations(self, monkeypatch):
         _mock_streamlit(monkeypatch)
-        t = {"data_quality": "DQ", "dq_total": "Tot", "dq_missing_score": "NoScore",
-             "dq_missing_address": "NoAddr", "dq_missing_reviews": "NoRev",
-             "dq_score_dist": "Dist", "freshness": "Fresh"}
+        t = {
+            "data_quality": "DQ",
+            "dq_total": "Tot",
+            "dq_missing_score": "NoScore",
+            "dq_missing_address": "NoAddr",
+            "dq_missing_prefecture": "NoPref",
+            "dq_missing_reviews": "NoRev",
+            "dq_score_dist": "Dist",
+            "freshness": "Fresh",
+        }
         render_data_quality({"db_synced_at": "now"}, [], t)
+
+    def test_renders_prefecture_missing_metric(self, monkeypatch):
+        metric_calls = _mock_streamlit(monkeypatch)
+        summary = {
+            "missing": {"total": 4, "no_score": 1, "no_address": 0, "no_prefecture": 2, "no_reviews": 3},
+            "pref_counts": {},
+            "score_bins": [],
+        }
+
+        render_data_quality({}, summary, _t_dict())
+
+        assert ("No Pref", 2) in metric_calls
 
     def test_meta_freshness_falls_back_to_db_synced_at(self, monkeypatch):
         _mock_streamlit(monkeypatch)
@@ -144,21 +167,34 @@ class TestRenderDataQuality:
 
 
 def _t_dict():
-    return {"data_quality": "📊", "dq_total": "Total", "dq_missing_score": "No Score",
-            "dq_missing_address": "No Addr", "dq_missing_reviews": "No Rev",
-            "dq_score_dist": "Dist", "freshness": "Fresh"}
+    return {
+        "data_quality": "📊",
+        "dq_total": "Total",
+        "dq_missing_score": "No Score",
+        "dq_missing_address": "No Addr",
+        "dq_missing_prefecture": "No Pref",
+        "dq_missing_reviews": "No Rev",
+        "dq_score_dist": "Dist",
+        "freshness": "Fresh",
+    }
 
 
 class _NullContext:
-    def __enter__(self): return self
-    def __exit__(self, *a): pass
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        pass
 
 
 def _mock_streamlit(monkeypatch):
     import streamlit as st
+
+    metric_calls = []
     monkeypatch.setattr(st, "expander", lambda *a, **kw: _NullContext())
     monkeypatch.setattr(st, "columns", lambda n: [_NullContext() for _ in range(n)])
-    monkeypatch.setattr(st, "metric", lambda *a, **kw: None)
+    monkeypatch.setattr(st, "metric", lambda label, value, *a, **kw: metric_calls.append((label, value)))
     monkeypatch.setattr(st, "bar_chart", lambda *a, **kw: None)
     monkeypatch.setattr(st, "subheader", lambda *a: None)
     monkeypatch.setattr(st, "caption", lambda *a: None)
+    return metric_calls

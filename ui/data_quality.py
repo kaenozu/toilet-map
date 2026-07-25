@@ -104,6 +104,7 @@ def _build_data_quality_summary_text(missing: dict, t: dict) -> str:
     dimensions = (
         (t.get("dq_missing_score", "Missing Score"), missing.get("no_score", 0)),
         (t.get("dq_missing_address", "Missing Address"), missing.get("no_address", 0)),
+        (t.get("dq_missing_prefecture", "Missing Prefecture"), missing.get("no_prefecture", 0)),
         (t.get("dq_missing_reviews", "Zero Reviews"), missing.get("no_reviews", 0)),
     )
     parts = []
@@ -124,15 +125,21 @@ def render_data_quality(meta: dict, data: list[ToiletDict] | dict[str, object], 
 
     with st.expander(t.get("data_quality", "📊 データ品質")):
         st.caption(_build_data_quality_summary_text(missing, t))
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric(t.get("dq_total", "Total"), missing.get("total", 0))
-        with col2:
-            st.metric("未採点 / Unscored", missing.get("no_score", 0))
-        with col3:
-            st.metric(t.get("dq_missing_address", "住所欠損"), missing.get("no_address", 0))
-        with col4:
-            st.metric(t.get("dq_missing_reviews", "口コミ0"), missing.get("no_reviews", 0))
+        metric_rows = (
+            (
+                (t.get("dq_total", "Total"), missing.get("total", 0)),
+                ("未採点 / Unscored", missing.get("no_score", 0)),
+                (t.get("dq_missing_reviews", "口コミ0"), missing.get("no_reviews", 0)),
+            ),
+            (
+                (t.get("dq_missing_address", "住所欠損"), missing.get("no_address", 0)),
+                (t.get("dq_missing_prefecture", "都道府県欠損"), missing.get("no_prefecture", 0)),
+            ),
+        )
+        for metrics in metric_rows:
+            for column, (label, value) in zip(st.columns(len(metrics)), metrics, strict=True):
+                with column:
+                    st.metric(label, value)
 
         quality_summary = build_data_quality_summary(missing, t)
         if quality_summary:
