@@ -41,11 +41,11 @@ export function buildDatasetFreshness(
     return { state: "unknown", text: "⚪ 公開データの更新日を確認できません。" };
   }
 
-  const ageDays = japanCalendarDay(now) - japanCalendarDay(published);
-  if (ageDays < 0) {
+  if (published.getTime() > now.getTime()) {
     return { state: "unknown", text: "⚪ 公開データの更新日を確認できません。" };
   }
 
+  const ageDays = japanCalendarDay(now) - japanCalendarDay(published);
   const ageLabel = ageDays === 0 ? "本日" : `${ageDays}日前`;
   const publishedDate = formatJapanDate(published);
   if (ageDays <= FRESH_DATA_MAX_AGE_DAYS) {
