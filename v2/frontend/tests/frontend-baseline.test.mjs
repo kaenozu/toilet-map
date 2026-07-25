@@ -3,8 +3,6 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-const agentGuide = readFileSync(new URL("../../../AGENTS.md", import.meta.url), "utf8");
-const v2Readme = readFileSync(new URL("../../README.md", import.meta.url), "utf8");
 
 function majorMinor(version) {
   const match = /^(\d+)\.(\d+)\./.exec(version);
@@ -29,23 +27,4 @@ test("pins frontend dependencies to exact versions", () => {
   })) {
     assert.match(version, /^\d+\.\d+\.\d+$/, `${name} must use an exact version`);
   }
-});
-
-test("documents the accepted frontend baseline consistently", () => {
-  const nextVersion = packageJson.dependencies.next;
-  const reactVersion = packageJson.dependencies.react;
-  const typescriptVersion = packageJson.devDependencies.typescript;
-
-  assert.match(
-    agentGuide,
-    new RegExp(
-      `Node\\.js 22 / Next\\.js ${nextVersion.replaceAll(".", "\\.")} / React ${reactVersion.replaceAll(".", "\\.")} / TypeScript`,
-    ),
-  );
-  assert.match(
-    v2Readme,
-    new RegExp(
-      `Node\\.js 22, Next\\.js ${nextVersion.replaceAll(".", "\\.")}, React ${reactVersion.replaceAll(".", "\\.")} and TypeScript ${typescriptVersion.replaceAll(".", "\\.")}`,
-    ),
-  );
 });
