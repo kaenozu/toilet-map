@@ -3,6 +3,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
+import { buildDatasetFreshness } from "./data-freshness";
 import FacilityCard from "./FacilityCard";
 import { buildResultStatus } from "./result-status";
 import type { Place, UserLocation } from "./types";
@@ -114,6 +115,7 @@ export default function Dashboard() {
 
   const resultStatus = buildResultStatus({ loading, failed: loadFailed, count: places.length });
   const resultStatusClass = loading || loadFailed || places.length === 0 ? "empty" : "sr-only";
+  const datasetFreshness = stats ? buildDatasetFreshness(stats.published_at) : null;
 
   return (
     <div className="shell">
@@ -173,11 +175,18 @@ export default function Dashboard() {
             )}
           </div>
           <div className="stats">
-            {stats
-              ? `全${stats.record_count}件・評価済み${stats.scored_count}件${
-                  stats.average_score == null ? "" : `・平均${stats.average_score.toFixed(1)}点`
-                }`
-              : "統計を読み込み中"}
+            <div>
+              {stats
+                ? `全${stats.record_count}件・評価済み${stats.scored_count}件${
+                    stats.average_score == null ? "" : `・平均${stats.average_score.toFixed(1)}点`
+                  }`
+                : "統計を読み込み中"}
+            </div>
+            {datasetFreshness && (
+              <div className={`data-freshness data-freshness-${datasetFreshness.state}`}>
+                {datasetFreshness.text}
+              </div>
+            )}
           </div>
           <p className={resultStatusClass} role="status" aria-live="polite" aria-atomic="true">
             {resultStatus}
