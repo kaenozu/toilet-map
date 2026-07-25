@@ -20,6 +20,7 @@ test("submits the selected report type and note to the facility endpoint", async
   assert.deepEqual(result, { ok: true });
   assert.equal(captured.input, "/api/v2/facilities/42/reports");
   assert.equal(captured.init.method, "POST");
+  assert.ok(captured.init.signal instanceof AbortSignal);
   assert.deepEqual(JSON.parse(captured.init.body), {
     report_type: "broken",
     note: "水が止まりません",
@@ -69,6 +70,21 @@ test("converts network failures into retryable user feedback", async () => {
   assert.deepEqual(result, {
     ok: false,
     message: "通信エラーのため報告を送信できませんでした。接続を確認して再試行してください。",
+  });
+});
+
+test("aborts stalled requests and returns retryable timeout feedback", async () => {
+  const result = await submitFacilityReport(
+    { facilityId: 42, reportType: "broken", note: "応答がありません" },
+    async (_input, init) => new Promise((resolve, reject) => {
+      init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true });
+    }),
+    5,
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    message: "通信がタイムアウトしたため報告を送信できませんでした。接続を確認して再試行してください。",
   });
 });
 
