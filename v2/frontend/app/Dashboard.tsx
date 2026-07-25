@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { buildDatasetFreshness } from "./data-freshness";
 import FacilityCard from "./FacilityCard";
+import { buildPlaceSearchParams } from "./place-search-params";
 import { buildResultStatus } from "./result-status";
 import type { Place, UserLocation } from "./types";
 
@@ -27,6 +28,7 @@ export default function Dashboard() {
   const [facets, setFacets] = useState<Facets>({ prefectures: [], categories: [] });
   const [query, setQuery] = useState("");
   const [prefecture, setPrefecture] = useState("");
+  const [category, setCategory] = useState("");
   const [minScore, setMinScore] = useState("");
   const [minTrust, setMinTrust] = useState("");
   const [wheelchair, setWheelchair] = useState(false);
@@ -38,23 +40,22 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
 
-  const params = useMemo(() => {
-    const value = new URLSearchParams({ limit: "2000" });
-    if (query.trim()) value.set("q", query.trim());
-    if (prefecture) value.set("prefecture", prefecture);
-    if (minScore) value.set("min_score", minScore);
-    if (minTrust) value.set("min_trust", minTrust);
-    if (wheelchair) value.set("wheelchair", "true");
-    if (changingTable) value.set("changing_table", "true");
-    if (freeOnly) value.set("fee", "false");
-    if (open24h) value.set("open_24h", "true");
-    if (userLocation) {
-      value.set("latitude", String(userLocation.latitude));
-      value.set("longitude", String(userLocation.longitude));
-      value.set("radius_m", "10000");
-    }
-    return value.toString();
-  }, [query, prefecture, minScore, minTrust, wheelchair, changingTable, freeOnly, open24h, userLocation]);
+  const params = useMemo(
+    () =>
+      buildPlaceSearchParams({
+        query,
+        prefecture,
+        category,
+        minScore,
+        minTrust,
+        wheelchair,
+        changingTable,
+        freeOnly,
+        open24h,
+        userLocation,
+      }),
+    [query, prefecture, category, minScore, minTrust, wheelchair, changingTable, freeOnly, open24h, userLocation],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -142,6 +143,12 @@ export default function Dashboard() {
             <select aria-label="都道府県" value={prefecture} onChange={(event) => setPrefecture(event.target.value)}>
               <option value="">すべての都道府県</option>
               {facets.prefectures.map((item) => (
+                <option key={item.value} value={item.value}>{item.value} ({item.count})</option>
+              ))}
+            </select>
+            <select aria-label="施設カテゴリ" value={category} onChange={(event) => setCategory(event.target.value)}>
+              <option value="">すべての施設カテゴリ</option>
+              {facets.categories.map((item) => (
                 <option key={item.value} value={item.value}>{item.value} ({item.count})</option>
               ))}
             </select>
