@@ -32,6 +32,21 @@ Compatibility tables (`places`, `provider_records`, `reviews`, `score_history`) 
 - versioned SQL migrations with checksum validation
 - Docker Compose development and CI against PostgreSQL/PostGIS
 
+## Frontend runtime
+
+The accepted frontend baseline is Node.js 22, Next.js 16.2.11, React 19.1.0 and TypeScript 5.8.3. Exact dependency versions are defined in `frontend/package.json`.
+
+The repository intentionally does not use `frontend/package-lock.json`. Local development, Docker and CI install dependencies with:
+
+```bash
+cd v2/frontend
+npm install --no-audit --no-fund
+npm run typecheck
+npm run build
+```
+
+Any Next.js major-version update must pass the same typecheck and production-build acceptance before the documented baseline is changed.
+
 ## Local start
 
 ```bash

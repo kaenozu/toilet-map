@@ -23,7 +23,7 @@ v2 の変更で v1 の公開API、安定ID、SQLite配信データ、Streamlit�
 
 ### v2
 
-- Frontend: Node.js 22 / Next.js 15 / React 19 / TypeScript / Leaflet / react-leaflet
+- Frontend: Node.js 22 / Next.js 16.2.11 / React 19.1.0 / TypeScript / Leaflet / react-leaflet
 - Backend: Python 3.12 / FastAPI / psycopg / PostgreSQL 17 / PostGIS / pg_trgm
 - Schema: `v2/backend/migrations/*.sql` の順序付き・チェックサム付きマイグレーション
 - Runtime: Frontend、Backend、Worker、PostgreSQL/PostGIS を Docker Compose で統合
@@ -84,7 +84,7 @@ provider discovery
 - client component の範囲を必要最小限にする。
 - 依存関係は正確なバージョンを維持し、Next.js のセキュリティ修正版を優先する。
 - npm の更新後は必ず typecheck と production build を実行する。
-- `package-lock.json` は現状使用していない。Docker と CI は `npm install --no-audit --no-fund` を使用する。
+- `package-lock.json` は現状使用せず、`v2/frontend/package-lock.json` を `.gitignore` で除外する。Docker と CI は `npm install --no-audit --no-fund` を使用する。
 
 ## v1 互換ルール
 

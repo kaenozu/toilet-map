@@ -71,6 +71,12 @@ __pycache__/
 *.network-request
 *.network-response
 
+# v2 frontend generated artifacts
+/v2/frontend/node_modules/
+/v2/frontend/.next/
+/v2/frontend/package-lock.json
+/v2/frontend/tsconfig.tsbuildinfo
+
 # OS
 .DS_Store
 Thumbs.db
