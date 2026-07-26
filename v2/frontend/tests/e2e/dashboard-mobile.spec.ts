@@ -130,6 +130,7 @@ test.describe("mobile layout at 390px width", () => {
       (el) => getComputedStyle(el).gridTemplateColumns,
     );
     expect(filterRowColumns).not.toContain(" ");
+    expect(checksColumns).not.toContain(" ");
   });
 
   test("guidance text wraps without overflow", async ({ page }) => {
@@ -227,6 +228,13 @@ test.describe("accessibility landmarks and keyboard navigation", () => {
   test("skip link points to main content", async ({ page }) => {
     const skipLink = page.locator(".skip-link");
     await expect(skipLink).toHaveAttribute("href", "#main");
+  });
+
+  test("activating skip link moves focus to main content", async ({ page }) => {
+    await page.keyboard.press("Tab");
+    await expect(page.locator(".skip-link")).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#main")).toBeFocused();
   });
 
   test("exactly one main landmark exists on public page", async ({ page }) => {
