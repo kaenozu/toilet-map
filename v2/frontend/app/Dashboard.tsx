@@ -125,9 +125,9 @@ export default function Dashboard() {
           <h1>トイレきれい度マップ</h1>
           <p>清潔度だけでなく、情報の新しさと信頼度を確認できます。</p>
         </div>
-        <a className="admin-link" href="/admin">データ管理</a>
+        <nav aria-label="管理"><a className="admin-link" href="/admin">データ管理</a></nav>
       </header>
-      <div className="content">
+      <main id="main" tabIndex={-1} className="content">
         <aside className="sidebar">
           <div className="filters">
             <p id="search-guidance" className="filter-help">
@@ -203,7 +203,7 @@ export default function Dashboard() {
           </div>
         </aside>
         <MapView places={places} userLocation={userLocation} />
-      </div>
+      </main>
     </div>
   );
 }

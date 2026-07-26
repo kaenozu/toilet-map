@@ -207,3 +207,44 @@ test.describe("mobile layout at 390px width", () => {
     await expect(page.locator(".data-freshness")).toBeVisible();
   });
 });
+
+test.describe("accessibility landmarks and keyboard navigation", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockApi(page);
+    await page.goto("/");
+    await page.waitForFunction(() => {
+      const el = document.querySelector('[role="list"]');
+      return el && el.querySelectorAll('[role="listitem"]').length === 2;
+    });
+  });
+
+  test("skip link is first focusable element on Tab", async ({ page }) => {
+    await page.keyboard.press("Tab");
+    const skipLink = page.locator(".skip-link");
+    await expect(skipLink).toBeFocused();
+  });
+
+  test("skip link points to main content", async ({ page }) => {
+    const skipLink = page.locator(".skip-link");
+    await expect(skipLink).toHaveAttribute("href", "#main");
+  });
+
+  test("exactly one main landmark exists on public page", async ({ page }) => {
+    const mains = page.locator("main");
+    await expect(mains).toHaveCount(1);
+  });
+
+  test("map region has accessible label", async ({ page }) => {
+    const mapRegion = page.locator('[role="region"][aria-label="地図"]');
+    await expect(mapRegion).toBeVisible();
+  });
+
+  test("focus-visible outline is applied to interactive elements", async ({ page }) => {
+    const filterInput = page.locator('input[aria-label="施設を検索"]');
+    await filterInput.focus();
+    const outline = await filterInput.evaluate(
+      (el) => getComputedStyle(el).outline,
+    );
+    expect(outline).toBeTruthy();
+  });
+});
