@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import gzip
 import json
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -133,6 +136,33 @@ def test_cli_handles_clean_checkout_without_raw_files(tmp_path, capsys):
 
     assert main(["--root", str(tmp_path), "--canonical", "data/toilets.json.gz"]) == 0
     assert "No raw files matched" in capsys.readouterr().out
+
+
+def test_script_entrypoint_bootstraps_repository_imports(tmp_path):
+    canonical = tmp_path / "data" / "toilets.json.gz"
+    _write_canonical(canonical, [])
+    script_path = Path(inventory_raw_data.__file__).resolve()
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script_path),
+            "--root",
+            str(tmp_path),
+            "--canonical",
+            "data/toilets.json.gz",
+            "--json",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["canonical_records"] == 0
+    assert payload["raw_file_count"] == 0
 
 
 def test_load_canonical_plain_json_skips_non_objects_and_rejects_invalid_shape(tmp_path):

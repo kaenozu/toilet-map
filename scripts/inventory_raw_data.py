@@ -6,14 +6,21 @@ import argparse
 import glob
 import gzip
 import json
+import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import cast
 
-from batch.identity import build_fallback_source_id, build_source_id
-from batch.process_data import process_place
-from batch.scoring import PlaceDict
+# Running this file by path sets sys.path[0] to scripts/, so the repository's
+# batch/ namespace is otherwise unavailable unless the project is installed.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from batch.identity import build_fallback_source_id, build_source_id  # noqa: E402
+from batch.process_data import process_place  # noqa: E402
+from batch.scoring import PlaceDict  # noqa: E402
 
 DEFAULT_CANONICAL_PATH = Path("data/toilets.json.gz")
 DEFAULT_RAW_PATTERNS = (
