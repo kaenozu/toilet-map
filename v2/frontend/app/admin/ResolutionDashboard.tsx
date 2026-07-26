@@ -89,7 +89,7 @@ export default function ResolutionDashboard() {
   }
 
   return (
-    <main className="admin-shell">
+    <main id="main" tabIndex={-1} className="admin-shell">
       <header className="admin-header">
         <div><h1>データ品質管理</h1><p>類似候補は自動統合せず、管理者判断で確定します。</p></div>
         <a href="/">公開マップへ戻る</a>
