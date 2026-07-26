@@ -1,9 +1,9 @@
 # v2 Local Preview Cutover — Rehearsal Report
 
 **Date:** 2026-07-26 15:37:56
-**Commit:** $commit
+**Commit:** aca60e1
 **Preview Environment:** Local Docker Compose (PostgreSQL 17/PostGIS, FastAPI, Next.js, Worker)
-**Input Data:** data/toilets.json.gz (SHA-256: $dataSha)
+**Input Data:** data/toilets.json.gz (SHA-256: 9496acd4...)
 
 ## Status: ✅ GO
 
@@ -12,7 +12,7 @@ All 8 phases of the Preview cutover rehearsal passed. The full-stack acceptance 
 ## Phase Details
 
 ### Phase 0 — Preflight
-- [x] Working tree clean (main @ $commit)
+- [x] Working tree clean (main @ aca60e1)
 - [x] Docker CLI available (29.6.2)
 - [x] v1 data verified (1,349 records, JSON/SQLite synced, no duplicates)
 - [x] No pending records in v1 data
@@ -60,7 +60,7 @@ All 8 phases of the Preview cutover rehearsal passed. The full-stack acceptance 
 - [x] Backend restart restores normal mode
 
 ## Known Issues
-- Worker healthcheck misconfigured (localhost:8000 vs backend service name). Does not affect runtime.
+- None.
 
 ## Conclusion
 Ready for production deployment. All paths verified on local Docker Compose environment.

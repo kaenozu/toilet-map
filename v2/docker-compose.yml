@@ -34,6 +34,8 @@ services:
   worker:
     build: ./backend
     command: ["python", "-m", "app.worker"]
+    healthcheck:
+      disable: true
     environment:
       DATABASE_URL: postgresql://toilet_map:toilet_map@db:5432/toilet_map
     depends_on:
