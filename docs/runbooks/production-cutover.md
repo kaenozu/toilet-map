@@ -8,9 +8,10 @@ rollback path.
 
 ## Prerequisites
 
-- [ ] Preview rehearsal passed (see docs/rehearsals/2026-07-26-v2-local-preview-cutover.md)
-- [ ] PR #104 (worker healthcheck + evidence fix) merged
-- [ ] All services built and tagged with a release version
+- [x] Preview rehearsal passed (see docs/rehearsals/2026-07-26-v2-local-preview-cutover.md) — aca60e1
+- [x] PR #104 (worker healthcheck + evidence fix) merged
+- [ ] Release candidate SHA pinned on `main` after Issue #57 and #58 are complete
+- [ ] All services built and tagged with release version (`v2.*` tag pushed)
 - [ ] Production DB backup confirmed exists and is restorable
 - [ ] Production environment variables audited (secrets, CORS, URLs)
 
