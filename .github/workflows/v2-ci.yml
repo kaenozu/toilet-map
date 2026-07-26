@@ -205,6 +205,16 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm run typecheck
       - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:ui
+      - name: Upload frontend UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-frontend-ui-evidence
+          path: |
+            v2/frontend/playwright-report/
+            v2/frontend/test-results/
 
   compose:
     runs-on: ubuntu-latest

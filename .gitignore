@@ -76,6 +76,12 @@ __pycache__/
 /v2/frontend/.next/
 /v2/frontend/package-lock.json
 /v2/frontend/tsconfig.tsbuildinfo
+/v2/frontend/next-env.d.ts
+/v2/frontend/test-results/
+/v2/frontend/playwright-report/
+
+# Local environment
+/v2/.env
 
 # OS
 .DS_Store
