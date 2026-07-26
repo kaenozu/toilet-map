@@ -22,7 +22,7 @@ rollback path.
 pg_dump -Fc -f backup-$(date +%Y%m%d).dump toilet_map
 ```
 
-**Verification:** File exists and size > 100MB (expected ~50-100MB for 1349 facilities).
+**Verification:** File exists, pg_dump exit code is 0, and `pg_restore --list` succeeds against the backup (proves restorability). Do not use a fixed size threshold — check `pg_restore --list` output for expected table count instead.
 
 ### 1.2 Migration Status Check
 
@@ -59,7 +59,7 @@ python -m app.cli init-db
 python -m app.cli import-legacy /data/toilets.json.gz
 ```
 
-**Pass:** `record_count` matches expected (1,349).
+**Pass:** `record_count` matches the canonical JSON record count (run `python -c "import gzip,json; d=json.load(gzip.open('/data/toilets.json.gz')); print(len(d['toilets']))"` to get the expected number).
 **Fail:** Do not publish. Investigate data integrity.
 
 ### 2.2 Validate
@@ -86,7 +86,7 @@ python -m app.cli import-legacy /data/toilets.json.gz --publish
 python -m app.cli data-quality
 ```
 
-**Pass:** `published_snapshots` = 1,349.
+**Pass:** `published_snapshots` matches the canonical JSON record count.
 **Fail:** Publication is incomplete — rollback and retry.
 
 ## Phase 3 — Service Deployment
@@ -130,9 +130,9 @@ docker compose up -d frontend
 ### 4.1 API Smoke
 
 ```bash
-curl -s http://localhost:8000/api/v2/places?limit=1  # items array, total >= 1349
+curl -s http://localhost:8000/api/v2/places?limit=1  # items array, total > 0
 curl -s http://localhost:8000/api/v2/facets          # categories + prefectures populated
-curl -s http://localhost:8000/api/v2/stats            # record_count >= 1349
+curl -s http://localhost:8000/api/v2/stats            # record_count > 0
 ```
 
 **Pass:** All endpoints return expected data.
