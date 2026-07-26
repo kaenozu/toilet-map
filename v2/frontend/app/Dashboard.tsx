@@ -114,6 +114,11 @@ export default function Dashboard() {
     );
   }
 
+  function clearUserLocation() {
+    setUserLocation(null);
+    setLocationStatus("");
+  }
+
   const resultStatus = buildResultStatus({ loading, failed: loadFailed, count: places.length });
   const resultStatusClass = loading || loadFailed || places.length === 0 ? "empty" : "sr-only";
   const datasetFreshness = stats ? buildDatasetFreshness(stats.published_at) : null;
@@ -173,7 +178,7 @@ export default function Dashboard() {
             </div>
             <div className="location-row">
               <button type="button" aria-describedby="search-guidance" onClick={locateUser}>現在地から探す</button>
-              {userLocation && <button type="button" className="secondary" onClick={() => setUserLocation(null)}>解除</button>}
+              {userLocation && <button type="button" className="secondary" onClick={clearUserLocation}>解除</button>}
             </div>
             {locationStatus && (
               <p className="location-status" role="status" aria-live="polite">
