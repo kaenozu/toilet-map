@@ -36,7 +36,7 @@ jobs:
           exit 0
       - name: Upload Ruff output
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: v2-ruff-output
           path: v2-ruff-output.txt
@@ -209,7 +209,7 @@ jobs:
       - run: npm run test:ui
       - name: Upload frontend UI evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: v2-frontend-ui-evidence
           path: |
