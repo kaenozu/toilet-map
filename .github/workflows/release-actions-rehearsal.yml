@@ -1,0 +1,54 @@
+name: Release Actions Rehearsal
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
+      - '.github/workflows/v2-release.yml'
+      - '.github/workflows/release-actions-rehearsal.yml'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-actions-rehearsal-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  ghcr-rehearsal:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: v1
+            context: .
+            package: toilet-map
+          - name: v2-api
+            context: v2/backend
+            package: toilet-map-v2-api
+          - name: v2-web
+            context: v2/frontend
+            package: toilet-map-v2-web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR with login-action v4
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push rehearsal image with build-push-action v7
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.package }}:rehearsal-pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          provenance: mode=max
+          sbom: true
+      - name: Record rehearsal tag
+        run: |
+          echo "Published ghcr.io/${{ github.repository_owner }}/${{ matrix.package }}:rehearsal-pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}" >> "$GITHUB_STEP_SUMMARY"
