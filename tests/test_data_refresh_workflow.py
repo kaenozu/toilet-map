@@ -43,7 +43,7 @@ def test_data_refresh_workflow_preserves_failure_evidence() -> None:
 
     assert "continue-on-error: true" in workflow
     assert workflow.count("if: always()") >= 3
-    assert "actions/upload-artifact@v4" in workflow
+    assert "uses: actions/upload-artifact@" in workflow
     assert "artifacts/logs/refresh.log" in workflow
     assert "artifacts/logs/verify.log" in workflow
     assert "artifacts/snapshot-report.json" in workflow
