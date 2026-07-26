@@ -31,7 +31,7 @@ jobs:
           exit 0
       - name: Upload Ruff output
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ruff-output
           path: ruff-output.txt
@@ -64,7 +64,7 @@ jobs:
           exit 0
       - name: Upload dependency output
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dependency-output-${{ matrix.python-version }}
           path: dependency-output.txt
@@ -82,7 +82,7 @@ jobs:
           exit 0
       - name: Upload mypy output
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mypy-output-${{ matrix.python-version }}
           path: mypy-output.txt
@@ -101,7 +101,7 @@ jobs:
           exit 0
       - name: Upload test output
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pytest-output-${{ matrix.python-version }}
           path: pytest-output.txt
