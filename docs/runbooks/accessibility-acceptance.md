@@ -26,7 +26,7 @@ The acceptance covers:
 
 ## Required environments
 
-Run at least one Windows screen reader and TalkBack. Record the exact versions.
+Run NVDA, Narrator and TalkBack independently. Record the exact versions.
 
 | Environment | Required setup |
 |---|---|
@@ -180,10 +180,9 @@ Use `NOT RUN`, not `PASS`, when an environment or scenario was unavailable.
 Issue #58 can be closed only when:
 
 1. the frontend typecheck, production build and Playwright suite pass at the recorded commit;
-2. NVDA or Narrator has passed every desktop scenario;
-3. TalkBack has passed every mobile scenario;
-4. the other Windows screen reader is either passed or explicitly tracked in a
-   follow-up issue with a reason and owner;
+2. NVDA has passed every desktop scenario;
+3. Narrator has passed every desktop scenario;
+4. TalkBack has passed every mobile scenario;
 5. all discovered severity-high accessibility defects are fixed and reverified;
 6. evidence is attached without secrets or precise personal location data.
 
