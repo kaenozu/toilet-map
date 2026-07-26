@@ -32,7 +32,7 @@ export default function MapView({
 }) {
   const viewport = resolveMapViewport(places, userLocation);
   return (
-    <div className="map">
+    <div className="map" role="region" aria-label="地図">
       <MapContainer
         key={viewport.key}
         center={viewport.kind === "center" ? viewport.center : undefined}

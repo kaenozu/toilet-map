@@ -125,7 +125,7 @@ export default function Dashboard() {
           <h1>トイレきれい度マップ</h1>
           <p>清潔度だけでなく、情報の新しさと信頼度を確認できます。</p>
         </div>
-        <a className="admin-link" href="/admin">データ管理</a>
+        <nav aria-label="管理"><a className="admin-link" href="/admin">データ管理</a></nav>
       </header>
       <div className="content">
         <aside className="sidebar">
