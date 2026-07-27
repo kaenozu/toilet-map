@@ -80,11 +80,11 @@ test.describe("facility card interaction", () => {
     const dl = page.locator(".score-rationale-body dl");
 
     const dlFirst = dl.first();
-    await expect(dlFirst.getByText("きれい度")).toBeVisible();
-    await expect(dlFirst.getByText("信頼度")).toBeVisible();
-    await expect(dlFirst.getByText("確認状態")).toBeVisible();
-    await expect(dlFirst.getByText("最終確認")).toBeVisible();
-    await expect(dlFirst.getByText("情報源")).toBeVisible();
+    await expect(dlFirst.getByText("きれい度").first()).toBeVisible();
+    await expect(dlFirst.getByText("信頼度").first()).toBeVisible();
+    await expect(dlFirst.getByText("確認状態").first()).toBeVisible();
+    await expect(dlFirst.getByText("最終確認").first()).toBeVisible();
+    await expect(dlFirst.getByText("情報源").first()).toBeVisible();
   });
 });
 

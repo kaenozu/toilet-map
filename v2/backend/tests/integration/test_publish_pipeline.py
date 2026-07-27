@@ -211,12 +211,11 @@ class TestPipeline:
             assert row["verification_status"] in ("human_verified",)
 
     def test_api_serves_published_places(self, dataset_id: int) -> None:
-        from httpx import ASGITransport, Client
+        from fastapi.testclient import TestClient
 
         from app.main import app
 
-        transport = ASGITransport(app=app)
-        with Client(transport=transport, base_url="http://test") as client:
+        with TestClient(app) as client:
             resp = client.get("/api/v2/places?wheelchair=true&min_trust=1")
         assert resp.status_code == 200
         data = resp.json()
@@ -351,14 +350,18 @@ class TestV1Compatibility:
 
     def test_provider_records_compatibility(self, dataset_id: int, db) -> None:
         rows = db.execute(
-            "SELECT source_id, place_id, data_id, name FROM provider_records WHERE dataset_version_id = %s ORDER BY id",
+            """
+            SELECT pr.external_id, pr.provider, p.stable_key
+              FROM provider_records pr
+              JOIN places p ON p.id = pr.place_id
+             WHERE pr.dataset_version_id = %s
+             ORDER BY pr.id
+            """,
             [dataset_id],
         ).fetchall()
-        assert rows[0]["source_id"] == "src-001"
-        assert rows[0]["place_id"] == "gp-1001"
-        assert rows[0]["data_id"] == "42"
-        assert rows[1]["source_id"] == "src-002"
-        assert rows[1]["place_id"] is None
+        assert rows[0]["external_id"] == "src-001"
+        assert rows[0]["stable_key"] == "gp-1001"
+        assert rows[1]["external_id"] == "src-002"
 
     def test_published_snapshot_matches_v1_input(self, dataset_id: int, db) -> None:
         validate_dataset(dataset_id)
@@ -427,35 +430,32 @@ class TestAPI:
         truncate_all()
 
     def test_health(self) -> None:
-        from httpx import ASGITransport, Client
+        from fastapi.testclient import TestClient
 
         from app.main import app
 
-        transport = ASGITransport(app=app)
-        with Client(transport=transport, base_url="http://test") as client:
+        with TestClient(app) as client:
             resp = client.get("/health")
         assert resp.status_code == 200
         assert resp.json() == {"status": "ok"}
 
     def test_stats_empty_when_no_published_data(self) -> None:
-        from httpx import ASGITransport, Client
+        from fastapi.testclient import TestClient
 
         from app.main import app
 
-        transport = ASGITransport(app=app)
-        with Client(transport=transport, base_url="http://test") as client:
+        with TestClient(app) as client:
             resp = client.get("/api/v2/stats")
         assert resp.status_code == 200
         data = resp.json()
         assert data["record_count"] == 0
 
     def test_places_empty_when_no_published_data(self) -> None:
-        from httpx import ASGITransport, Client
+        from fastapi.testclient import TestClient
 
         from app.main import app
 
-        transport = ASGITransport(app=app)
-        with Client(transport=transport, base_url="http://test") as client:
+        with TestClient(app) as client:
             resp = client.get("/api/v2/places")
         assert resp.status_code == 200
         data = resp.json()

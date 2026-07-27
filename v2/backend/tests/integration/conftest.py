@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from psycopg.rows import dict_row
+
 from app.db import DATABASE_URL
 from app.migrations import apply_migrations
 
@@ -50,16 +52,17 @@ def _connect(**kwargs):
 
 
 def truncate_all() -> None:
-    conn = _connect()
+    conn = _connect(row_factory=dict_row)
     conn.autocommit = True
     tables = conn.execute(
         """
         SELECT tablename FROM pg_catalog.pg_tables
-         WHERE schemaname = 'public' AND tablename != 'schema_migrations'
+         WHERE schemaname = 'public'
+           AND tablename NOT IN ('schema_migrations', 'score_dimensions')
         """
     ).fetchall()
     for row in tables:
-        conn.execute(f'TRUNCATE TABLE "{row[0]}" CASCADE')
+        conn.execute(f'TRUNCATE TABLE "{row["tablename"]}" CASCADE')
     conn.close()
 
 
@@ -84,7 +87,7 @@ def _schema() -> None:
 
 @pytest.fixture
 def db(_schema: None) -> Iterator:
-    conn = _connect()
+    conn = _connect(row_factory=dict_row)
     try:
         yield conn
     finally:
