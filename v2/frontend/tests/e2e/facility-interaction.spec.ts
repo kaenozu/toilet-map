@@ -79,11 +79,12 @@ test.describe("facility card interaction", () => {
     await page.getByText("評価の根拠を見る").click();
     const dl = page.locator(".score-rationale-body dl");
 
-    await expect(dl.getByText("きれい度")).toBeVisible();
-    await expect(dl.getByText("信頼度")).toBeVisible();
-    await expect(dl.getByText("確認状態")).toBeVisible();
-    await expect(dl.getByText("最終確認")).toBeVisible();
-    await expect(dl.getByText("情報源")).toBeVisible();
+    const dlFirst = dl.first();
+    await expect(dlFirst.getByText("きれい度")).toBeVisible();
+    await expect(dlFirst.getByText("信頼度")).toBeVisible();
+    await expect(dlFirst.getByText("確認状態")).toBeVisible();
+    await expect(dlFirst.getByText("最終確認")).toBeVisible();
+    await expect(dlFirst.getByText("情報源")).toBeVisible();
   });
 });
 
