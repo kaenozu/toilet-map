@@ -63,7 +63,10 @@ def _make_fixture(*, extra: list[dict[str, object]] | None = None) -> Path:
 
 def _count(connection, query: str, params: list[object] | None = None) -> int:
     row = connection.execute(query, params or []).fetchone()
-    return int(row[0]) if row else 0
+    if row is None:
+        return 0
+    values = list(row.values()) if isinstance(row, dict) else row
+    return int(values[0])
 
 
 class TestImport:
