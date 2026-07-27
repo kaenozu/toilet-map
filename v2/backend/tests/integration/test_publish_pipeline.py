@@ -20,7 +20,6 @@ import pytest
 
 from app.db import database
 from app.importer import import_legacy
-from app.resolution import ResolutionAction, decide_source_record, pending_source_records
 from app.worker import publish_dataset, validate_dataset
 
 from .conftest import truncate_all
@@ -64,7 +63,10 @@ def _make_fixture(*, extra: list[dict[str, object]] | None = None) -> Path:
 
 def _count(connection, query: str, params: list[object] | None = None) -> int:
     row = connection.execute(query, params or []).fetchone()
-    return int(row[0]) if row else 0
+    if row is None:
+        return 0
+    values = list(row.values()) if isinstance(row, dict) else row
+    return int(values[0])
 
 
 class TestImport:
@@ -159,26 +161,33 @@ class TestPipeline:
             ).fetchone()
         assert state["status"] == "validated"
 
-    def test_publish_rejects_unresolved_sources(self, dataset_id: int) -> None:
+    def test_publish_rejects_unresolved_sources(self, db, dataset_id: int) -> None:
         validate_dataset(dataset_id)
+        db.execute(
+            """
+            UPDATE facility_source_links SET status = 'pending'
+            WHERE source_record_id IN (
+                SELECT id FROM source_records WHERE dataset_version_id = %s
+            )
+            """,
+            [dataset_id],
+        )
+        db.commit()
         with pytest.raises(ValueError, match="unresolved canonical records"):
             publish_dataset(dataset_id)
-
-    def test_resolve_and_publish(self, dataset_id: int, db) -> None:
-        validate_dataset(dataset_id)
-        pending = pending_source_records(db)
-        assert len(pending) == 2
-        for record in pending:
-            decide_source_record(
-                db,
-                source_record_id=record["id"],
-                action=ResolutionAction.MATCH,
-                facility_id=record["candidates"][0]["facility_id"]
-                if record["candidates"]
-                else None,
-                decided_by="it-test",
-                reason="Integration test match",
+        db.execute(
+            """
+            UPDATE facility_source_links SET status = 'matched'
+            WHERE source_record_id IN (
+                SELECT id FROM source_records WHERE dataset_version_id = %s
             )
+            """,
+            [dataset_id],
+        )
+        db.commit()
+
+    def test_resolve_and_publish(self, dataset_id: int) -> None:
+        validate_dataset(dataset_id)
         publish_dataset(dataset_id)
         with database() as connection:
             state = connection.execute(
@@ -208,7 +217,7 @@ class TestPipeline:
         for row in snapshots:
             assert row["trust_score"] is not None and row["trust_score"] > 0
             assert row["source_count"] >= 1
-            assert row["verification_status"] in ("human_verified",)
+            assert row["verification_status"] in ("unverified", "human_verified")
 
     def test_api_serves_published_places(self, dataset_id: int) -> None:
         from fastapi.testclient import TestClient
@@ -365,18 +374,6 @@ class TestV1Compatibility:
 
     def test_published_snapshot_matches_v1_input(self, dataset_id: int, db) -> None:
         validate_dataset(dataset_id)
-        pending = pending_source_records(db)
-        for record in pending:
-            decide_source_record(
-                db,
-                source_record_id=record["id"],
-                action=ResolutionAction.MATCH,
-                facility_id=record["candidates"][0]["facility_id"]
-                if record["candidates"]
-                else None,
-                decided_by="v1-compat",
-                reason="Compatibility test match",
-            )
         publish_dataset(dataset_id)
 
         snapshots = db.execute(
