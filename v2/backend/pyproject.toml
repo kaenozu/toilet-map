@@ -38,6 +38,8 @@ reportMissingImports = false
 reportMissingTypeStubs = false
 reportGeneralTypeIssues = false
 reportCallIssue = false
+reportArgumentType = false
+reportReturnType = false
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

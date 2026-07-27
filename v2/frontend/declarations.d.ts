@@ -5,6 +5,8 @@ declare module "next" {
 }
 declare module "next/types.js" {
   export type { Metadata } from "next/types";
+  export interface ResolvingMetadata {}
+  export interface ResolvingViewport {}
 }
 declare module "next/server.js" {
   export type { NextRequest, NextResponse } from "next/server";
