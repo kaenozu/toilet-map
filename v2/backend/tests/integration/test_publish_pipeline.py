@@ -245,10 +245,9 @@ class TestV1Compatibility:
     def fixture_path(self) -> Path:
         toilets = [
             {
-                "place_id": "gp-1001",
-                "data_id": 42,
-                "source_id": "src-001",
-                "name": "V1 Compat Toilet",
+                 "place_id": "gp-1001",
+                 "data_id": 42,
+                 "name": "V1 Compat Toilet",
                 "address": "東京都千代田区丸の内1-9-1",
                 "prefecture": "東京都",
                 "category": "駅",
@@ -347,7 +346,7 @@ class TestV1Compatibility:
             """,
             [dataset_id],
         ).fetchall()
-        assert rows[0]["external_id"] == "src-001"
+        assert rows[0]["external_id"] == "gp-1001"
         assert rows[0]["stable_key"] == "gp-1001"
         assert rows[1]["external_id"] == "src-002"
 
