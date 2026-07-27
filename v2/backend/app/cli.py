@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from pathlib import Path
 
 from .db import apply_schema, database
 from .importer import import_legacy
+from .providers import OSM_REGIONS
 from .resolution import generate_match_candidates
 from .worker import (
     detect_stale_source_records,
@@ -46,7 +48,13 @@ def _parser() -> argparse.ArgumentParser:
     candidates.add_argument("--minimum-score", type=float, default=0.35)
 
     osm = sub.add_parser("ingest-osm")
-    osm.add_argument("--region", choices=("kumagaya", "gyoda", "fukaya"), required=True)
+    osm.add_argument("--region", choices=tuple(sorted(OSM_REGIONS)), required=True)
+
+    all_osm = sub.add_parser("ingest-osm-all")
+    all_osm.add_argument("--delay", type=float, default=1.0,
+                         help="Seconds to wait between regions (default 1.0)")
+    all_osm.add_argument("--from-region", choices=tuple(sorted(OSM_REGIONS)),
+                         help="Resume from this region (inclusive)")
     return parser
 
 
@@ -118,6 +126,38 @@ def main() -> None:
         print(f"generated={total}")
     elif args.command == "ingest-osm":
         print(json.dumps(ingest_osm_region(args.region), ensure_ascii=False))
+    elif args.command == "ingest-osm-all":
+        results: dict[str, dict[str, int] | str] = {}
+        started = False
+        for key in sorted(OSM_REGIONS):
+            if args.from_region and not started:
+                if key == args.from_region:
+                    started = True
+                else:
+                    results[key] = "skipped"
+                    continue
+            if args.from_region and key == args.from_region:
+                started = True
+            region_label = OSM_REGIONS[key].label
+            print(f"[{key}] {region_label}...", end=" ", flush=True)
+            try:
+                stats = ingest_osm_region(key)
+                results[key] = stats
+                print(f"ok ({stats['inserted']} new, {stats['reused']} reused)")
+            except Exception as exc:
+                results[key] = str(exc)
+                print(f"failed: {exc}")
+            if key != sorted(OSM_REGIONS)[-1]:
+                time.sleep(args.delay)
+        total_new = sum(r["inserted"] for r in results.values() if isinstance(r, dict))
+        total_reused = sum(r["reused"] for r in results.values() if isinstance(r, dict))
+        failed = sum(1 for r in results.values() if isinstance(r, str))
+        print(json.dumps({
+            "total_inserted": total_new,
+            "total_reused": total_reused,
+            "regions_succeeded": sum(1 for r in results.values() if isinstance(r, dict)),
+            "regions_failed": failed,
+        }, ensure_ascii=False))
 
 
 if __name__ == "__main__":

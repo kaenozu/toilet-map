@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -78,19 +79,36 @@ class OsmOverpassProvider:
                 continue
             yield RawRecord(self.name, f"{osm_type}/{osm_id}", element)
 
-    def normalize(self, record: RawRecord) -> NormalizedObservation | None:
-        payload = record.payload
-        tags = payload.get("tags") if isinstance(payload.get("tags"), dict) else {}
-        center = payload.get("center") if isinstance(payload.get("center"), dict) else {}
-        latitude = payload.get("lat", center.get("lat"))
-        longitude = payload.get("lon", center.get("lon"))
+    def _tags(self, payload: dict[str, object]) -> dict[str, object]:
+        raw = payload.get("tags")
+        return raw if isinstance(raw, dict) else {}
+
+    def _center(self, payload: dict[str, object]) -> dict[str, object]:
+        raw = payload.get("center")
+        return raw if isinstance(raw, dict) else {}
+
+    @staticmethod
+    def _coord(payload: dict[str, object], center: dict[str, object]) -> tuple[float, float] | None:
+        lat: Any = payload.get("lat")
+        lon: Any = payload.get("lon")
+        if lat is None or lon is None:
+            lat = center.get("lat")
+            lon = center.get("lon")
+        if lat is None or lon is None:
+            return None
         try:
-            lat = float(latitude)
-            lon = float(longitude)
+            return float(lat), float(lon)
         except (TypeError, ValueError):
             return None
-        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+
+    def normalize(self, record: RawRecord) -> NormalizedObservation | None:
+        payload = record.payload
+        tags = self._tags(payload)
+        center = self._center(payload)
+        coords = self._coord(payload, center)
+        if coords is None:
             return None
+        lat, lon = coords
         name = str(tags.get("name") or tags.get("operator") or "公衆トイレ").strip()
         address_parts = [
             str(tags.get("addr:province") or ""),
