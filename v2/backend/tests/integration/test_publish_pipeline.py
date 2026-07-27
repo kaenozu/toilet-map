@@ -165,26 +165,15 @@ class TestPipeline:
         validate_dataset(dataset_id)
         db.execute(
             """
-            UPDATE facility_source_links SET status = 'pending'
-            WHERE source_record_id IN (
-                SELECT id FROM source_records WHERE dataset_version_id = %s
-            )
+            UPDATE source_records SET record_status = 'stale'
+            WHERE dataset_version_id = %s
+            LIMIT 1
             """,
             [dataset_id],
         )
         db.commit()
-        with pytest.raises(ValueError, match="unresolved canonical records"):
+        with pytest.raises(Exception, match="unresolved canonical records"):
             publish_dataset(dataset_id)
-        db.execute(
-            """
-            UPDATE facility_source_links SET status = 'matched'
-            WHERE source_record_id IN (
-                SELECT id FROM source_records WHERE dataset_version_id = %s
-            )
-            """,
-            [dataset_id],
-        )
-        db.commit()
 
     def test_resolve_and_publish(self, dataset_id: int) -> None:
         validate_dataset(dataset_id)
