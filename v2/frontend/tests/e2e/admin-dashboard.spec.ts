@@ -125,7 +125,7 @@ test.describe("admin dashboard", () => {
     await page.locator('button:has-text("データを読み込む")').click();
     await expect(page.getByText("ユーザー報告")).toBeVisible();
     await expect(page.getByText("未処理報告1件")).toBeVisible();
-    await expect(page.getByText("東京駅構内トイレ")).toBeVisible();
+    await expect(page.locator(".admin-card").nth(2).getByText("東京駅構内トイレ")).toBeVisible();
     await expect(page.getByText("3番線ホームのトイレが故障しています")).toBeVisible();
   });
 
