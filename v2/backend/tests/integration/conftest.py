@@ -14,7 +14,6 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-
 from psycopg.rows import dict_row
 
 from app.db import DATABASE_URL
