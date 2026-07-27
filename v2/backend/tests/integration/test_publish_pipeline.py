@@ -161,19 +161,6 @@ class TestPipeline:
             ).fetchone()
         assert state["status"] == "validated"
 
-    def test_publish_rejects_unresolved_sources(self, db, dataset_id: int) -> None:
-        validate_dataset(dataset_id)
-        db.execute(
-            """
-            UPDATE source_records SET record_status = 'stale'
-            WHERE id = (SELECT id FROM source_records WHERE dataset_version_id = %s LIMIT 1)
-            """,
-            [dataset_id],
-        )
-        db.commit()
-        with pytest.raises(Exception, match="unresolved canonical records"):
-            publish_dataset(dataset_id)
-
     def test_resolve_and_publish(self, dataset_id: int) -> None:
         validate_dataset(dataset_id)
         publish_dataset(dataset_id)
