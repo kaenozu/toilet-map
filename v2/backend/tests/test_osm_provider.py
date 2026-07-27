@@ -27,7 +27,7 @@ def test_osm_provider_discovers_and_normalizes_bounded_records() -> None:
         ]
     }
     provider = OsmOverpassProvider(opener=lambda request, timeout: json.dumps(payload).encode())
-    region = OSM_REGIONS["kumagaya"]
+    region = OSM_REGIONS["saitama"]
     records = list(provider.discover(FetchRequest(bbox=region.bbox)))
     assert records[0].external_id == "node/42"
     observation = provider.normalize(records[0])
