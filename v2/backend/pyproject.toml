@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest==8.4.1", "httpx==0.28.1", "ruff==0.12.4"]
+dev = ["pytest==8.4.1", "httpx==0.28.1", "ruff==0.12.4", "pyright==1.1.400"]
 
 [project.scripts]
 toilet-map-v2 = "app.cli:main"
@@ -29,6 +29,18 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "SIM"]
 
+[tool.pyright]
+include = ["app"]
+exclude = ["tests"]
+typeCheckingMode = "standard"
+pythonVersion = "3.12"
+reportMissingImports = false
+reportMissingTypeStubs = false
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+    "integration: requires a real PostgreSQL database (DATABASE_URL)",
+    "slow: test that takes longer than a few seconds to run",
+]

@@ -1,0 +1,107 @@
+name: Data freshness check
+
+on:
+  schedule:
+    - cron: '0 22 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: data-freshness
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+
+      - name: Check freshness
+        id: check
+        shell: python
+        run: |
+          import gzip, json, datetime, os
+
+          with gzip.open("data/toilets.json.gz", "rt", encoding="utf-8") as f:
+              payload = json.load(f)
+
+          meta = payload.get("metadata", {})
+          last_updated = meta.get("last_updated", "unknown")
+          snapshot_id = meta.get("snapshot_id", "unknown")
+          total = meta.get("total", len(payload.get("toilets", [])))
+          scored = meta.get("scored", 0)
+
+          age_days = 999
+          if last_updated != "unknown":
+              updated = datetime.datetime.strptime(last_updated, "%Y-%m-%d").date()
+              age_days = (datetime.date.today() - updated).days
+
+          is_stale = "true" if age_days > 30 else "false"
+
+          print(f"snapshot_id={snapshot_id}")
+          print(f"total={total}")
+          print(f"scored={scored}")
+          print(f"last_updated={last_updated}")
+          print(f"age_days={age_days}")
+          print(f"stale={is_stale}")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"snapshot_id={snapshot_id}\n")
+              out.write(f"total={total}\n")
+              out.write(f"scored={scored}\n")
+              out.write(f"last_updated={last_updated}\n")
+              out.write(f"age_days={age_days}\n")
+              out.write(f"stale={is_stale}\n")
+
+      - name: Run quality verification
+        id: verify
+        continue-on-error: true
+        shell: bash
+        run: python batch/verify_data.py 2>&1 | tee /tmp/verify-output.txt
+
+      - name: Create issue if data is stale
+        if: steps.check.outputs.stale == 'true'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const age = parseInt("${{ steps.check.outputs.age_days }}");
+            const total = "${{ steps.check.outputs.total }}";
+            const last = "${{ steps.check.outputs.last_updated }}";
+            const runUrl = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}";
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "data-freshness",
+            });
+            if (issues.data.length > 0) {
+              console.log("Open data-freshness issue exists, skipping");
+              return;
+            }
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Data stale: ${age} days since last update`,
+              labels: ["data-freshness"],
+              body: [
+                `**データ鮮度警告** — 最終更新から ${age} 日経過`,
+                ``,
+                `| 項目 | 値 |`,
+                `|---|---|`,
+                `| 最終更新 | ${last} |`,
+                `| 経過日数 | ${age} 日 |`,
+                `| 総件数 | ${total} |`,
+                `| CI実行 | ${runUrl} |`,
+                ``,
+                `対応:`,
+                `1. 手動で \`data-refresh.yml\` を実行してスクレイピング`,
+                `2. または \`batch/update_data.bat\` をローカル実行`,
+              ].join("\n"),
+            });

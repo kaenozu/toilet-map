@@ -71,21 +71,12 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install './v2/backend[dev]'
-      - run: pytest -q
+      - run: pytest -q -m "not integration"
         working-directory: v2/backend
-      - name: Apply versioned migrations twice
+      - run: pyright app/
         working-directory: v2/backend
-        run: |
-          python -m app.cli init-db
-          python -m app.cli init-db
-          python - <<'PY'
-          from app.db import database
-          with database() as connection:
-              rows = connection.execute(
-                  "SELECT version FROM schema_migrations ORDER BY version"
-              ).fetchall()
-          assert [row['version'] for row in rows] == ['0001', '0002', '0003']
-          PY
+      - run: pytest -v -m integration
+        working-directory: v2/backend
       - name: Verify psql bootstrap is idempotent
         working-directory: v2/backend
         env:
@@ -100,97 +91,6 @@ jobs:
           psql -h localhost -U toilet_map -d toilet_map_schema_test -v ON_ERROR_STOP=1 -f schema.sql
           psql -h localhost -U toilet_map -d postgres -v ON_ERROR_STOP=1 \
             -c 'DROP DATABASE toilet_map_schema_test'
-      - name: Verify ingestion, publication guard, and snapshots
-        working-directory: v2/backend
-        run: |
-          python - <<'PY'
-          import gzip, json
-          from pathlib import Path
-          from app.db import database
-          from app.importer import import_legacy
-          from app.worker import validate_dataset, publish_dataset
-          fixture = Path('/tmp/toilets.json.gz')
-          with gzip.open(fixture, 'wt', encoding='utf-8') as handle:
-              json.dump({'metadata': {'snapshot_id': 'ci'}, 'toilets': [
-                  {
-                      'place_id': 'ci-1',
-                      'name': 'CI Toilet',
-                      'latitude': 35.0,
-                      'longitude': 139.0,
-                      'toilet_score': 80,
-                      'wheelchair': 'yes',
-                      'changing_table': 'yes',
-                      'opening_hours': '24/7',
-                      'reviews': ['清潔で車椅子用の手すりがあります'],
-                  }
-              ]}, handle)
-          dataset_id, count = import_legacy(fixture, source='ci')
-          assert count == 1
-          validate_dataset(dataset_id)
-          with database() as connection:
-              connection.execute(
-                  "UPDATE facility_source_links SET status = 'pending' "
-                  "WHERE source_record_id IN (SELECT source_record_id FROM places WHERE dataset_version_id = %s)",
-                  (dataset_id,),
-              )
-              connection.commit()
-          try:
-              publish_dataset(dataset_id)
-          except Exception as exc:
-              assert 'unresolved canonical records' in str(exc)
-          else:
-              raise AssertionError('publication must reject a post-validation unresolved link')
-          with database() as connection:
-              state = connection.execute(
-                  "SELECT status::text AS status FROM dataset_versions WHERE id = %s", (dataset_id,)
-              ).fetchone()
-              snapshots = connection.execute(
-                  "SELECT count(*) AS total FROM published_place_snapshots WHERE dataset_version_id = %s",
-                  (dataset_id,),
-              ).fetchone()
-              assert state['status'] == 'validated'
-              assert snapshots['total'] == 0
-              connection.execute(
-                  "UPDATE facility_source_links SET status = 'matched' "
-                  "WHERE source_record_id IN (SELECT source_record_id FROM places WHERE dataset_version_id = %s)",
-                  (dataset_id,),
-              )
-              connection.commit()
-          publish_dataset(dataset_id)
-          with database() as connection:
-              counts = connection.execute(
-                  '''
-                  SELECT
-                    (SELECT count(*) FROM facilities) AS facilities,
-                    (SELECT count(*) FROM source_records WHERE dataset_version_id = %s) AS source_records,
-                    (SELECT count(*) FROM facility_source_links WHERE status = 'matched') AS matched_links,
-                    (SELECT count(*) FROM published_place_snapshots WHERE dataset_version_id = %s) AS snapshots,
-                    (SELECT count(*) FROM dimension_observations) AS observations,
-                    (SELECT count(*) FROM facility_scores) AS dimension_scores,
-                    (SELECT min(trust_score) FROM published_place_snapshots WHERE dataset_version_id = %s) AS trust_score
-                  ''',
-                  (dataset_id, dataset_id, dataset_id),
-              ).fetchone()
-          assert counts['facilities'] == 1
-          assert counts['source_records'] == 1
-          assert counts['matched_links'] == 1
-          assert counts['snapshots'] == 1
-          assert counts['observations'] == 2
-          assert counts['dimension_scores'] == 2
-          assert counts['trust_score'] is not None
-          PY
-      - name: API smoke test
-        working-directory: v2/backend
-        run: |
-          uvicorn app.main:app --host 127.0.0.1 --port 8000 &
-          server=$!
-          trap 'kill $server' EXIT
-          for i in $(seq 1 20); do
-            curl -fsS http://127.0.0.1:8000/health && break
-            sleep 1
-          done
-          curl -fsS 'http://127.0.0.1:8000/api/v2/places?wheelchair=true&min_trust=1' | grep 'CI Toilet'
-          curl -fsS -H 'X-Admin-Key: ci-key' http://127.0.0.1:8000/api/v2/admin/data-quality | grep 'migrations'
 
   frontend:
     runs-on: ubuntu-latest
