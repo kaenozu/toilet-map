@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
+import traceback
 from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
@@ -185,6 +186,7 @@ def main() -> None:
             except Exception as exc:
                 results[key] = {"status": "failed", "error": str(exc)}
                 print(f"failed: {exc}")
+                traceback.print_exc()
 
             if index < len(region_keys) - 1:
                 time.sleep(args.delay)
