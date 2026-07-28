@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from psycopg import Connection
+from .db_types import DbConnection
 
 
 class ResolutionAction(StrEnum):
@@ -40,7 +40,7 @@ def candidate_score(metrics: CandidateMetrics, *, max_distance_m: float = 300.0)
 
 
 def generate_match_candidates(
-    connection: Connection,
+    connection: DbConnection,
     *,
     dataset_version_id: int | None = None,
     source_record_id: int | None = None,
@@ -120,7 +120,7 @@ def generate_match_candidates(
     return int(row["total"] if row else 0)
 
 
-def _create_facility_from_source(connection: Connection, source_record_id: int) -> int:
+def _create_facility_from_source(connection: DbConnection, source_record_id: int) -> int:
     row = connection.execute(
         """
         INSERT INTO facilities (
@@ -151,7 +151,7 @@ def _create_facility_from_source(connection: Connection, source_record_id: int) 
 
 
 def decide_source_record(
-    connection: Connection,
+    connection: DbConnection,
     *,
     source_record_id: int,
     action: ResolutionAction,
@@ -237,7 +237,7 @@ def decide_source_record(
     }
 
 
-def pending_source_records(connection: Connection, *, limit: int = 100) -> list[dict[str, Any]]:
+def pending_source_records(connection: DbConnection, *, limit: int = 100) -> list[dict[str, Any]]:
     rows = connection.execute(
         """
         SELECT sr.id, sr.source_type::text AS source_type, sr.provider, sr.external_id,

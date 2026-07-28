@@ -9,7 +9,7 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
-from psycopg import Connection
+from .db_types import DbConnection
 
 from .db import database
 from .entities import upsert_legacy_entity
@@ -145,7 +145,7 @@ def normalized_records(records: Iterable[dict[str, Any]]) -> Iterator[dict[str, 
         }
 
 
-def create_dataset(connection: Connection, *, source: str, source_metadata: dict[str, Any]) -> int:
+def create_dataset(connection: DbConnection, *, source: str, source_metadata: dict[str, Any]) -> int:
     row = connection.execute(
         """
         INSERT INTO dataset_versions (status, source, source_metadata)
@@ -160,7 +160,7 @@ def create_dataset(connection: Connection, *, source: str, source_metadata: dict
 
 
 def _insert_reviews(
-    connection: Connection,
+    connection: DbConnection,
     *,
     place_id: int,
     source: str,

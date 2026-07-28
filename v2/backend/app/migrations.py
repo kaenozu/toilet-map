@@ -6,7 +6,7 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
-from psycopg import Connection
+from .db_types import DbConnection
 
 MIGRATION_LOCK_ID = 8_764_210_631
 
@@ -42,7 +42,7 @@ def discover_migrations(directory: Path | None = None) -> list[Migration]:
     return migrations
 
 
-def ensure_migration_table(connection: Connection) -> None:
+def ensure_migration_table(connection: DbConnection) -> None:
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -55,14 +55,14 @@ def ensure_migration_table(connection: Connection) -> None:
     )
 
 
-def applied_migrations(connection: Connection) -> dict[str, dict[str, object]]:
+def applied_migrations(connection: DbConnection) -> dict[str, dict[str, object]]:
     rows = connection.execute(
         "SELECT version, name, checksum, applied_at FROM schema_migrations ORDER BY version"
     ).fetchall()
     return {str(row["version"]): dict(row) for row in rows}
 
 
-def apply_migrations(connection: Connection, directory: Path | None = None) -> list[str]:
+def apply_migrations(connection: DbConnection, directory: Path | None = None) -> list[str]:
     """Apply pending migrations atomically while rejecting edited history."""
     ensure_migration_table(connection)
     connection.commit()

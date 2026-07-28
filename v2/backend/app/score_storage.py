@@ -5,13 +5,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from psycopg import Connection
+from .db_types import DbConnection
 
 from .scoring import DIMENSION_SCORING_VERSION, DimensionScore, ScoreDimension
 
 
 def store_dimension_observations(
-    connection: Connection,
+    connection: DbConnection,
     *,
     facility_id: int,
     source_record_id: int,
@@ -67,7 +67,7 @@ def store_dimension_observations(
     recalculate_facility_scores(connection, facility_id=facility_id)
 
 
-def recalculate_facility_scores(connection: Connection, *, facility_id: int) -> None:
+def recalculate_facility_scores(connection: DbConnection, *, facility_id: int) -> None:
     connection.execute(
         """
         WITH aggregates AS (

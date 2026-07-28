@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from psycopg import Connection
+from .db_types import DbConnection
 
 from .providers import SourceType, VerificationStatus
 
@@ -47,7 +47,7 @@ def source_type_from_provider(provider: str, *, legacy_import: bool = False) -> 
 
 
 def upsert_legacy_entity(
-    connection: Connection,
+    connection: DbConnection,
     *,
     dataset_id: int,
     provider: str,

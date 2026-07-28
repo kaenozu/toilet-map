@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 
-from psycopg import Connection
+from .db_types import DbConnection
 
 from .providers import FetchRequest, NormalizedObservation, SourceProvider
 from .resolution import generate_match_candidates
@@ -38,7 +38,7 @@ def observation_hash(observation: NormalizedObservation) -> str:
 
 
 def _insert_source_record(
-    connection: Connection,
+    connection: DbConnection,
     *,
     provider: SourceProvider,
     observation: NormalizedObservation,
@@ -108,7 +108,7 @@ def _insert_source_record(
     return source_record_id, True
 
 
-def _link_source_record(connection: Connection, source_record_id: int) -> bool:
+def _link_source_record(connection: DbConnection, source_record_id: int) -> bool:
     previous = connection.execute(
         """
         SELECT previous_link.facility_id
@@ -158,7 +158,7 @@ def _link_source_record(connection: Connection, source_record_id: int) -> bool:
 
 
 def ingest_provider(
-    connection: Connection,
+    connection: DbConnection,
     provider: SourceProvider,
     request: FetchRequest,
 ) -> IngestionResult:

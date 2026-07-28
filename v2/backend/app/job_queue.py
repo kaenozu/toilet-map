@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
-from psycopg import Connection
+from .db_types import DbConnection
 
 DEFAULT_LEASE_SECONDS = 300
 
@@ -28,7 +28,7 @@ def retry_delay_seconds(attempts: int) -> int:
     return min(300, 2 ** max(1, attempts))
 
 
-def enqueue_job(connection: Connection, request: EnqueueRequest) -> tuple[int, bool]:
+def enqueue_job(connection: DbConnection, request: EnqueueRequest) -> tuple[int, bool]:
     row = connection.execute(
         """
         INSERT INTO jobs (
@@ -63,7 +63,7 @@ def enqueue_job(connection: Connection, request: EnqueueRequest) -> tuple[int, b
     return int(existing["id"]), False
 
 
-def recover_expired_jobs(connection: Connection) -> int:
+def recover_expired_jobs(connection: DbConnection) -> int:
     row = connection.execute(
         """
         WITH changed AS (
@@ -97,7 +97,7 @@ def recover_expired_jobs(connection: Connection) -> int:
     return int(row["total"] if row else 0)
 
 
-def claim_job(connection: Connection, *, lease_seconds: int = DEFAULT_LEASE_SECONDS) -> dict[str, Any] | None:
+def claim_job(connection: DbConnection, *, lease_seconds: int = DEFAULT_LEASE_SECONDS) -> dict[str, Any] | None:
     recover_expired_jobs(connection)
     row = connection.execute(
         """
@@ -132,7 +132,7 @@ def claim_job(connection: Connection, *, lease_seconds: int = DEFAULT_LEASE_SECO
 
 
 def heartbeat_job(
-    connection: Connection,
+    connection: DbConnection,
     *,
     job_id: int,
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
@@ -154,7 +154,7 @@ def heartbeat_job(
 
 
 def finish_job(
-    connection: Connection,
+    connection: DbConnection,
     *,
     job: dict[str, Any],
     error: Exception | None = None,
@@ -214,7 +214,7 @@ def finish_job(
         )
 
 
-def cancel_job(connection: Connection, *, job_id: int) -> bool:
+def cancel_job(connection: DbConnection, *, job_id: int) -> bool:
     row = connection.execute(
         """
         UPDATE jobs SET status = 'cancelled', finished_at = now(), updated_at = now()

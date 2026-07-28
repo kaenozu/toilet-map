@@ -7,9 +7,12 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from psycopg import Connection, connect
-from psycopg.rows import DictRow, dict_row
+from typing import cast
 
+from psycopg import connect
+from psycopg.rows import dict_row
+
+from .db_types import DbConnection
 from .migrations import apply_migrations
 
 DATABASE_URL = os.environ.get(
@@ -19,11 +22,11 @@ DATABASE_URL = os.environ.get(
 
 
 @contextmanager
-def database() -> Iterator[Connection[DictRow]]:
-    connection: Connection[DictRow] = connect(
+def database() -> Iterator[DbConnection]:
+    connection = cast(DbConnection, connect(
         DATABASE_URL,
         row_factory=dict_row,
-    )
+    ))
     with connection:
         yield connection
 

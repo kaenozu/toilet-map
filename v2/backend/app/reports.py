@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import uuid4
 
-from psycopg import Connection
+from .db_types import DbConnection
 
 
 class DuplicateReportError(ValueError):
@@ -49,7 +49,7 @@ def report_fingerprint(facility_id: int, payload: ReportPayload, *, day: str | N
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def create_report(connection: Connection, *, facility_id: int, payload: ReportPayload) -> dict[str, object]:
+def create_report(connection: DbConnection, *, facility_id: int, payload: ReportPayload) -> dict[str, object]:
     facility = connection.execute(
         """
         SELECT id, name, address, prefecture, category,
@@ -131,7 +131,7 @@ def create_report(connection: Connection, *, facility_id: int, payload: ReportPa
     return dict(row)
 
 
-def pending_reports(connection: Connection, *, limit: int = 100) -> list[dict[str, object]]:
+def pending_reports(connection: DbConnection, *, limit: int = 100) -> list[dict[str, object]]:
     rows = connection.execute(
         """
         SELECT report.id, report.facility_id, facility.name, facility.address,
@@ -148,7 +148,7 @@ def pending_reports(connection: Connection, *, limit: int = 100) -> list[dict[st
 
 
 def decide_report(
-    connection: Connection,
+    connection: DbConnection,
     *,
     report_id: int,
     accepted: bool,
