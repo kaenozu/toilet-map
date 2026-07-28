@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const PLACES_RESPONSE = {
+  total: 3,
   items: [
     {
       id: 1,
