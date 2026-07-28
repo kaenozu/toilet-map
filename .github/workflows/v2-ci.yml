@@ -73,8 +73,25 @@ jobs:
       - run: pip install './v2/backend[dev]'
       - run: pytest -q -m "not integration"
         working-directory: v2/backend
-      - run: pyright app/
+      - name: Capture Pyright output
+        id: pyright
         working-directory: v2/backend
+        shell: bash
+        run: |
+          set +e
+          pyright app/ 2>&1 | tee pyright-output.txt
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload Pyright output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: v2-pyright-output
+          path: v2/backend/pyright-output.txt
+      - name: Enforce Pyright
+        if: steps.pyright.outputs.status != '0'
+        run: exit 1
       - run: pytest -v -m integration
         working-directory: v2/backend
       - name: Explicitly verify migration and publication contracts
