@@ -34,12 +34,8 @@ include = ["app"]
 exclude = ["tests"]
 typeCheckingMode = "standard"
 pythonVersion = "3.12"
-reportMissingImports = false
-reportMissingTypeStubs = false
-reportGeneralTypeIssues = false
-reportCallIssue = false
-reportArgumentType = false
-reportReturnType = false
+reportMissingImports = "error"
+reportMissingTypeStubs = "none"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
