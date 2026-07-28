@@ -6,7 +6,7 @@ import argparse
 import json
 import time
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 from .db import apply_schema, database
 from .importer import import_legacy
@@ -21,11 +21,11 @@ from .worker import (
 )
 
 
-class _IngestRegionResult(TypedDict, total=False):
+class _IngestRegionResult(TypedDict):
     status: Literal["skipped", "succeeded", "failed"]
-    inserted: int
-    reused: int
-    error: str
+    inserted: NotRequired[int]
+    reused: NotRequired[int]
+    error: NotRequired[str]
 
 
 def _non_negative_float(value: str) -> float:
