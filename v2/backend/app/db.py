@@ -6,7 +6,6 @@ import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-
 from typing import cast
 
 from psycopg import connect
@@ -23,10 +22,13 @@ DATABASE_URL = os.environ.get(
 
 @contextmanager
 def database() -> Iterator[DbConnection]:
-    connection = cast(DbConnection, connect(
-        DATABASE_URL,
-        row_factory=dict_row,
-    ))
+    connection = cast(
+        DbConnection,
+        connect(
+            DATABASE_URL,
+            row_factory=dict_row,
+        ),
+    )
     with connection:
         yield connection
 
