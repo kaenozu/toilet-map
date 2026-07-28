@@ -6,6 +6,7 @@ import argparse
 import json
 import time
 from pathlib import Path
+from typing import Literal, TypedDict
 
 from .db import apply_schema, database
 from .importer import import_legacy
@@ -18,6 +19,31 @@ from .worker import (
     resolve_source_records,
     validate_dataset,
 )
+
+
+class _IngestRegionResult(TypedDict, total=False):
+    status: Literal["skipped", "succeeded", "failed"]
+    inserted: int
+    reused: int
+    error: str
+
+
+def _non_negative_float(value: str) -> float:
+    parsed = float(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be greater than or equal to 0")
+    return parsed
+
+
+def _summarize_ingest_results(results: dict[str, _IngestRegionResult]) -> dict[str, int]:
+    succeeded = [result for result in results.values() if result["status"] == "succeeded"]
+    return {
+        "total_inserted": sum(result.get("inserted", 0) for result in succeeded),
+        "total_reused": sum(result.get("reused", 0) for result in succeeded),
+        "regions_succeeded": len(succeeded),
+        "regions_failed": sum(1 for result in results.values() if result["status"] == "failed"),
+        "regions_skipped": sum(1 for result in results.values() if result["status"] == "skipped"),
+    }
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -51,10 +77,17 @@ def _parser() -> argparse.ArgumentParser:
     osm.add_argument("--region", choices=tuple(sorted(OSM_REGIONS)), required=True)
 
     all_osm = sub.add_parser("ingest-osm-all")
-    all_osm.add_argument("--delay", type=float, default=1.0,
-                         help="Seconds to wait between regions (default 1.0)")
-    all_osm.add_argument("--from-region", choices=tuple(sorted(OSM_REGIONS)),
-                         help="Resume from this region (inclusive)")
+    all_osm.add_argument(
+        "--delay",
+        type=_non_negative_float,
+        default=1.0,
+        help="Seconds to wait between regions (default 1.0)",
+    )
+    all_osm.add_argument(
+        "--from-region",
+        choices=tuple(sorted(OSM_REGIONS)),
+        help="Resume from this region (inclusive)",
+    )
     return parser
 
 
@@ -127,37 +160,36 @@ def main() -> None:
     elif args.command == "ingest-osm":
         print(json.dumps(ingest_osm_region(args.region), ensure_ascii=False))
     elif args.command == "ingest-osm-all":
-        results: dict[str, dict[str, int] | str] = {}
-        started = False
-        for key in sorted(OSM_REGIONS):
-            if args.from_region and not started:
+        results: dict[str, _IngestRegionResult] = {}
+        started = args.from_region is None
+        region_keys = sorted(OSM_REGIONS)
+
+        for index, key in enumerate(region_keys):
+            if not started:
                 if key == args.from_region:
                     started = True
                 else:
-                    results[key] = "skipped"
+                    results[key] = {"status": "skipped"}
                     continue
-            if args.from_region and key == args.from_region:
-                started = True
+
             region_label = OSM_REGIONS[key].label
             print(f"[{key}] {region_label}...", end=" ", flush=True)
             try:
                 stats = ingest_osm_region(key)
-                results[key] = stats
+                results[key] = {
+                    "status": "succeeded",
+                    "inserted": stats["inserted"],
+                    "reused": stats["reused"],
+                }
                 print(f"ok ({stats['inserted']} new, {stats['reused']} reused)")
             except Exception as exc:
-                results[key] = str(exc)
+                results[key] = {"status": "failed", "error": str(exc)}
                 print(f"failed: {exc}")
-            if key != sorted(OSM_REGIONS)[-1]:
+
+            if index < len(region_keys) - 1:
                 time.sleep(args.delay)
-        total_new = sum(r["inserted"] for r in results.values() if isinstance(r, dict))
-        total_reused = sum(r["reused"] for r in results.values() if isinstance(r, dict))
-        failed = sum(1 for r in results.values() if isinstance(r, str))
-        print(json.dumps({
-            "total_inserted": total_new,
-            "total_reused": total_reused,
-            "regions_succeeded": sum(1 for r in results.values() if isinstance(r, dict)),
-            "regions_failed": failed,
-        }, ensure_ascii=False))
+
+        print(json.dumps(_summarize_ingest_results(results), ensure_ascii=False))
 
 
 if __name__ == "__main__":
