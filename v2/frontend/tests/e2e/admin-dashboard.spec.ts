@@ -1,5 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
+const SOURCES_URL = "**/api/v2/admin/source-records/pending";
+const REPORTS_URL = "**/api/v2/admin/reports/pending";
+
 const PENDING_SOURCES_RESPONSE = {
   total: 2,
   items: [
@@ -63,24 +66,39 @@ const PENDING_REPORTS_RESPONSE = {
   ],
 };
 
-async function mockApi(page: Page) {
-  await page.route("**/api/v2/admin/source-records/pending", async (route) => {
-    await route.fulfill({ json: PENDING_SOURCES_RESPONSE });
+async function mockPendingApi(
+  page: Page,
+  sources = PENDING_SOURCES_RESPONSE,
+  reports = PENDING_REPORTS_RESPONSE,
+) {
+  await page.route(SOURCES_URL, async (route) => {
+    await route.fulfill({ json: sources });
   });
-  await page.route("**/api/v2/admin/reports/pending", async (route) => {
-    await route.fulfill({ json: PENDING_REPORTS_RESPONSE });
+  await page.route(REPORTS_URL, async (route) => {
+    await route.fulfill({ json: reports });
   });
-  await page.route("**/api/v2/admin/source-records/**/decision", async (route) => {
-    await route.fulfill({ status: 200 });
-  });
-  await page.route("**/api/v2/admin/reports/**/decision", async (route) => {
-    await route.fulfill({ status: 200 });
+}
+
+async function replacePendingApi(
+  page: Page,
+  sourceHandler: Parameters<Page["route"]>[1],
+  reportHandler: Parameters<Page["route"]>[1],
+) {
+  await page.unroute(SOURCES_URL);
+  await page.unroute(REPORTS_URL);
+  await page.route(SOURCES_URL, sourceHandler);
+  await page.route(REPORTS_URL, reportHandler);
+}
+
+function reportCard(page: Page) {
+  return page.locator(".admin-card").filter({
+    hasText: "3番線ホームのトイレが故障しています",
   });
 }
 
 test.describe("admin dashboard", () => {
   test.beforeEach(async ({ page }) => {
-    await mockApi(page);
+    await mockPendingApi(page);
     await page.goto("/admin");
   });
 
@@ -125,25 +143,23 @@ test.describe("admin dashboard", () => {
     await page.locator('button:has-text("データを読み込む")').click();
     await expect(page.getByText("ユーザー報告")).toBeVisible();
     await expect(page.getByText("未処理報告1件")).toBeVisible();
-    await expect(page.locator(".admin-card").nth(2).getByText("東京駅構内トイレ")).toBeVisible();
+    await expect(reportCard(page).getByText("東京駅構内トイレ")).toBeVisible();
     await expect(page.getByText("3番線ホームのトイレが故障しています")).toBeVisible();
   });
 
   test("shows accept and reject buttons for each report", async ({ page }) => {
     await page.locator('input[aria-label="管理APIキー"]').fill("test-admin-key");
     await page.locator('button:has-text("データを読み込む")').click();
-    const reportCard = page.locator(".admin-card").nth(2);
-    await expect(reportCard.locator('button:has-text("承認")')).toBeVisible();
-    await expect(reportCard.locator('button:has-text("却下")')).toBeVisible();
+    await expect(reportCard(page).locator('button:has-text("承認")')).toBeVisible();
+    await expect(reportCard(page).locator('button:has-text("却下")')).toBeVisible();
   });
 
   test("shows empty state when no sources or reports", async ({ page }) => {
-    await page.route("**/api/v2/admin/source-records/pending", async (route) => {
-      await route.fulfill({ json: { total: 0, items: [] } });
-    });
-    await page.route("**/api/v2/admin/reports/pending", async (route) => {
-      await route.fulfill({ json: { total: 0, items: [] } });
-    });
+    await replacePendingApi(
+      page,
+      async (route) => route.fulfill({ json: { total: 0, items: [] } }),
+      async (route) => route.fulfill({ json: { total: 0, items: [] } }),
+    );
     await page.locator('input[aria-label="管理APIキー"]').fill("test-admin-key");
     await page.locator('button:has-text("データを読み込む")').click();
     await expect(page.getByText("未解決ソースはありません。")).toBeVisible();
@@ -151,12 +167,11 @@ test.describe("admin dashboard", () => {
   });
 
   test("shows error when API key is invalid", async ({ page }) => {
-    await page.route("**/api/v2/admin/source-records/pending", async (route) => {
-      await route.fulfill({ status: 403 });
-    });
-    await page.route("**/api/v2/admin/reports/pending", async (route) => {
-      await route.fulfill({ status: 403 });
-    });
+    await replacePendingApi(
+      page,
+      async (route) => route.fulfill({ status: 403 }),
+      async (route) => route.fulfill({ status: 403 }),
+    );
     await page.locator('input[aria-label="管理APIキー"]').fill("wrong-key");
     await page.locator('button:has-text("データを読み込む")').click();
     await expect(page.getByText("管理キーまたはバックエンド接続を確認してください。")).toBeVisible();
