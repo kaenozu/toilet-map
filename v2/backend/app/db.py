@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from psycopg import Connection, connect
-from psycopg.rows import dict_row
+from psycopg.rows import DictRow, dict_row
 
 from .migrations import apply_migrations
 
@@ -19,8 +19,12 @@ DATABASE_URL = os.environ.get(
 
 
 @contextmanager
-def database() -> Iterator[Connection]:
-    with connect(DATABASE_URL, row_factory=dict_row) as connection:
+def database() -> Iterator[Connection[DictRow]]:
+    connection: Connection[DictRow] = connect(
+        DATABASE_URL,
+        row_factory=dict_row,
+    )
+    with connection:
         yield connection
 
 
