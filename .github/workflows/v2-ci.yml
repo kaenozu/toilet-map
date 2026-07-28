@@ -77,6 +77,13 @@ jobs:
         working-directory: v2/backend
       - run: pytest -v -m integration
         working-directory: v2/backend
+      - name: Explicitly verify migration and publication contracts
+        working-directory: v2/backend
+        run: >-
+          pytest -v
+          tests/integration/test_publish_pipeline.py::TestMigrations::test_all_migrations_applied
+          tests/integration/test_publish_pipeline.py::TestPipeline::test_validate_then_publish
+          tests/integration/test_publish_pipeline.py::TestPipeline::test_api_serves_published_places
       - name: Verify psql bootstrap is idempotent
         working-directory: v2/backend
         env:
