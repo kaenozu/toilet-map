@@ -9,9 +9,8 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
-from .db_types import DbConnection
-
 from .db import database
+from .db_types import DbConnection
 from .entities import upsert_legacy_entity
 from .legacy_identity import resolve_stable_key_collisions
 from .score_storage import store_dimension_observations

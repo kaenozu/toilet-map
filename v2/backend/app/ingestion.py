@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from .db_types import DbConnection
-
 from .providers import FetchRequest, NormalizedObservation, SourceProvider
 from .resolution import generate_match_candidates
 

@@ -6,7 +6,6 @@ import json
 from typing import Any
 
 from .db_types import DbConnection
-
 from .scoring import DIMENSION_SCORING_VERSION, DimensionScore, ScoreDimension
 
 

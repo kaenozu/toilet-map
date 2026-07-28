@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from .db_types import DbConnection
-
 from .providers import SourceType, VerificationStatus
 
 
