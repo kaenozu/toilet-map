@@ -27,21 +27,29 @@ jobs:
         id: check
         shell: python
         run: |
-          import gzip, json, datetime, os
+          import datetime
+          import gzip
+          import json
+          import os
 
           with gzip.open("data/toilets.json.gz", "rt", encoding="utf-8") as f:
               payload = json.load(f)
 
           meta = payload.get("metadata", {})
-          last_updated = meta.get("last_updated", "unknown")
+          last_updated = str(meta.get("last_updated") or "unknown")
           snapshot_id = meta.get("snapshot_id", "unknown")
           total = meta.get("total", len(payload.get("toilets", [])))
           scored = meta.get("scored", 0)
 
           age_days = 999
+          parse_error = ""
           if last_updated != "unknown":
-              updated = datetime.datetime.strptime(last_updated, "%Y-%m-%d").date()
-              age_days = (datetime.date.today() - updated).days
+              try:
+                  updated = datetime.datetime.strptime(last_updated, "%Y-%m-%d").date()
+                  age_days = (datetime.date.today() - updated).days
+              except ValueError as error:
+                  parse_error = str(error)
+                  print(f"Invalid metadata.last_updated={last_updated!r}: {error}")
 
           is_stale = "true" if age_days > 30 else "false"
 
@@ -51,8 +59,13 @@ jobs:
           print(f"last_updated={last_updated}")
           print(f"age_days={age_days}")
           print(f"stale={is_stale}")
+          if parse_error:
+              print("metadata date is invalid; treating dataset as stale")
 
-          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+          output_path = os.environ.get("GITHUB_OUTPUT")
+          if not output_path:
+              raise RuntimeError("GITHUB_OUTPUT is not available")
+          with open(output_path, "a", encoding="utf-8") as out:
               out.write(f"snapshot_id={snapshot_id}\n")
               out.write(f"total={total}\n")
               out.write(f"scored={scored}\n")
@@ -81,8 +94,9 @@ jobs:
               state: "open",
               labels: "data-freshness",
             });
-            if (issues.data.length > 0) {
-              console.log("Open data-freshness issue exists, skipping");
+            const existingIssue = issues.data.find((issue) => !issue.pull_request);
+            if (existingIssue) {
+              console.log(`Open data-freshness issue #${existingIssue.number} exists, skipping`);
               return;
             }
             await github.rest.issues.create({
