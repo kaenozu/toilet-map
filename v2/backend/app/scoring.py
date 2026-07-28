@@ -42,7 +42,7 @@ class ScoreDimension(StrEnum):
 @dataclass(frozen=True)
 class ScoreResult:
     score: float | None
-    confidence: float | None
+    confidence: float
     matched_reviews: int
     explanation: dict[str, object]
 
@@ -129,7 +129,7 @@ def score_review_dimensions(reviews: Iterable[str]) -> dict[ScoreDimension, Dime
 def score_reviews(reviews: Iterable[str]) -> ScoreResult:
     texts = [text.strip() for text in reviews if text and text.strip()]
     if not texts:
-        return ScoreResult(None, None, 0, {"version": SCORING_VERSION, "reason": "no_reviews"})
+        return ScoreResult(None, 0.0, 0, {"version": SCORING_VERSION, "reason": "no_reviews"})
 
     positive = 0
     negative = 0
