@@ -1,0 +1,38 @@
+name: Normalize PR 112 Python imports
+
+on:
+  push:
+    branches: [agent/osm-scoring-ingestion]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: normalize-pr112-imports
+  cancel-in-progress: true
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/osm-scoring-ingestion
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: pip install ruff==0.12.4
+      - run: |
+          ruff check --fix \
+            v2/backend/app/entities.py \
+            v2/backend/app/importer.py \
+            v2/backend/app/ingestion.py \
+            v2/backend/app/score_storage.py
+          git rm .github/workflows/fix-pr112-imports.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add v2/backend/app
+          git commit -m 'style: normalize backend database type imports'
+          git push origin HEAD:agent/osm-scoring-ingestion
