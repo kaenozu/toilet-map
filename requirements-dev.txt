@@ -1,6 +1,6 @@
 pytest==9.1.1
 pytest-cov==7.1.0
 mypy==2.3.0
-types-setuptools==83.0.0.20260724
+types-setuptools==84.0.0.20260812
 # Required by Starlette TestClient.
 httpx2==2.9.1
