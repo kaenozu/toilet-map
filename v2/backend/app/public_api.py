@@ -59,7 +59,7 @@ def list_places(
     offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
     model = public_read_model()
-    conditions: list[str] = ["d.status = 'published'"]
+    conditions: list[str] = ["d.status = 'published'", "f.status = 'active'"]
     params: list[object] = []
     if prefecture:
         conditions.append("p.prefecture = %s")
@@ -87,9 +87,9 @@ def list_places(
     _boolean_attribute(conditions, "changing_table", changing_table, params)
     if fee is not None:
         conditions.append(
-            "lower(COALESCE(p.attributes->>'fee', 'no')) IN ('yes', 'true', '1')"
+            "lower(COALESCE(p.attributes->>'fee', '')) IN ('yes', 'true', '1')"
             if fee
-            else "lower(COALESCE(p.attributes->>'fee', 'no')) NOT IN ('yes', 'true', '1')"
+            else "lower(COALESCE(p.attributes->>'fee', '')) IN ('no', 'false', '0')"
         )
     if open_24h is not None:
         conditions.append(
@@ -140,6 +140,7 @@ def list_places(
                d.id AS dataset_version_id, d.published_at
           FROM {model.table} p
           JOIN dataset_versions d ON d.id = p.dataset_version_id
+          JOIN facilities f ON f.id = p.facility_id
          WHERE {where_sql}
          ORDER BY {order_sql}
          LIMIT %s OFFSET %s
@@ -148,6 +149,7 @@ def list_places(
         SELECT count(*) AS total
           FROM {model.table} p
           JOIN dataset_versions d ON d.id = p.dataset_version_id
+          JOIN facilities f ON f.id = p.facility_id
          WHERE {where_sql}
     """
     with database() as connection:
@@ -179,7 +181,8 @@ def get_place(place_id: int) -> dict[str, Any]:
                    d.published_at
               FROM {model.table} p
               JOIN dataset_versions d ON d.id = p.dataset_version_id
-             WHERE {id_condition} AND d.status = 'published'
+              JOIN facilities f ON f.id = p.facility_id
+             WHERE {id_condition} AND d.status = 'published' AND f.status = 'active'
             """,
             (place_id,),
         ).fetchone()
