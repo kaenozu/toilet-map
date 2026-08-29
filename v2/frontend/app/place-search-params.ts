@@ -18,7 +18,10 @@ export function buildPlaceSearchParams(filters: PlaceSearchFilters): string {
   if (filters.query.trim()) value.set("q", filters.query.trim());
   if (filters.prefecture) value.set("prefecture", filters.prefecture);
   if (filters.category) value.set("category", filters.category);
-  if (filters.minScore) value.set("min_score", filters.minScore);
+  if (filters.minScore) {
+    value.set("min_score", filters.minScore);
+    value.set("include_unscored", "false");
+  }
   if (filters.minTrust) value.set("min_trust", filters.minTrust);
   if (filters.wheelchair) value.set("wheelchair", "true");
   if (filters.changingTable) value.set("changing_table", "true");
