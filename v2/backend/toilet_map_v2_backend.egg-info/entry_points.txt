@@ -1,3 +1,0 @@
-[console_scripts]
-toilet-map-v2 = app.cli:main
-toilet-map-worker = app.worker:run_forever
