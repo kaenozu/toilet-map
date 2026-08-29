@@ -1,0 +1,42 @@
+name: Agent patch public semantics
+
+on:
+  push:
+    branches: [fix/issues-140-143-public-semantics]
+    paths: ['.github/workflows/agent-patch-public-semantics.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/issues-140-143-public-semantics
+      - name: Patch API and frontend query semantics
+        shell: python
+        run: |
+          from pathlib import Path
+          def rep(path,old,new,count=1):
+            p=Path(path); text=p.read_text(encoding='utf-8'); actual=text.count(old)
+            if actual!=count: raise SystemExit(f'{path}: expected {count}, got {actual}: {old[:80]!r}')
+            p.write_text(text.replace(old,new,count),encoding='utf-8')
+          rep('v2/backend/app/public_api.py','conditions: list[str] = ["d.status = \'published\'"]','conditions: list[str] = ["d.status = \'published\'", "f.status = \'active\'"]')
+          rep('v2/backend/app/public_api.py','''        conditions.append(\n            "lower(COALESCE(p.attributes->>'fee', 'no')) IN ('yes', 'true', '1')"\n            if fee\n            else "lower(COALESCE(p.attributes->>'fee', 'no')) NOT IN ('yes', 'true', '1')"\n        )\n''','''        conditions.append(\n            "lower(COALESCE(p.attributes->>'fee', '')) IN ('yes', 'true', '1')"\n            if fee\n            else "lower(COALESCE(p.attributes->>'fee', '')) IN ('no', 'false', '0')"\n        )\n''')
+          rep('v2/backend/app/public_api.py','''          FROM {model.table} p\n          JOIN dataset_versions d ON d.id = p.dataset_version_id\n''','''          FROM {model.table} p\n          JOIN dataset_versions d ON d.id = p.dataset_version_id\n          JOIN facilities f ON f.id = p.facility_id\n''',2)
+          rep('v2/backend/app/public_api.py','''              FROM {model.table} p\n              JOIN dataset_versions d ON d.id = p.dataset_version_id\n             WHERE {id_condition} AND d.status = 'published'\n''','''              FROM {model.table} p\n              JOIN dataset_versions d ON d.id = p.dataset_version_id\n              JOIN facilities f ON f.id = p.facility_id\n             WHERE {id_condition} AND d.status = 'published' AND f.status = 'active'\n''')
+          rep('v2/frontend/app/place-search-params.ts','''  if (filters.minScore) value.set("min_score", filters.minScore);\n''','''  if (filters.minScore) {\n    value.set("min_score", filters.minScore);\n    value.set("include_unscored", "false");\n  }\n''')
+          Path('v2/backend/tests/test_public_filter_contracts.py').write_text('''from pathlib import Path\n\n\ndef test_public_queries_hide_non_active_facilities_and_unknown_fee():\n    source = Path("app/public_api.py").read_text(encoding="utf-8")\n    assert "f.status = 'active'" in source\n    assert "JOIN facilities f ON f.id = p.facility_id" in source\n    assert "IN ('no', 'false', '0')" in source\n    assert "COALESCE(p.attributes->>'fee', 'no')" not in source\n\n\ndef test_publish_migration_only_snapshots_active_facilities():\n    migration = Path("migrations/0004_public_facility_status.sql").read_text(encoding="utf-8")\n    assert migration.count("f.status = 'active'") >= 3\n    assert "record_count = snapshot_count" in migration\n''',encoding='utf-8')
+          Path('v2/frontend/app/place-search-params.test.ts').write_text('''import { describe, expect, it } from "vitest";\nimport { buildPlaceSearchParams } from "./place-search-params";\n\ndescribe("buildPlaceSearchParams", () => {\n  it("excludes unscored rows when a score threshold is selected", () => {\n    const params = new URLSearchParams(buildPlaceSearchParams({ query: "", prefecture: "", category: "", minScore: "70", minTrust: "", wheelchair: false, changingTable: false, freeOnly: false, open24h: false, userLocation: null }));\n    expect(params.get("min_score")).toBe("70");\n    expect(params.get("include_unscored")).toBe("false");\n  });\n});\n''',encoding='utf-8')
+      - name: Commit source only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add v2/backend/app/public_api.py v2/backend/tests/test_public_filter_contracts.py v2/frontend/app/place-search-params.ts v2/frontend/app/place-search-params.test.ts
+          git commit -m 'fix: make public facility and filter semantics explicit'
+          git push origin HEAD:fix/issues-140-143-public-semantics
