@@ -5,12 +5,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from .db import database
 from .read_model import public_read_model
-from .reports import DuplicateReportError, ReportPayload, ReportType, create_report
+from .reports import DuplicateReportError, ReportPayload, ReportRateLimitError, ReportType, create_report
 
 router = APIRouter()
 
@@ -286,13 +286,16 @@ def facets() -> dict[str, list[dict[str, Any]]]:
 
 
 @router.post("/api/v2/facilities/{facility_id}/reports", status_code=201)
-def submit_facility_report(facility_id: int, request: FacilityReportRequest) -> dict[str, object]:
+def submit_facility_report(
+    facility_id: int, request: FacilityReportRequest, raw_request: Request
+) -> dict[str, object]:
     try:
         with database() as connection:
             result = create_report(
                 connection,
                 facility_id=facility_id,
                 payload=ReportPayload(request.report_type, request.note, request.occurred_at),
+                submitter_ip=raw_request.client.host if raw_request.client else None,
             )
             connection.commit()
         return result
@@ -300,3 +303,5 @@ def submit_facility_report(facility_id: int, request: FacilityReportRequest) -> 
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except DuplicateReportError as exc:
         raise HTTPException(status_code=409, detail="同じ内容の報告はすでに受け付けています") from exc
+    except ReportRateLimitError as exc:
+        raise HTTPException(status_code=429, detail="報告が集中しています。時間をおいて再度お試しください") from exc
