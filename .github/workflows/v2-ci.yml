@@ -84,7 +84,7 @@ jobs:
               rows = connection.execute(
                   "SELECT version FROM schema_migrations ORDER BY version"
               ).fetchall()
-          assert [row['version'] for row in rows] == ['0001', '0002', '0003']
+          assert [row['version'] for row in rows] == ['0001', '0002', '0003', '0004']
           PY
       - name: Verify psql bootstrap is idempotent
         working-directory: v2/backend
@@ -100,14 +100,16 @@ jobs:
           psql -h localhost -U toilet_map -d toilet_map_schema_test -v ON_ERROR_STOP=1 -f schema.sql
           psql -h localhost -U toilet_map -d postgres -v ON_ERROR_STOP=1 \
             -c 'DROP DATABASE toilet_map_schema_test'
-      - name: Verify ingestion, publication guard, and snapshots
+      - name: Verify ingestion, publication guard, snapshots, and facility status
         working-directory: v2/backend
         run: |
           python - <<'PY'
           import gzip, json
           from pathlib import Path
+          from fastapi import HTTPException
           from app.db import database
           from app.importer import import_legacy
+          from app.public_api import get_place, list_places
           from app.worker import validate_dataset, publish_dataset
           fixture = Path('/tmp/toilets.json.gz')
           with gzip.open(fixture, 'wt', encoding='utf-8') as handle:
@@ -122,10 +124,21 @@ jobs:
                       'changing_table': 'yes',
                       'opening_hours': '24/7',
                       'reviews': ['清潔で車椅子用の手すりがあります'],
-                  }
+                  },
+                  {
+                      'place_id': 'ci-2',
+                      'name': 'CI Closed Toilet',
+                      'latitude': 35.01,
+                      'longitude': 139.01,
+                      'toilet_score': 70,
+                      'wheelchair': 'no',
+                      'changing_table': 'no',
+                      'opening_hours': '09:00-18:00',
+                      'reviews': [],
+                  },
               ]}, handle)
           dataset_id, count = import_legacy(fixture, source='ci')
-          assert count == 1
+          assert count == 2
           validate_dataset(dataset_id)
           with database() as connection:
               connection.execute(
@@ -171,13 +184,59 @@ jobs:
                   ''',
                   (dataset_id, dataset_id, dataset_id),
               ).fetchone()
-          assert counts['facilities'] == 1
-          assert counts['source_records'] == 1
-          assert counts['matched_links'] == 1
-          assert counts['snapshots'] == 1
+              closed_place = connection.execute(
+                  "SELECT id, facility_id FROM places WHERE dataset_version_id = %s AND name = 'CI Closed Toilet'",
+                  (dataset_id,),
+              ).fetchone()
+          assert counts['facilities'] == 2
+          assert counts['source_records'] == 2
+          assert counts['matched_links'] == 2
+          assert counts['snapshots'] == 2
           assert counts['observations'] == 2
           assert counts['dimension_scores'] == 2
           assert counts['trust_score'] is not None
+          assert closed_place is not None
+
+          with database() as connection:
+              connection.execute(
+                  "UPDATE facilities SET status = 'closed', updated_at = now() WHERE id = %s",
+                  (closed_place['facility_id'],),
+              )
+              connection.commit()
+
+          public = list_places()
+          assert public['total'] == 1
+          assert [item['name'] for item in public['items']] == ['CI Toilet']
+          try:
+              get_place(int(closed_place['id']))
+          except HTTPException as exc:
+              assert exc.status_code == 404
+          else:
+              raise AssertionError('closed facility must disappear from detail API immediately')
+
+          with database() as connection:
+              connection.execute(
+                  "UPDATE dataset_versions SET status = 'validated' WHERE id = %s",
+                  (dataset_id,),
+              )
+              connection.commit()
+          publish_dataset(dataset_id)
+          with database() as connection:
+              republished = connection.execute(
+                  "SELECT count(*) AS total FROM published_place_snapshots WHERE dataset_version_id = %s",
+                  (dataset_id,),
+              ).fetchone()
+              closed_snapshot = connection.execute(
+                  "SELECT count(*) AS total FROM published_place_snapshots WHERE dataset_version_id = %s AND facility_id = %s",
+                  (dataset_id, closed_place['facility_id']),
+              ).fetchone()
+              published_count = connection.execute(
+                  "SELECT record_count FROM dataset_versions WHERE id = %s",
+                  (dataset_id,),
+              ).fetchone()
+          assert republished['total'] == 1
+          assert closed_snapshot['total'] == 0
+          assert published_count['record_count'] == 1
           PY
       - name: API smoke test
         working-directory: v2/backend
