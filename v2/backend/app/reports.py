@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -14,6 +15,10 @@ from psycopg import Connection
 
 class DuplicateReportError(ValueError):
     """Raised when the same report was already accepted for the same day."""
+
+
+class ReportRateLimitError(ValueError):
+    """Raised when a public report submission exceeds a server-side quota."""
 
 
 class ReportType(StrEnum):
@@ -49,7 +54,13 @@ def report_fingerprint(facility_id: int, payload: ReportPayload, *, day: str | N
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def create_report(connection: Connection, *, facility_id: int, payload: ReportPayload) -> dict[str, object]:
+def create_report(
+    connection: Connection,
+    *,
+    facility_id: int,
+    payload: ReportPayload,
+    submitter_ip: str | None = None,
+) -> dict[str, object]:
     facility = connection.execute(
         """
         SELECT id, name, address, prefecture, category,
@@ -62,6 +73,28 @@ def create_report(connection: Connection, *, facility_id: int, payload: ReportPa
     ).fetchone()
     if facility is None:
         raise LookupError("facility not found")
+    window_minutes = int(os.environ.get("REPORT_RATE_WINDOW_MINUTES", "60"))
+    per_ip_limit = int(os.environ.get("REPORT_RATE_PER_IP", "10"))
+    per_facility_limit = int(os.environ.get("REPORT_RATE_PER_FACILITY", "30"))
+    pending_limit = int(os.environ.get("REPORT_PENDING_LIMIT", "1000"))
+    # Serialize quota checks across workers so concurrent requests cannot bypass limits.
+    connection.execute("SELECT pg_advisory_xact_lock(8764210632)")
+    counts = connection.execute(
+        """
+        SELECT count(*) FILTER (WHERE submitter_ip = %s) AS ip_count,
+               count(*) FILTER (WHERE facility_id = %s) AS facility_count,
+               count(*) FILTER (WHERE status = 'pending') AS pending_count
+          FROM facility_reports
+         WHERE created_at >= now() - make_interval(mins => %s)
+        """,
+        (submitter_ip, facility_id, window_minutes),
+    ).fetchone()
+    if counts and (
+        (submitter_ip is not None and int(counts["ip_count"]) >= per_ip_limit)
+        or int(counts["facility_count"]) >= per_facility_limit
+        or int(counts["pending_count"]) >= pending_limit
+    ):
+        raise ReportRateLimitError("report submission quota exceeded")
     fingerprint = report_fingerprint(facility_id, payload)
     # Serialize equal reports so the deduplication check cannot race with the insert.
     connection.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (fingerprint,))
@@ -120,15 +153,28 @@ def create_report(connection: Connection, *, facility_id: int, payload: ReportPa
     row = connection.execute(
         """
         INSERT INTO facility_reports (
-          facility_id, source_record_id, report_type, note, fingerprint
-        ) VALUES (%s, %s, %s, %s, %s)
+          facility_id, source_record_id, report_type, note, fingerprint, submitter_ip
+        ) VALUES (%s, %s, %s, %s, %s, %s)
         RETURNING id, facility_id, report_type, note, status, created_at
         """,
-        (facility_id, source_record_id, payload.report_type.value, payload.note.strip(), fingerprint),
+        (facility_id, source_record_id, payload.report_type.value, payload.note.strip(), fingerprint, submitter_ip),
     ).fetchone()
     if row is None:
         raise RuntimeError("failed to create report")
     return dict(row)
+
+
+def purge_expired_reports(connection: Connection, *, retention_days: int = 90) -> int:
+    """Delete user submissions beyond the documented retention period."""
+    result = connection.execute(
+        """
+        DELETE FROM source_records
+         WHERE source_type = 'user_submission'
+           AND fetched_at < now() - make_interval(days => %s)
+        """,
+        (retention_days,),
+    )
+    return result.rowcount
 
 
 def pending_reports(connection: Connection, *, limit: int = 100) -> list[dict[str, object]]:

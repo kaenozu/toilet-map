@@ -79,6 +79,7 @@ Current migration sequence:
 0001_initial
 0002_source_model
 0003_operational_platform
+0005_report_abuse_controls
 ```
 
 Before production application:
@@ -249,8 +250,11 @@ python -m app.cli status
 python -m app.cli data-quality
 python -m app.cli resolve-sources
 python -m app.cli expire-sources
+python -m app.cli purge-reports --retention-days 90
 python -m app.cli generate-candidates
 ```
+
+Public report submissions are protected server-side with a 60-minute quota (10 per IP, 30 per facility, and 1,000 pending reports by default). Limits can be tuned with `REPORT_RATE_WINDOW_MINUTES`, `REPORT_RATE_PER_IP`, `REPORT_RATE_PER_FACILITY`, and `REPORT_PENDING_LIMIT`; rejected submissions receive HTTP 429. User-submission records are purged after 90 days by the scheduled `purge-reports` command (override with `--retention-days`).
 
 ## Production cutover
 

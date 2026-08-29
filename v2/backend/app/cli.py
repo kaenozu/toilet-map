@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .db import apply_schema, database
 from .importer import import_legacy
+from .reports import purge_expired_reports
 from .resolution import generate_match_candidates
 from .worker import (
     detect_stale_source_records,
@@ -38,6 +39,8 @@ def _parser() -> argparse.ArgumentParser:
     sub.add_parser("data-quality")
     sub.add_parser("resolve-sources")
     sub.add_parser("expire-sources")
+    retention = sub.add_parser("purge-reports")
+    retention.add_argument("--retention-days", type=int, default=90)
 
     candidates = sub.add_parser("generate-candidates")
     candidates.add_argument("--dataset-id", type=int)
@@ -105,6 +108,11 @@ def main() -> None:
         print(f"resolved={resolve_source_records()}")
     elif args.command == "expire-sources":
         print(f"expired={detect_stale_source_records()}")
+    elif args.command == "purge-reports":
+        with database() as connection:
+            deleted = purge_expired_reports(connection, retention_days=args.retention_days)
+            connection.commit()
+        print(f"purged_reports={deleted}")
     elif args.command == "generate-candidates":
         with database() as connection:
             total = generate_match_candidates(
