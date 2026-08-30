@@ -4,3 +4,5 @@
 \ir migrations/0001_initial.sql
 \ir migrations/0002_source_model.sql
 \ir migrations/0003_operational_platform.sql
+\ir migrations/0004_active_facility_publication.sql
+\ir migrations/0005_report_abuse_controls.sql
