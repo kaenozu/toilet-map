@@ -84,7 +84,7 @@ jobs:
               rows = connection.execute(
                   "SELECT version FROM schema_migrations ORDER BY version"
               ).fetchall()
-          assert [row['version'] for row in rows] == ['0001', '0002', '0003', '0004']
+          assert [row['version'] for row in rows] == ['0001', '0002', '0003', '0004', '0005']
           PY
       - name: Verify psql bootstrap is idempotent
         working-directory: v2/backend
