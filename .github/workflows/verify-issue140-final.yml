@@ -1,0 +1,132 @@
+name: Verify issue 140 final backend acceptance
+
+on:
+  push:
+    branches: [agent/fix-closed-publication-140]
+    paths:
+      - .github/workflows/verify-issue140-final.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_DB: toilet_map
+          POSTGRES_USER: toilet_map
+          POSTGRES_PASSWORD: toilet_map
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U toilet_map -d toilet_map"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://toilet_map:toilet_map@localhost:5432/toilet_map
+      ADMIN_API_KEY: ci-key
+      PUBLIC_READ_MODEL: snapshot
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/fix-closed-publication-140
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install backend
+        run: pip install './v2/backend[dev]'
+      - name: Static and unit regression
+        run: |
+          ruff check v2/backend
+          pytest -q
+          python -m compileall -q app
+        working-directory: v2/backend
+      - name: Apply versioned migrations twice
+        working-directory: v2/backend
+        run: |
+          python -m app.cli init-db
+          python -m app.cli init-db
+          python - <<'PY'
+          from app.db import database
+          with database() as connection:
+              rows = connection.execute('SELECT version FROM schema_migrations ORDER BY version').fetchall()
+          assert [row['version'] for row in rows] == ['0001', '0002', '0003', '0004']
+          PY
+      - name: Verify schema bootstrap twice
+        working-directory: v2/backend
+        env:
+          PGPASSWORD: toilet_map
+        run: |
+          psql -h localhost -U toilet_map -d postgres -v ON_ERROR_STOP=1 -c 'DROP DATABASE IF EXISTS toilet_map_schema_test'
+          psql -h localhost -U toilet_map -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE toilet_map_schema_test'
+          psql -h localhost -U toilet_map -d toilet_map_schema_test -v ON_ERROR_STOP=1 -f schema.sql
+          psql -h localhost -U toilet_map -d toilet_map_schema_test -v ON_ERROR_STOP=1 -f schema.sql
+          psql -h localhost -U toilet_map -d postgres -v ON_ERROR_STOP=1 -c 'DROP DATABASE toilet_map_schema_test'
+      - name: Verify close and republish behavior
+        working-directory: v2/backend
+        run: |
+          python - <<'PY'
+          import gzip
+          import json
+          from pathlib import Path
+          from fastapi import HTTPException
+          from app.db import database
+          from app.importer import import_legacy
+          from app.public_api import get_place, list_places, stats
+          from app.worker import publish_dataset, validate_dataset
+
+          fixture = Path('/tmp/issue140.json.gz')
+          with gzip.open(fixture, 'wt', encoding='utf-8') as handle:
+              json.dump({'metadata': {'snapshot_id': 'issue140-final'}, 'toilets': [
+                  {'place_id': 'active-1', 'name': 'Active Toilet', 'latitude': 35.0, 'longitude': 139.0, 'toilet_score': 80, 'reviews': []},
+                  {'place_id': 'closed-1', 'name': 'Closed Toilet', 'latitude': 35.01, 'longitude': 139.01, 'toilet_score': 70, 'reviews': []},
+              ]}, handle)
+
+          dataset_id, count = import_legacy(fixture, source='issue140-final')
+          assert count == 2
+          validate_dataset(dataset_id)
+          publish_dataset(dataset_id)
+          with database() as connection:
+              closed = connection.execute(
+                  "SELECT id, facility_id FROM places WHERE dataset_version_id = %s AND name = 'Closed Toilet'",
+                  (dataset_id,),
+              ).fetchone()
+              assert closed is not None
+              connection.execute("UPDATE facilities SET status = 'closed', updated_at = now() WHERE id = %s", (closed['facility_id'],))
+              connection.commit()
+
+          # Direct Python calls intentionally exercise plain FastAPI defaults.
+          public = list_places()
+          assert public['total'] == 1
+          assert [item['name'] for item in public['items']] == ['Active Toilet']
+          assert stats()['record_count'] == 1
+          try:
+              get_place(int(closed['id']))
+          except HTTPException as exc:
+              assert exc.status_code == 404
+          else:
+              raise AssertionError('closed facility remained visible through detail API')
+
+          with database() as connection:
+              connection.execute("UPDATE dataset_versions SET status = 'validated' WHERE id = %s", (dataset_id,))
+              connection.commit()
+          publish_dataset(dataset_id)
+          with database() as connection:
+              snapshots = connection.execute(
+                  'SELECT count(*) AS total FROM published_place_snapshots WHERE dataset_version_id = %s',
+                  (dataset_id,),
+              ).fetchone()
+              closed_snapshot = connection.execute(
+                  'SELECT count(*) AS total FROM published_place_snapshots WHERE dataset_version_id = %s AND facility_id = %s',
+                  (dataset_id, closed['facility_id']),
+              ).fetchone()
+              dataset = connection.execute('SELECT record_count FROM dataset_versions WHERE id = %s', (dataset_id,)).fetchone()
+          assert snapshots['total'] == 1
+          assert closed_snapshot['total'] == 0
+          assert dataset['record_count'] == 1
+          assert list_places()['total'] == 1
+          PY
