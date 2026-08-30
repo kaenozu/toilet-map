@@ -41,7 +41,7 @@ jobs:
         run: pip install './v2/backend[dev]'
       - name: Static and unit regression
         run: |
-          ruff check v2/backend
+          ruff check .
           pytest -q
           python -m compileall -q app
         working-directory: v2/backend
