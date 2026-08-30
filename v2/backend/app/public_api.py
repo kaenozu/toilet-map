@@ -71,7 +71,7 @@ def list_places(
     offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
     model = public_read_model()
-    conditions: list[str] = ["d.status = 'published'"]
+    conditions: list[str] = ["d.status = 'published'", "f.status = 'active'"]
     params: list[object] = []
     if prefecture:
         conditions.append("p.prefecture = %s")
@@ -145,6 +145,7 @@ def list_places(
                d.id AS dataset_version_id, d.published_at
           FROM {model.table} p
           JOIN dataset_versions d ON d.id = p.dataset_version_id
+          JOIN facilities f ON f.id = p.facility_id
          WHERE {where_sql}
          ORDER BY {order_sql}
          LIMIT %s OFFSET %s
@@ -153,6 +154,7 @@ def list_places(
         SELECT count(*) AS total
           FROM {model.table} p
           JOIN dataset_versions d ON d.id = p.dataset_version_id
+          JOIN facilities f ON f.id = p.facility_id
          WHERE {where_sql}
     """
     with database() as connection:
@@ -184,7 +186,8 @@ def get_place(place_id: int) -> dict[str, Any]:
                    d.published_at
               FROM {model.table} p
               JOIN dataset_versions d ON d.id = p.dataset_version_id
-             WHERE {id_condition} AND d.status = 'published'
+              JOIN facilities f ON f.id = p.facility_id
+             WHERE {id_condition} AND d.status = 'published' AND f.status = 'active'
             """,
             (place_id,),
         ).fetchone()
@@ -258,12 +261,18 @@ def stats() -> dict[str, Any]:
     with database() as connection:
         row = connection.execute(
             f"""
-            SELECT d.id AS dataset_version_id, d.published_at, d.record_count,
+            SELECT d.id AS dataset_version_id, d.published_at, count(p.id) AS record_count,
                    count(p.id) FILTER (WHERE p.toilet_score IS NOT NULL) AS scored_count,
                    avg(p.toilet_score)::float AS average_score,
                    count(DISTINCT NULLIF(p.prefecture, '')) AS prefecture_count
               FROM dataset_versions d
-              LEFT JOIN {model.table} p ON p.dataset_version_id = d.id
+              LEFT JOIN {model.table} p
+                ON p.dataset_version_id = d.id
+               AND EXISTS (
+                 SELECT 1 FROM facilities active_facility
+                  WHERE active_facility.id = p.facility_id
+                    AND active_facility.status = 'active'
+               )
              WHERE d.status = 'published'
              GROUP BY d.id
             """
@@ -278,13 +287,15 @@ def facets() -> dict[str, list[dict[str, Any]]]:
         prefectures = connection.execute(
             f"""SELECT p.prefecture AS value, count(*) AS count FROM {model.table} p
                 JOIN dataset_versions d ON d.id = p.dataset_version_id
-                WHERE d.status = 'published' AND p.prefecture <> ''
+                JOIN facilities f ON f.id = p.facility_id
+                WHERE d.status = 'published' AND f.status = 'active' AND p.prefecture <> ''
                 GROUP BY p.prefecture ORDER BY p.prefecture"""
         ).fetchall()
         categories = connection.execute(
             f"""SELECT p.category AS value, count(*) AS count FROM {model.table} p
                 JOIN dataset_versions d ON d.id = p.dataset_version_id
-                WHERE d.status = 'published' AND p.category <> ''
+                JOIN facilities f ON f.id = p.facility_id
+                WHERE d.status = 'published' AND f.status = 'active' AND p.category <> ''
                 GROUP BY p.category ORDER BY count(*) DESC, p.category"""
         ).fetchall()
     return {"prefectures": prefectures, "categories": categories}
