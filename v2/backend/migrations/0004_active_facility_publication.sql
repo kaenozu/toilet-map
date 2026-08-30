@@ -1,3 +1,4 @@
+-- Regression-covered by V2 CI: closed facilities stay absent after republish.
 -- Keep unavailable canonical facilities out of the public read model.
 -- Existing snapshots are filtered by the API immediately; future publications
 -- also omit non-active facilities so republishing cannot resurrect them.
