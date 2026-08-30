@@ -204,7 +204,27 @@ jobs:
               )
               connection.commit()
 
-          public = list_places()
+          public = list_places(
+              prefecture=None,
+              category=None,
+              q=None,
+              min_score=None,
+              min_trust=None,
+              include_unscored=None,
+              wheelchair=None,
+              changing_table=None,
+              fee=None,
+              open_24h=None,
+              north=None,
+              south=None,
+              east=None,
+              west=None,
+              latitude=None,
+              longitude=None,
+              radius_m=5000,
+              limit=500,
+              offset=0,
+          )
           assert public['total'] == 1
           assert [item['name'] for item in public['items']] == ['CI Toilet']
           try:
