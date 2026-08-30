@@ -135,6 +135,7 @@ def heartbeat_job(
     connection: Connection,
     *,
     job_id: int,
+    expected_attempt: int,
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
     stats: dict[str, Any] | None = None,
 ) -> bool:
@@ -145,10 +146,10 @@ def heartbeat_job(
                lease_expires_at = now() + make_interval(secs => %s),
                stats = stats || %s::jsonb,
                updated_at = now()
-         WHERE id = %s AND status = 'running'
+         WHERE id = %s AND status = 'running' AND attempts = %s
         RETURNING id
         """,
-        (lease_seconds, json.dumps(stats or {}, ensure_ascii=False), job_id),
+        (lease_seconds, json.dumps(stats or {}, ensure_ascii=False), job_id, expected_attempt),
     ).fetchone()
     return row is not None
 
@@ -159,23 +160,25 @@ def finish_job(
     job: dict[str, Any],
     error: Exception | None = None,
     stats: dict[str, Any] | None = None,
-) -> None:
+) -> bool:
+    expected_attempt = int(job["attempts"])
     if error is None:
-        connection.execute(
+        row = connection.execute(
             """
             UPDATE jobs
                SET status = 'succeeded', finished_at = now(), lease_expires_at = NULL,
                    heartbeat_at = NULL, stats = stats || %s::jsonb, updated_at = now()
-             WHERE id = %s
+             WHERE id = %s AND status = 'running' AND attempts = %s
+            RETURNING id
             """,
-            (json.dumps(stats or {}, ensure_ascii=False), job["id"]),
-        )
-        return
+            (json.dumps(stats or {}, ensure_ascii=False), job["id"], expected_attempt),
+        ).fetchone()
+        return row is not None
     attempts = int(job["attempts"])
     max_attempts = int(job["max_attempts"])
     retryable = bool(job.get("retryable", True))
     if retryable and attempts < max_attempts:
-        connection.execute(
+        row = connection.execute(
             """
             UPDATE jobs
                SET status = 'retry_wait',
@@ -186,7 +189,8 @@ def finish_job(
                    error_message = %s,
                    stats = stats || %s::jsonb,
                    updated_at = now()
-             WHERE id = %s
+             WHERE id = %s AND status = 'running' AND attempts = %s
+            RETURNING id
             """,
             (
                 retry_delay_seconds(attempts),
@@ -194,24 +198,29 @@ def finish_job(
                 str(error)[:2000],
                 json.dumps(stats or {}, ensure_ascii=False),
                 job["id"],
+                expected_attempt,
             ),
-        )
+        ).fetchone()
+        return row is not None
     else:
-        connection.execute(
+        row = connection.execute(
             """
             UPDATE jobs
                SET status = 'failed', finished_at = now(), lease_expires_at = NULL,
                    heartbeat_at = NULL, error_code = %s, error_message = %s,
                    stats = stats || %s::jsonb, updated_at = now()
-             WHERE id = %s
+             WHERE id = %s AND status = 'running' AND attempts = %s
+            RETURNING id
             """,
             (
                 error.__class__.__name__,
                 str(error)[:2000],
                 json.dumps(stats or {}, ensure_ascii=False),
                 job["id"],
+                expected_attempt,
             ),
-        )
+        ).fetchone()
+        return row is not None
 
 
 def cancel_job(connection: Connection, *, job_id: int) -> bool:

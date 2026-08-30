@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
+from threading import Event, Thread
 from typing import Any
 
 from .db import database
 from .ingestion import ingest_provider, ingestion_stats
-from .job_queue import claim_job, finish_job
+from .job_queue import DEFAULT_LEASE_SECONDS, claim_job, finish_job, heartbeat_job
 from .osm_provider import OsmOverpassProvider
 from .providers import OSM_REGIONS, FetchRequest
 from .resolution import generate_match_candidates
+
+logger = logging.getLogger(__name__)
 
 
 def validate_dataset(dataset_version_id: int) -> None:
@@ -194,22 +198,82 @@ def execute_job(job: dict[str, Any]) -> dict[str, Any]:
     raise ValueError(f"unsupported job kind: {job['kind']}")
 
 
-def run_once() -> bool:
+def _renew_job_lease(job: dict[str, Any], lease_seconds: int) -> bool:
     with database() as connection:
-        job = claim_job(connection)
+        renewed = heartbeat_job(
+            connection,
+            job_id=int(job["id"]),
+            expected_attempt=int(job["attempts"]),
+            lease_seconds=lease_seconds,
+        )
+        connection.commit()
+    return renewed
+
+
+def _heartbeat_loop(
+    job: dict[str, Any],
+    stop_event: Event,
+    lease_lost: Event,
+    *,
+    lease_seconds: int,
+    interval_seconds: float,
+) -> None:
+    while not stop_event.wait(interval_seconds):
+        try:
+            renewed = _renew_job_lease(job, lease_seconds)
+        except Exception:
+            logger.exception("Job heartbeat failed for job %s", job["id"])
+            continue
+        if not renewed:
+            lease_lost.set()
+            logger.warning(
+                "Job lease generation was lost for job %s attempt %s",
+                job["id"],
+                job["attempts"],
+            )
+            return
+
+
+def run_once(
+    *,
+    lease_seconds: int = DEFAULT_LEASE_SECONDS,
+    heartbeat_interval_seconds: float | None = None,
+) -> bool:
+    with database() as connection:
+        job = claim_job(connection, lease_seconds=lease_seconds)
         connection.commit()
     if not job:
         return False
+
+    interval = heartbeat_interval_seconds or max(1.0, lease_seconds / 3)
+    stop_event = Event()
+    lease_lost = Event()
+    heartbeat = Thread(
+        target=_heartbeat_loop,
+        args=(job, stop_event, lease_lost),
+        kwargs={"lease_seconds": lease_seconds, "interval_seconds": interval},
+        daemon=True,
+    )
+    heartbeat.start()
+    error: Exception | None = None
+    stats: dict[str, Any] | None = None
     try:
         stats = execute_job(job)
     except Exception as exc:
-        with database() as connection:
-            finish_job(connection, job=job, error=exc)
-            connection.commit()
-    else:
-        with database() as connection:
-            finish_job(connection, job=job, stats=stats)
-            connection.commit()
+        error = exc
+    finally:
+        stop_event.set()
+        heartbeat.join(timeout=max(1.0, interval * 2))
+
+    with database() as connection:
+        finished = finish_job(connection, job=job, error=error, stats=stats)
+        connection.commit()
+    if not finished or lease_lost.is_set():
+        logger.warning(
+            "Ignored stale completion for job %s attempt %s",
+            job["id"],
+            job["attempts"],
+        )
     return True
 
 
