@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from .db import database
 from .read_model import public_read_model
-from .reports import DuplicateReportError, ReportPayload, ReportRateLimitError, ReportType, create_report
+from .reports import DuplicateReportError, ReportPayload, ReportType, create_report
 
 router = APIRouter()
 
@@ -29,18 +29,6 @@ def _boolean_attribute(conditions: list[str], key: str, value: bool | None, para
     params.append(key)
 
 
-def _minimum_score_condition(include_unscored: bool | None) -> str:
-    clause = "p.toilet_score >= %s"
-    if include_unscored is True:
-        return f"({clause} OR p.toilet_score IS NULL)"
-    return clause
-
-
-def _fee_condition(value: bool) -> str:
-    explicit_values = "('yes', 'true', '1', 'paid')" if value else "('no', 'false', '0', 'free')"
-    return f"lower(p.attributes->>'fee') IN {explicit_values}"
-
-
 @router.get("/health")
 def health() -> dict[str, str]:
     with database() as connection:
@@ -52,26 +40,26 @@ def health() -> dict[str, str]:
 def list_places(
     prefecture: str | None = None,
     category: str | None = None,
-    q: str | None = Query(None, max_length=200),
-    min_score: float | None = Query(None, ge=0, le=100),
-    min_trust: float | None = Query(None, ge=0, le=100),
-    include_unscored: bool | None = None,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    min_score: Annotated[float | None, Query(ge=0, le=100)] = None,
+    min_trust: Annotated[float | None, Query(ge=0, le=100)] = None,
+    include_unscored: bool = True,
     wheelchair: bool | None = None,
     changing_table: bool | None = None,
     fee: bool | None = None,
     open_24h: bool | None = None,
-    north: float | None = Query(None, ge=-90, le=90),
-    south: float | None = Query(None, ge=-90, le=90),
-    east: float | None = Query(None, ge=-180, le=180),
-    west: float | None = Query(None, ge=-180, le=180),
-    latitude: float | None = Query(None, ge=-90, le=90),
-    longitude: float | None = Query(None, ge=-180, le=180),
-    radius_m: int = Query(5000, ge=100, le=50000),
-    limit: int = Query(500, ge=1, le=2000),
-    offset: int = Query(0, ge=0),
+    north: Annotated[float | None, Query(ge=-90, le=90)] = None,
+    south: Annotated[float | None, Query(ge=-90, le=90)] = None,
+    east: Annotated[float | None, Query(ge=-180, le=180)] = None,
+    west: Annotated[float | None, Query(ge=-180, le=180)] = None,
+    latitude: Annotated[float | None, Query(ge=-90, le=90)] = None,
+    longitude: Annotated[float | None, Query(ge=-180, le=180)] = None,
+    radius_m: Annotated[int, Query(ge=100, le=50000)] = 5000,
+    limit: Annotated[int, Query(ge=1, le=2000)] = 500,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> dict[str, Any]:
     model = public_read_model()
-    conditions: list[str] = ["d.status = 'published'"]
+    conditions: list[str] = ["d.status = 'published'", "f.status = 'active'"]
     params: list[object] = []
     if prefecture:
         conditions.append("p.prefecture = %s")
@@ -84,9 +72,12 @@ def list_places(
         pattern = f"%{q}%"
         params.extend([pattern, pattern])
     if min_score is not None:
-        conditions.append(_minimum_score_condition(include_unscored))
+        clause = "p.toilet_score >= %s"
+        if include_unscored:
+            clause = f"({clause} OR p.toilet_score IS NULL)"
+        conditions.append(clause)
         params.append(min_score)
-    elif include_unscored is False:
+    elif not include_unscored:
         conditions.append("p.toilet_score IS NOT NULL")
     if min_trust is not None and model.table == "published_place_snapshots":
         conditions.append("p.trust_score >= %s")
@@ -95,7 +86,11 @@ def list_places(
     _boolean_attribute(conditions, "wheelchair", wheelchair, params)
     _boolean_attribute(conditions, "changing_table", changing_table, params)
     if fee is not None:
-        conditions.append(_fee_condition(fee))
+        conditions.append(
+            "lower(COALESCE(p.attributes->>'fee', 'no')) IN ('yes', 'true', '1')"
+            if fee
+            else "lower(COALESCE(p.attributes->>'fee', 'no')) NOT IN ('yes', 'true', '1')"
+        )
     if open_24h is not None:
         conditions.append(
             "COALESCE(p.attributes->>'opening_hours', '') = '24/7'"
@@ -145,6 +140,7 @@ def list_places(
                d.id AS dataset_version_id, d.published_at
           FROM {model.table} p
           JOIN dataset_versions d ON d.id = p.dataset_version_id
+          JOIN facilities f ON f.id = p.facility_id
          WHERE {where_sql}
          ORDER BY {order_sql}
          LIMIT %s OFFSET %s
@@ -153,6 +149,7 @@ def list_places(
         SELECT count(*) AS total
           FROM {model.table} p
           JOIN dataset_versions d ON d.id = p.dataset_version_id
+          JOIN facilities f ON f.id = p.facility_id
          WHERE {where_sql}
     """
     with database() as connection:
@@ -184,7 +181,8 @@ def get_place(place_id: int) -> dict[str, Any]:
                    d.published_at
               FROM {model.table} p
               JOIN dataset_versions d ON d.id = p.dataset_version_id
-             WHERE {id_condition} AND d.status = 'published'
+              JOIN facilities f ON f.id = p.facility_id
+             WHERE {id_condition} AND d.status = 'published' AND f.status = 'active'
             """,
             (place_id,),
         ).fetchone()
@@ -258,12 +256,18 @@ def stats() -> dict[str, Any]:
     with database() as connection:
         row = connection.execute(
             f"""
-            SELECT d.id AS dataset_version_id, d.published_at, d.record_count,
+            SELECT d.id AS dataset_version_id, d.published_at, count(p.id) AS record_count,
                    count(p.id) FILTER (WHERE p.toilet_score IS NOT NULL) AS scored_count,
                    avg(p.toilet_score)::float AS average_score,
                    count(DISTINCT NULLIF(p.prefecture, '')) AS prefecture_count
               FROM dataset_versions d
-              LEFT JOIN {model.table} p ON p.dataset_version_id = d.id
+              LEFT JOIN {model.table} p
+                ON p.dataset_version_id = d.id
+               AND EXISTS (
+                 SELECT 1 FROM facilities active_facility
+                  WHERE active_facility.id = p.facility_id
+                    AND active_facility.status = 'active'
+               )
              WHERE d.status = 'published'
              GROUP BY d.id
             """
@@ -278,29 +282,28 @@ def facets() -> dict[str, list[dict[str, Any]]]:
         prefectures = connection.execute(
             f"""SELECT p.prefecture AS value, count(*) AS count FROM {model.table} p
                 JOIN dataset_versions d ON d.id = p.dataset_version_id
-                WHERE d.status = 'published' AND p.prefecture <> ''
+                JOIN facilities f ON f.id = p.facility_id
+                WHERE d.status = 'published' AND f.status = 'active' AND p.prefecture <> ''
                 GROUP BY p.prefecture ORDER BY p.prefecture"""
         ).fetchall()
         categories = connection.execute(
             f"""SELECT p.category AS value, count(*) AS count FROM {model.table} p
                 JOIN dataset_versions d ON d.id = p.dataset_version_id
-                WHERE d.status = 'published' AND p.category <> ''
+                JOIN facilities f ON f.id = p.facility_id
+                WHERE d.status = 'published' AND f.status = 'active' AND p.category <> ''
                 GROUP BY p.category ORDER BY count(*) DESC, p.category"""
         ).fetchall()
     return {"prefectures": prefectures, "categories": categories}
 
 
 @router.post("/api/v2/facilities/{facility_id}/reports", status_code=201)
-def submit_facility_report(
-    facility_id: int, request: FacilityReportRequest, raw_request: Request
-) -> dict[str, object]:
+def submit_facility_report(facility_id: int, request: FacilityReportRequest) -> dict[str, object]:
     try:
         with database() as connection:
             result = create_report(
                 connection,
                 facility_id=facility_id,
                 payload=ReportPayload(request.report_type, request.note, request.occurred_at),
-                submitter_ip=raw_request.client.host if raw_request.client else None,
             )
             connection.commit()
         return result
@@ -308,5 +311,3 @@ def submit_facility_report(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except DuplicateReportError as exc:
         raise HTTPException(status_code=409, detail="同じ内容の報告はすでに受け付けています") from exc
-    except ReportRateLimitError as exc:
-        raise HTTPException(status_code=429, detail="報告が集中しています。時間をおいて再度お試しください") from exc
