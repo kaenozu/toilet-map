@@ -46,6 +46,7 @@ test("sends the selected category with the existing public filters", () => {
     prefecture: "埼玉県",
     category: "駅",
     min_score: "65",
+    include_unscored: "false",
     min_trust: "55",
     wheelchair: "true",
     changing_table: "true",

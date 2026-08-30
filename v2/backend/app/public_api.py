@@ -29,6 +29,18 @@ def _boolean_attribute(conditions: list[str], key: str, value: bool | None, para
     params.append(key)
 
 
+def _minimum_score_condition(include_unscored: bool | None) -> str:
+    clause = "p.toilet_score >= %s"
+    if include_unscored is True:
+        return f"({clause} OR p.toilet_score IS NULL)"
+    return clause
+
+
+def _fee_condition(value: bool) -> str:
+    explicit_values = "('yes', 'true', '1', 'paid')" if value else "('no', 'false', '0', 'free')"
+    return f"lower(p.attributes->>'fee') IN {explicit_values}"
+
+
 @router.get("/health")
 def health() -> dict[str, str]:
     with database() as connection:
@@ -43,7 +55,7 @@ def list_places(
     q: str | None = Query(None, max_length=200),
     min_score: float | None = Query(None, ge=0, le=100),
     min_trust: float | None = Query(None, ge=0, le=100),
-    include_unscored: bool = True,
+    include_unscored: bool | None = None,
     wheelchair: bool | None = None,
     changing_table: bool | None = None,
     fee: bool | None = None,
@@ -72,12 +84,9 @@ def list_places(
         pattern = f"%{q}%"
         params.extend([pattern, pattern])
     if min_score is not None:
-        clause = "p.toilet_score >= %s"
-        if include_unscored:
-            clause = f"({clause} OR p.toilet_score IS NULL)"
-        conditions.append(clause)
+        conditions.append(_minimum_score_condition(include_unscored))
         params.append(min_score)
-    elif not include_unscored:
+    elif include_unscored is False:
         conditions.append("p.toilet_score IS NOT NULL")
     if min_trust is not None and model.table == "published_place_snapshots":
         conditions.append("p.trust_score >= %s")
@@ -86,11 +95,7 @@ def list_places(
     _boolean_attribute(conditions, "wheelchair", wheelchair, params)
     _boolean_attribute(conditions, "changing_table", changing_table, params)
     if fee is not None:
-        conditions.append(
-            "lower(COALESCE(p.attributes->>'fee', 'no')) IN ('yes', 'true', '1')"
-            if fee
-            else "lower(COALESCE(p.attributes->>'fee', 'no')) NOT IN ('yes', 'true', '1')"
-        )
+        conditions.append(_fee_condition(fee))
     if open_24h is not None:
         conditions.append(
             "COALESCE(p.attributes->>'opening_hours', '') = '24/7'"
